@@ -8,7 +8,7 @@
 // ThüringenForst), KWF-Rettungspunkte, Forsteinrichtung/Baumartenkarte.
 
 import { parcels as demoParcels, stands, rescuePoints, gemarkungen, DEMO_CENTER } from './demo-data.js';
-import { pointInPolygon, distance } from '../geo.js';
+import { pointInPolygon, inPolys, polysOf, distance } from '../geo.js';
 import { wfsParcelAt, wfsSearch, localParcelAt, localSearch } from '../map/thueringen.js';
 import { store } from '../store.js';
 
@@ -42,7 +42,7 @@ export const source = {
       const d = demoParcels.find((p) => pointInPolygon(latlng, p.ring));
       if (d) return d;
     }
-    const own = stored().find((p) => pointInPolygon(latlng, p.ring));
+    const own = stored().find((p) => inPolys(latlng, polysOf(p)));
     const loc = await localParcelAt(latlng); // mitgelieferte ALKIS-Daten (data/alkis)
     if (loc) { source.lastError = null; remember([loc]); return loc; }
     try {

@@ -45,6 +45,14 @@ export function areaM2(ring) {
 
 export const areaHa = (ring) => areaM2(ring) / 10000;
 
+// Flurstücke können aus mehreren Teilflächen mit Löchern bestehen:
+// polys = [[außen, loch, …], [außen2, …]]; ohne polys gilt der einfache Ring.
+export const polysOf = (o) => (o?.polys?.length ? o.polys : o?.ring ? [[o.ring]] : []);
+export const areaM2Polys = (polys) => polys.reduce((s, [ext, ...holes]) => s + areaM2(ext) - holes.reduce((h, r) => h + areaM2(r), 0), 0);
+export function inPolys(pt, polys) {
+  return polys.some(([ext, ...holes]) => pointInPolygon(pt, ext) && !holes.some((r) => pointInPolygon(pt, r)));
+}
+
 export function pointInPolygon([lat, lng], ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -82,9 +90,10 @@ export function destination([lat, lng], brg, dist) {
  * Liefert die Punkte in Schlangenlinien-Reihenfolge (Reihe für Reihe,
  * abwechselnd West→Ost und Ost→West), damit der Laufweg kurz bleibt.
  */
-export function generateGrid(ring, spacing, { rand = null } = {}) {
+export function generateGrid(ring, spacing, { rand = null, polys = null } = {}) {
+  const ps = polys?.length ? polys : [[ring]];
   const p = makeProjector(centroid(ring));
-  const xy = ring.map(p.toXY);
+  const xy = ps.flatMap((poly) => poly[0]).map(p.toXY);
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [x, y] of xy) {
     minX = Math.min(minX, x); maxX = Math.max(maxX, x);
@@ -99,7 +108,7 @@ export function generateGrid(ring, spacing, { rand = null } = {}) {
     const row = [];
     for (let x = minX + offX; x <= maxX; x += spacing) {
       const ll = p.toLatLng([x, y]);
-      if (pointInPolygon(ll, ring)) row.push(ll);
+      if (inPolys(ll, ps)) row.push(ll);
     }
     if (row.length) rows.push(row);
   }

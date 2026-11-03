@@ -1,7 +1,7 @@
 // Amtliche Geodienste des Freistaats Thüringen (Geoproxy, GDI-Th).
 // Lizenz: Datenlizenz Deutschland – Namensnennung 2.0 bzw. CC BY 4.0, Quelle „© GDI-Th“.
 /* global L */
-import { pointInPolygon, areaHa, toUTM32, fromUTM32 } from '../geo.js';
+import { pointInPolygon, inPolys, polysOf, areaHa, toUTM32, fromUTM32, generateGrid } from '../geo.js';
 
 const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
 export const TH_ATTR = '© <a href="https://www.geoportal-th.de" target="_blank" rel="noopener">GDI-Th</a>, dl-de/by-2-0';
@@ -90,7 +90,7 @@ export async function wfsParcelAt([lat, lng]) {
   const [x, y] = toUTM32([lat, lng]);
   const d = 4; // m
   const list = await wfsGet(() => ({ BBOX: `${x - d},${y - d},${x + d},${y + d},urn:ogc:def:crs:EPSG::25832` }));
-  return list.find((p) => pointInPolygon([lat, lng], p.ring)) || list[0] || null;
+  return list.find((p) => inPolys([lat, lng], polysOf(p))) || list[0] || null;
 }
 
 /** Suche nach Gemarkung, Flur, Flurstücksnummer (Zähler[/Nenner]) */
@@ -121,13 +121,11 @@ function val(el, name) {
   return n ? n.textContent.trim() : '';
 }
 
-function parseOne(el) {
-  // Äußerer Ring des (ersten) Polygons
-  const ext = el.getElementsByTagNameNS('*', 'exterior')[0] || el;
-  const pl = ext.getElementsByTagNameNS('*', 'posList')[0];
+function ringFrom(e) {
+  const pl = e.getElementsByTagNameNS('*', 'posList')[0];
   let nums = [];
   if (pl) nums = pl.textContent.trim().split(/\s+/).map(Number);
-  else nums = [...ext.getElementsByTagNameNS('*', 'pos')].flatMap((p) => p.textContent.trim().split(/\s+/).map(Number));
+  else nums = [...e.getElementsByTagNameNS('*', 'pos')].flatMap((p) => p.textContent.trim().split(/\s+/).map(Number));
   if (nums.length < 6) return null;
   let ring = [];
   for (let i = 0; i + 1 < nums.length; i += 2) ring.push([nums[i], nums[i + 1]]);
@@ -135,6 +133,21 @@ function parseOne(el) {
   // Achsreihenfolge prüfen: Thüringen liegt bei ca. 50–52° N und 9,8–13° O
   else if (ring[0][0] < 30 && ring[0][1] > 30) ring = ring.map(([a, b]) => [b, a]);
   if (ring.length > 3 && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1]) ring.pop();
+  return ring;
+}
+
+function parseOne(el) {
+  // Alle Teilflächen mit Löchern (exterior beginnt ein Polygon, interior = Loch)
+  const polys = [];
+  for (const e of el.getElementsByTagNameNS('*', '*')) {
+    if (e.localName !== 'exterior' && e.localName !== 'interior') continue;
+    const r = ringFrom(e);
+    if (!r) continue;
+    if (e.localName === 'exterior' || !polys.length) polys.push([r]); else polys.at(-1).push(r);
+  }
+  if (!polys.length) { const r = ringFrom(el); if (r) polys.push([r]); }
+  if (!polys.length) return null;
+  const ring = polys[0][0];
 
   const kennz = val(el, 'flstkennz');
   let zae = val(el, 'flstnrzae'), nen = val(el, 'flstnrnen');
@@ -160,6 +173,7 @@ function parseOne(el) {
     nutzung: categorize(nutzung),
     flaecheAmtlich: flaeche,
     ring,
+    polys: polys.length > 1 || polys[0].length > 1 ? polys : undefined,
     standort: null,
     features: [],
   };
@@ -203,17 +217,23 @@ const tileY = (lat) => Math.floor(((1 - Math.asinh(Math.tan((lat * Math.PI) / 18
 const tileCache = new Map();
 let localIndex;
 
+function decodeQ(q) {
+  const ring = []; let la = 0, lo = 0; // Mikrograd, ab dem 2. Punkt als Differenz
+  for (let i = 0; i + 1 < q.length; i += 2) { la += q[i]; lo += q[i + 1]; ring.push([la / 1e6, lo / 1e6]); }
+  return ring;
+}
+
 function fromCompact(c) {
-  const ring = [];
-  if (c.q) { // Mikrograd, ab dem 2. Punkt als Differenz
-    let la = 0, lo = 0;
-    for (let i = 0; i + 1 < c.q.length; i += 2) { la += c.q[i]; lo += c.q[i + 1]; ring.push([la / 1e6, lo / 1e6]); }
+  let ring = [];
+  const polys = c.x ? c.x.map((poly) => poly.map(decodeQ)) : undefined;
+  if (c.q) {
+    ring = decodeQ(c.q);
   } else {
     for (let i = 0; i + 1 < c.r.length; i += 2) ring.push([c.r[i], c.r[i + 1]]);
   }
   return {
     id: c.i, source: 'alkis', gemarkung: c.g || '–', flur: c.f || '–', nr: c.n, gemeinde: c.m || '–', ortsteil: c.g || '',
-    lage: c.l, nutzungText: umlaute(c.t), nutzung: categorize(c.t), flaecheAmtlich: c.a || null, ring, standort: null, features: [],
+    lage: c.l, nutzungText: umlaute(c.t), nutzung: categorize(c.t), flaecheAmtlich: c.a || null, ring, polys, standort: null, features: [],
   };
 }
 
@@ -237,7 +257,7 @@ export async function localIndexInfo() {
 export async function localParcelAt([lat, lng]) {
   const list = await loadTile(tileX(lng), tileY(lat));
   if (!list.length) return null;
-  return list.find((p) => pointInPolygon([lat, lng], p.ring)) || null;
+  return list.find((p) => inPolys([lat, lng], polysOf(p))) || null;
 }
 
 export async function localSearch({ gemarkung, flur, nr }) {
@@ -426,4 +446,21 @@ export async function nearestRescue(latlng, n = 2) {
   rescueCache.set(key, job);
   job.catch(() => rescueCache.delete(key));
   return job;
+}
+
+
+/** Amtliche Daten eines Flurstücks frisch holen (vollständige Geometrie mit Teilflächen und Löchern,
+ *  amtliche Fläche, Nutzung) – für gespeicherte Flurstücke aus älteren App-Versionen */
+export async function parcelExact(p) {
+  if (!p || p.source !== 'alkis') return p;
+  const probe = generateGrid(p.ring, 4, { polys: polysOf(p) })[0];
+  try {
+    const loc = await localParcelAt(probe);
+    if (loc && loc.id === p.id) return { ...p, ...loc };
+  } catch { /* weiter mit WFS */ }
+  try {
+    const w = await wfsParcelAt(probe);
+    if (w && w.id === p.id) return { ...p, ...w };
+  } catch { /* offline: gespeicherte Daten */ }
+  return p;
 }

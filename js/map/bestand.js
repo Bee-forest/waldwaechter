@@ -48,8 +48,8 @@ export async function bestandAt([lat, lng]) {
 }
 
 /** Vorherrschender Bestand in einer Fläche (Stichprobe über ein Punktraster) */
-export async function bestandInFlaeche(ring) {
-  const pts = generateGrid(ring, 15).slice(0, 400);
+export async function bestandInFlaeche(ring, polys = null) {
+  const pts = generateGrid(ring, 15, { polys }).slice(0, 400);
   const hits = await Promise.all(pts.map((p) => bestandAt(p)));
   const groups = new Map();
   for (const b of hits.filter(Boolean)) {

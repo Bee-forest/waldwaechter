@@ -89,6 +89,16 @@ def slug(s):
 def local(tag): return tag.rsplit('}', 1)[-1]
 
 
+def fix_ring(pts):
+    if pts[0][0] > 1000:                     # UTM (Rechtswert, Hochwert) → (lat, lon)
+        pts = [from_utm(a, b) if a < 1e6 else from_utm(b, a) for a, b in pts]
+    elif pts[0][0] < 30 < pts[0][1]:         # Achsreihenfolge (lon, lat) → (lat, lon)
+        pts = [(b, a) for a, b in pts]
+    if pts[0] == pts[-1]:
+        pts = pts[:-1]
+    return pts
+
+
 def parse(xml_bytes):
     root = ET.fromstring(xml_bytes)
     if local(root.tag) == 'ExceptionReport':
@@ -100,18 +110,24 @@ def parse(xml_bytes):
         vals = {}
         for c in el:
             vals[local(c.tag)] = (c.text or '').strip()
-        ext = next((e for e in el.iter() if local(e.tag) == 'exterior'), el)
-        pl = next((e for e in ext.iter() if local(e.tag) == 'posList'), None)
-        nums = [float(v) for v in (pl.text.split() if pl is not None else [])]
-        if len(nums) < 6:
+        # Alle Teilflächen mit Löchern: jedes 'exterior' beginnt ein Polygon, 'interior' sind Löcher darin
+        polys = []
+        for e in el.iter():
+            t = local(e.tag)
+            if t not in ('exterior', 'interior'):
+                continue
+            pl = next((x for x in e.iter() if local(x.tag) == 'posList'), None)
+            nums = [float(v) for v in (pl.text.split() if pl is not None else [])]
+            if len(nums) < 6:
+                continue
+            ring = fix_ring(list(zip(nums[0::2], nums[1::2])))
+            if t == 'exterior' or not polys:
+                polys.append([ring])
+            else:
+                polys[-1].append(ring)
+        if not polys:
             continue
-        pts = list(zip(nums[0::2], nums[1::2]))
-        if pts[0][0] > 1000:                     # UTM (Rechtswert, Hochwert) → (lat, lon)
-            pts = [from_utm(a, b) if a < 1e6 else from_utm(b, a) for a, b in pts]
-        elif pts[0][0] < 30 < pts[0][1]:         # Achsreihenfolge (lon, lat) → (lat, lon)
-            pts = [(b, a) for a, b in pts]
-        if pts[0] == pts[-1]:
-            pts = pts[:-1]
+        pts = polys[0][0]
         kennz = vals.get('flstkennz', '')
         zae, nen = vals.get('flstnrzae', ''), vals.get('flstnrnen', '')
         if not zae and re.match(r'^\d{14}', kennz):   # LL GGGG FFF ZZZZZ NNNN|____ __
@@ -131,6 +147,7 @@ def parse(xml_bytes):
             'g': vals.get('gemarkung', ''), 'f': flur, 'n': f'{zae}/{nen}' if nen else zae,
             'm': vals.get('gemeinde', ''), 'l': vals.get('lagebeztxt', ''), 't': nutzung_text(vals.get('tntxt', '')), 'a': area,
             'q': encode(pts),
+            **({'x': [[encode(r) for r in poly] for poly in polys]} if len(polys) > 1 or len(polys[0]) > 1 else {}),
         })
     return out
 

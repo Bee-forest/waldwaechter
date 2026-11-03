@@ -4,7 +4,7 @@ import { h, fill, icon, dialog, confirmDialog, toast } from './ui.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
-import { areaHa, formatHa, formatDist, centroid, compassLabel } from './geo.js';
+import { areaHa, formatHa, formatDist, centroid, compassLabel, polysOf } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
 import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls } from './map/thueringen.js';
 import { openProfile } from './profile.js';
@@ -158,9 +158,9 @@ function drawParcels() {
     const m = myList.find((x) => x.id === p.id);
     if (m) {
       const c = CATEGORIES[m.category] || CATEGORIES.Wald;
-      catGroups[m.category]?.addLayer(L.polygon(p.ring, { color: c.color, weight: 2, fillColor: c.color, fillOpacity: 0.38, interactive: false }));
+      catGroups[m.category]?.addLayer(L.polygon(polysOf(p), { color: c.color, weight: 2, fillColor: c.color, fillOpacity: 0.38, interactive: false }));
     } else if (p.source !== 'alkis') { // ALKIS-Grenzen zeigt bereits der WMS
-      allParcelsLayer.addLayer(L.polygon(p.ring, { color: '#3B4A40', weight: 1, dashArray: '4 4', fillOpacity: 0, interactive: false, className: 'parcel-outline' }));
+      allParcelsLayer.addLayer(L.polygon(polysOf(p), { color: '#3B4A40', weight: 1, dashArray: '4 4', fillOpacity: 0, interactive: false, className: 'parcel-outline' }));
     }
     if (m || selected?.parcel.id === p.id) addInfoPoints(p);
   }
@@ -205,7 +205,7 @@ async function drawRescue() {
 async function select(parcel, latlng) {
   selected = { parcel, latlng };
   clearMarks();
-  selectionLayer.addLayer(L.polygon(parcel.ring, { color: '#FFFFFF', weight: 3.5, fillColor: '#1F4A2C', fillOpacity: 0.35, interactive: false }));
+  selectionLayer.addLayer(L.polygon(polysOf(parcel), { color: '#FFFFFF', weight: 3.5, fillColor: '#1F4A2C', fillOpacity: 0.35, interactive: false }));
   selectionLayer.addLayer(infoPin(latlng));
   drawParcels();
   await renderInfo();

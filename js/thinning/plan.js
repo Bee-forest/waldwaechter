@@ -1,5 +1,5 @@
 // Rechenkern der Durchforstungsmethode (ohne UI, gut testbar).
-import { areaHa, generateGrid } from '../geo.js';
+import { areaHa, generateGrid, polysOf, areaM2Polys } from '../geo.js';
 import { bestimme, DIMENSION, RASTER_M, RAND_M, amPunkt, QUALITAET_TEXT, AUSWAHL_TEXT } from './methode.js';
 
 export const SPECIES = ['Fichte', 'Kiefer', 'Lärche', 'Douglasie', 'Tanne', 'Buche', 'Eiche', 'Bergahorn', 'Esche', 'Birke', 'Erle'];
@@ -63,11 +63,15 @@ export const pointTotal = (pt) => pt.removals.reduce((s, r) => s + r.count, 0);
 
 // ---------- Neue Methode (Raster-Verfahren, siehe methode.js) ----------
 
-export function computePlanMethode(ring, p) {
-  const ha = areaHa(ring);
+export function computePlanMethode(sel, p) {
+  // sel: { ring, polys?, flaecheHa? } – bei Flurstücken amtliche Fläche und vollständige Geometrie
+  const sh = Array.isArray(sel) ? { ring: sel } : sel;
+  const polys = polysOf(sh);
+  const geoHa = areaM2Polys(polys) / 10000;
+  const ha = sh.flaecheHa ?? geoHa;
   const r = bestimme(p);
   p.spacing = RASTER_M;
-  const grid = generateGrid(ring, RASTER_M, { rand: RAND_M });
+  const grid = generateGrid(sh.ring, RASTER_M, { rand: RAND_M, polys });
   // „in jedem n-ten Punkt“: fortlaufend über alle Punkte mitzählen
   const points = grid.map((at, i) => ({
     id: i + 1,
@@ -82,6 +86,8 @@ export function computePlanMethode(ring, p) {
   return {
     methode: 'raster-2026-11',
     areaHa: ha,
+    areaAmtlich: sh.flaecheHa != null,
+    areaGeoHa: geoHa,
     stufe: r.stufe,
     szenario: r.szenario,
     gruppeLabel: r.gruppeLabel,

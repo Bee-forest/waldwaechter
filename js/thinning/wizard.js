@@ -4,7 +4,8 @@ import { h, fill, icon, dialog, confirmDialog, toast } from '../ui.js';
 import { store, uid } from '../store.js';
 import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
-import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox } from '../geo.js';
+import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox, polysOf, areaM2Polys } from '../geo.js';
+import { parcelExact, amtlicheFlaecheHa } from '../map/thueringen.js';
 import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
 import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, anteilSatz, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
@@ -34,15 +35,52 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   const existing = measureId ? store.get().measures.find((m) => m.id === measureId) : null;
   if (existing?.thinning) {
     const t = existing.thinning;
-    st.sel = { ring: t.ring, label: t.label, parcelId: existing.parcelId };
+    st.sel = { ring: t.ring, polys: t.polys, flaecheHa: t.flaecheHa, parcel: t.parcel, label: t.label, parcelId: existing.parcelId };
     st.mode = t.mode || 'parcel';
     st.params = t.params || null;
     st.plan = t.plan || null;
     st.step = st.plan ? 3 : st.params ? 1 : 0;
   } else if (parcelId && byId[parcelId]) {
-    const p = byId[parcelId];
-    st.sel = { ring: p.ring, label: `Flurstück ${p.nr}, ${p.gemarkung}`, parcelId };
+    st.sel = selFromParcel(byId[parcelId]);
+    queueMicrotask(() => refreshExact());
   }
+
+  // Exakte Flurstücksdaten: amtliche Fläche, vollständige Geometrie (Teilflächen, Löcher), Nutzung
+  function selFromParcel(p) {
+    const ha = p.flaecheAmtlich ? p.flaecheAmtlich / 10000 : null;
+    return {
+      ring: p.ring, polys: p.polys, flaecheHa: ha, parcelId: p.id,
+      parcel: { gemarkung: p.gemarkung, flur: p.flur, nr: p.nr, gemeinde: p.gemeinde, lage: p.lage, nutzungText: p.nutzungText, id: p.id },
+      label: `Flurstück ${p.nr}, Gemarkung ${p.gemarkung}, Flur ${p.flur}`,
+    };
+  }
+  // Gespeicherte Flurstücke aus älteren Versionen haben nur den äußeren Ring → amtliche Daten nachladen
+  async function refreshExact() {
+    const id = st.sel?.parcelId;
+    const p = id && byId[id];
+    if (!p || p.source !== 'alkis') return;
+    const fresh = await parcelExact(p);
+    if (fresh === p || st.sel?.parcelId !== id) return;
+    byId[id] = fresh;
+    store.update((s) => { const i = s.parcels.findIndex((x) => x.id === id); if (i >= 0) s.parcels[i] = { ...s.parcels[i], ...fresh, category: s.parcels[i].category, addedAt: s.parcels[i].addedAt }; });
+    if (st.step <= 1 && !st.plan) { st.sel = selFromParcel(fresh); st.auto = null; if (st.step === 0) renderSelect(); else renderParams(); }
+  }
+  function parcelCard() {
+    const pc = st.sel?.parcel;
+    if (!pc) return null;
+    const teile = st.sel.polys?.length > 1 ? `${st.sel.polys.length} Teilflächen` : null;
+    const loecher = st.sel.polys?.reduce((n, poly) => n + poly.length - 1, 0) || 0;
+    return h('dl', { class: 'parcel-facts' },
+      h('div', {}, h('dt', {}, 'Flurstück'), h('dd', {}, `${pc.nr}`)),
+      h('div', {}, h('dt', {}, 'Gemarkung / Flur'), h('dd', {}, `${pc.gemarkung}, Flur ${pc.flur}`)),
+      h('div', {}, h('dt', {}, st.sel.flaecheHa != null ? 'Fläche (amtlich)' : 'Fläche (berechnet)'), h('dd', {}, st.sel.flaecheHa != null ? `${selHa().toLocaleString('de-DE', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ha (${Math.round(selHa() * 10000).toLocaleString('de-DE')} m²)` : formatHa(selHa()))),
+      pc.nutzungText ? h('div', {}, h('dt', {}, 'Nutzung laut ALKIS'), h('dd', {}, pc.nutzungText)) : null,
+      pc.lage ? h('div', {}, h('dt', {}, 'Lage'), h('dd', {}, pc.lage)) : null,
+      teile || loecher ? h('div', {}, h('dt', {}, 'Form'), h('dd', {}, [teile, loecher ? `${loecher} ausgesparte Fläche${loecher > 1 ? 'n' : ''}` : null].filter(Boolean).join(', '))) : null,
+    );
+  }
+  const selPolys = () => polysOf(st.sel);
+  const selHa = () => st.sel?.flaecheHa ?? areaM2Polys(selPolys()) / 10000;
 
   // ---------- Grundgerüst ----------
   const stepper = h('ol', { class: 'stepper', 'aria-label': 'Fortschritt' });
@@ -122,7 +160,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     // Kartengröße ändert sich je Schritt → Größe neu messen und Fläche wieder einpassen
     setTimeout(() => {
       map.invalidateSize();
-      if (step !== 3 && st.sel?.ring?.length >= 3) map.fitBounds(L.polygon(st.sel.ring).getBounds(), { paddingTopLeft: [24, 76], paddingBottomRight: [24, 24], maxZoom: 18 });
+      if (step !== 3 && st.sel?.ring?.length >= 3) map.fitBounds(L.polygon(selPolys()).getBounds(), { paddingTopLeft: [24, 76], paddingBottomRight: [24, 24], maxZoom: 18 });
     }, 60);
   }
 
@@ -130,10 +168,11 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     selLayer.clearLayers();
     const ring = st.mode === 'draw' && st.step === 0 ? st.draft : st.sel?.ring;
     if (!ring?.length) return;
-    if (ring.length >= 3) selLayer.addLayer(L.polygon(ring, { color: '#F26B1D', weight: 4, fillColor: '#F26B1D', fillOpacity: 0.12, interactive: false }));
+    const shape = st.mode === 'draw' && st.step === 0 ? ring : selPolys();
+    if (ring.length >= 3) selLayer.addLayer(L.polygon(shape, { color: '#F26B1D', weight: 4, fillColor: '#F26B1D', fillOpacity: 0.12, interactive: false }));
     else selLayer.addLayer(L.polyline(ring, { color: '#F26B1D', weight: 4, interactive: false }));
     if (st.mode === 'draw' && st.step === 0) ring.forEach((ll) => selLayer.addLayer(L.circleMarker(ll, { radius: 6, color: '#fff', weight: 2, fillColor: '#F26B1D', fillOpacity: 1, interactive: false })));
-    if (fit && ring.length >= 3) map.fitBounds(L.polygon(ring).getBounds(), { padding: [30, 30], maxZoom: 18 });
+    if (fit && ring.length >= 3) map.fitBounds(L.polygon(shape).getBounds(), { padding: [30, 30], maxZoom: 18 });
   }
 
   // ---------- Schritt 1: Fläche ----------
@@ -152,7 +191,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       content.append(list.length
         ? h('ul', { class: 'pick-list' }, list.map((p) => h('li', {}, h('button', {
             class: 'pick', 'aria-pressed': String(st.sel?.parcelId === p.id && !st.sel?.stand), onclick: () => pickParcel(p),
-          }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(areaHa(p.ring))}`)))))
+          }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(amtlicheFlaecheHa(p))}${p.flaecheAmtlich ? ' (amtlich)' : ''}`)))))
         : h('p', { class: 'muted' }, 'Du hast noch keine eigenen Flächen. Füge sie auf der Startseite hinzu oder zeichne den Bestand ein.'));
     } else if (st.mode === 'stand') {
       const stands = myStands.length ? myStands : [];
@@ -176,7 +215,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       if (st.draft.length >= 3) st.sel = { ring: [...st.draft], label: `Eingezeichneter Bestand (${formatHa(areaHa(st.draft))})`, parcelId: null };
     }
     fill(panel, h('h2', { class: 'step-title' }, 'Welche Fläche willst du durchforsten?'), tabs, content,
-      st.sel ? h('p', { class: 'selected-label' }, h('span', { html: icon.check }), st.sel.label) : null, next);
+      st.sel ? h('p', { class: 'selected-label' }, h('span', { html: icon.check }), st.sel.label) : null, parcelCard(), next);
     drawSelection(st.mode !== 'draw');
   }
 
@@ -186,9 +225,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   function pickParcel(p) {
-    st.sel = { ring: p.ring, label: `Flurstück ${p.nr}, ${p.gemarkung}`, parcelId: p.id };
+    st.sel = selFromParcel(p);
     st.params = null;
     renderSelect();
+    refreshExact();
   }
 
   function pickStand(s) {
@@ -220,7 +260,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
     if (!st.auto || st.auto.ring !== st.sel.ring) {
       st.auto = { ring: st.sel.ring, loading: true };
-      Promise.all([bestandInFlaeche(st.sel.ring).catch(() => null), oberhoeheFlaeche(st.sel.ring).catch(() => null)]).then(([bestand, oberhoehe]) => {
+      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring).catch(() => null)]).then(([bestand, oberhoehe]) => {
         st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe };
         if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = 'waldverzeichnis'; }
         if (st.step === 1) renderParams();
@@ -285,7 +325,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       ];
       canNext = !loading && !!f.hoKlasse;
     } else {
-      const plan = computePlanMethode(st.sel.ring, f);
+      const plan = computePlanMethode(st.sel, f);
       st.plan = plan;
       title = 'Dein Eingriff';
       help = `${plan.gruppeLabel} · Szenario ${plan.szenario} · B° ${bLabel(f.b)} · Oberhöhe ${HOEHENKLASSEN.find((x) => x.key === f.hoKlasse).label}`;
@@ -301,7 +341,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('strong', {}, `Je Rasterpunkt: ${plan.regel}`),
           zeilen.map((k) => h('small', {}, `${DIMENSION[k].label[0].toUpperCase()}${DIMENSION[k].label.slice(1)} (${DIMENSION[k].bhd}): ${anteilSatz(plan.jePunkt[k])}`)),
           h('small', {}, `Raster ${RASTER_M} m in Schlangenlinien, Start 10–15 m vom Rand, Entnahmekreis ca. ${KREIS_M} m. „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
-        h('p', {}, `Auf ${formatHa(plan.areaHa)} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume für ein Jahrzehnt (Ziel-Entnahme: ca. ${fmt(plan.stufe * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
+        parcelCard(),
+        h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume für ein Jahrzehnt (Ziel-Entnahme: ca. ${fmt(plan.stufe * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
         h('details', { class: 'calc' }, h('summary', {}, 'Was bedeutet die Ziel-Entnahme Grundfläche?'),
           h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
           h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),
@@ -359,7 +400,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function renderGrid() {
     drawSelection();
-    st.plan ??= computePlanMethode(st.sel.ring, st.params);
+    st.plan ??= computePlanMethode(st.sel, st.params);
     const plan = st.plan;
     drawGrid(plan.points, { numbers: true });
     const radius = KREIS_M;
@@ -391,7 +432,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         m = { id: st.measureId, type: 'durchforstung', parcelId: st.sel.parcelId, date: Date.now(), note: '', details: {}, status: 'arbeit', createdAt: Date.now() };
         s.measures.push(m);
       }
-      m.thinning = { ...(m.thinning || {}), mode: st.mode, ring: st.sel.ring, label: st.sel.label, params: st.params, plan: st.plan };
+      m.thinning = { ...(m.thinning || {}), mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
       Object.assign(m, patch);
     });
   }

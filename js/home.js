@@ -8,6 +8,7 @@ import { areaHa, formatHa, formatDist, centroid, compassLabel } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
 import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls } from './map/thueringen.js';
 import { openProfile } from './profile.js';
+import { bestandAt } from './map/bestand.js';
 import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
@@ -340,11 +341,21 @@ function renderGeoInfo(info) {
   return blocks;
 }
 
+function bestandCard(b) {
+  return h('div', { class: 'geo-card' },
+    h('p', { class: 'geo-kicker' }, 'Bestand'),
+    h('h4', {}, `${b.art || b.text}${b.alter != null ? `, etwa ${b.alter} Jahre` : ''}`),
+    h('p', { class: 'muted' }, `Waldverzeichnis ThüringenForst: „${b.text}“${b.alterStichtag != null ? `, ${b.alterStichtag} Jahre zum Stand ${b.stichtag}, auf heute hochgerechnet` : ''}.`),
+  );
+}
+
 function geoInfoBlock(latlng) {
   const body = h('div', { class: 'geo-grid', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Lade Standort, Schutzstatus und Waldfunktionen …'));
-  queryPoint(latlng).then((info) => {
+  const bestandP = bestandAt([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]]).catch(() => null);
+  queryPoint(latlng).then(async (info) => {
     if (info.failed) throw new Error('offline');
-    fill(body, ...renderGeoInfo(info));
+    const b = await bestandP;
+    fill(body, b ? bestandCard(b) : null, ...renderGeoInfo(info));
   }).catch(() => fill(body,
     h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'),
     geoFrame('Forstliche Angaben am Punkt', INFO_SOURCES.forst(latlng), 220),

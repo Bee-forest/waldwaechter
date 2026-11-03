@@ -6,7 +6,8 @@ import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox } from '../geo.js';
 import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
-import { BAUMARTEN, HOECHSTMENGE, DIMENSION, KRONENSCHLUSS, ZUWACHS_RICHTWERT, RASTER, rasterVorschlag, gruppeVon, fmt } from './methode.js';
+import { BAUMARTEN, HOECHSTMENGE, DIMENSION, KRONENSCHLUSS, ZUWACHS_RICHTWERT, RASTER, rasterVorschlag, gruppeVon, fmt, wuechsigkeit } from './methode.js';
+import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
 import { say, WANZE_SVG } from '../mascot.js';
@@ -216,6 +217,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     drawSelection();
     if (!st.params || st.params.main) st.params = defaultParams(); // alte Angaben (vorherige Version) verwerfen
     const f = st.params;
+    // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
+    if (!st.auto || st.auto.ring !== st.sel.ring) {
+      st.auto = { ring: st.sel.ring, loading: true };
+      Promise.all([bestandInFlaeche(st.sel.ring).catch(() => null), oberhoeheFlaeche(st.sel.ring).catch(() => null)]).then(([bestand, oberhoehe]) => {
+        st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe };
+        if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = 'waldverzeichnis'; }
+        if (st.step === 1) renderParams();
+      });
+    }
     const qi = Math.min(f.q || 0, QUESTIONS.length - 1);
     const q = QUESTIONS[qi];
     const next = () => { f.q = qi + 1; renderParams(); panel.scrollTop = 0; };
@@ -227,7 +237,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
     if (q === 'art') {
       title = 'Welche Baumart prägt den Bestand?';
-      help = 'Wähle die Baumart, die die meisten Bäume stellt. Daraus ergibt sich die Baumartengruppe und damit die Höchstmenge.';
+      const b = st.auto?.bestand;
+      help = b?.art
+        ? `Laut Waldverzeichnis von ThüringenForst: ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Baumart, die die meisten Bäume stellt.`
+        : st.auto?.loading ? 'Suche Baumart im Waldverzeichnis …' : 'Wähle die Baumart, die die meisten Bäume stellt. Daraus ergibt sich die Baumartengruppe und damit die Höchstmenge.';
       content = Object.entries(BAUMARTEN).map(([g, grp]) => h('div', { class: 'q-group' },
         h('p', { class: 'sheet-label' }, grp.label, ` – höchstens ${HOECHSTMENGE[g]} Fm/ha im Jahrzehnt`),
         h('div', { class: 'q-chips' }, grp.arten.map((a) => choice(f.art === a, () => { f.art = a; f.gruppe = g; renderParams(); }, a))),
@@ -246,19 +259,37 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         [crownSvg(k.b), h('span', { class: 'q-text' }, h('strong', {}, `B° ${fmt(k.b, 1)} – ${k.label}`), h('small', {}, k.text))])));
       canNext = f.b != null;
     } else if (q === 'zuwachs') {
-      const rw = ZUWACHS_RICHTWERT[f.gruppe];
+      const a = st.auto || {};
+      const alter = f.alter ?? a.bestand?.alter ?? null;
+      const oh = a.oberhoehe?.oberhoehe ?? null;
+      const w = wuechsigkeit(f.art, alter, oh);
+      const klasse = w?.klasse || 'mittel';
+      f.wuchs = klasse; f.zuwachs = ZUWACHS_RICHTWERT[f.gruppe][klasse]; f.wuchsQuelle = w ? 'lidar' : 'annahme';
       title = 'Wie wüchsig ist der Bestand?';
-      help = 'Der Zuwachs bestimmt, wie viel genutzt werden darf. Steht er in deiner Forsteinrichtung, trag den Wert ein – sonst schätze über die Wuchskraft.';
+      help = 'Das berechnet die App für dich: aus der Oberhöhe (Laserscanning-Höhenmodell des Landes) und dem Alter (Waldverzeichnis von ThüringenForst).';
+      const loading = a.loading;
       content = [
-        h('div', { class: 'q-cards' }, [['schwach', 'kurze Jahrestriebe, lückige Kronen, armer oder trockener Boden'], ['mittel', 'normaler Wuchs'], ['stark', 'lange Triebe, dichte grüne Kronen, guter Boden']].map(([k, t]) =>
-          choice(f.wuchs === k, () => { f.wuchs = k; f.zuwachs = rw[k]; renderParams(); },
-            h('span', { class: 'q-text' }, h('strong', {}, `${k[0].toUpperCase()}${k.slice(1)}wüchsig`), h('span', {}, `ca. ${rw[k]} Vfm/ha/Jahr (Richtwert)`), h('small', {}, t))))),
-        h('label', { class: 'q-own' }, 'Oder eigener Wert aus der Forsteinrichtung (Vfm/ha/Jahr)',
-          h('input', { type: 'number', inputmode: 'decimal', min: 1, max: 30, step: 0.5, value: f.wuchs === 'eigen' ? f.zuwachs : '',
-            oninput: (e) => { const v = Number(e.target.value); if (v > 0) { f.wuchs = 'eigen'; f.zuwachs = v; nextBtn.disabled = false; } } })),
-        h('p', { class: 'hint' }, 'Die Richtwerte sind vorläufig und werden durch die Werte der Methode ersetzt.'),
+        h('div', { class: 'auto-grid' },
+          h('div', { class: 'auto-card' }, h('span', {}, 'Alter'),
+            alter != null ? h('strong', {}, `${alter} Jahre`) : h('strong', {}, loading ? '…' : 'unbekannt'),
+            a.bestand?.alter != null && f.alter == null ? h('small', {}, `Waldverzeichnis, Stand ${a.bestand.stichtag}: ${a.bestand.alterStichtag} J., hochgerechnet`) : h('small', {}, f.alter != null ? 'von dir geschätzt' : loading ? 'wird geladen' : 'nicht im Waldverzeichnis')),
+          h('div', { class: 'auto-card' }, h('span', {}, 'Oberhöhe'),
+            h('strong', {}, oh != null ? `${fmt(oh, 1)} m` : loading ? '…' : 'folgt'),
+            h('small', {}, oh != null ? `aus ${a.oberhoehe.zellen} Höhenzellen (LiDAR)` : 'Höhenmodell für diese Fläche noch nicht aufbereitet')),
+        ),
+        alter == null && !loading ? h('label', { class: 'q-own' }, 'Für diese Fläche ist kein Alter hinterlegt. Wie alt ist der Bestand ungefähr? (Jahre)',
+          h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: f.alter ?? '', onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; renderParams(); } })) : null,
+        alter != null && !loading ? h('label', { class: 'q-own' }, 'Alter weicht ab? Hier anpassen (Jahre)',
+          h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: alter, onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; renderParams(); } })) : null,
+        h('div', { class: `wuchs-result wuchs-${klasse}` },
+          h('span', {}, 'Wüchsigkeit'),
+          h('strong', {}, `${klasse[0].toUpperCase()}${klasse.slice(1)}wüchsig`),
+          h('small', {}, w ? `Oberhöhe ${fmt(oh, 1)} m statt ${fmt(w.ref, 1)} m bei mittlerem Wuchs im Alter ${alter} → ${fmt(w.verhaeltnis * 100)} %` : 'Vorläufig mittlerer Wuchs angenommen, bis die Oberhöhe aus dem Höhenmodell vorliegt.'),
+          h('small', {}, `Zuwachs ca. ${f.zuwachs} Vfm/ha/Jahr (Richtwert)`),
+        ),
+        h('p', { class: 'hint' }, 'Höhenkurven und Zuwachswerte sind vorläufig und werden durch die Ertragstafeln (Nicke) der Methode ersetzt.'),
       ];
-      canNext = f.zuwachs > 0;
+      canNext = !loading && f.zuwachs > 0;
     } else if (q === 'grundflaeche') {
       title = 'Hast du die Grundfläche gemessen?';
       help = 'Optional. Mit einer Winkelzählprobe vergleichst du deinen Bestand mit der Grundflächenleitkurve. Liegt er darüber, wird etwas mehr entnommen, liegt er darunter, etwas weniger.';

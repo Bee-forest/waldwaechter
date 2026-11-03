@@ -91,3 +91,26 @@ export function berechne(p) {
 }
 
 export const fmt = (v, d = 0) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });
+
+// ---------- Wüchsigkeit aus Oberhöhe und Alter ----------
+// VORLÄUFIG: Oberhöhe einer mittleren Bonität in Abhängigkeit vom Alter
+// (Chapman-Richards h = A · (1 − e^(−k·t))^p). Bitte durch die Oberhöhenfächer der
+// Nicke-Ertragstafeln (ET.xlsx) ersetzen.
+export const HOEHENKURVE = {
+  Fichte: [38, 0.022, 1.6], Tanne: [38, 0.018, 1.6], Douglasie: [48, 0.022, 1.5], Lärche: [36, 0.025, 1.4],
+  Kiefer: [30, 0.025, 1.4], Buche: [36, 0.018, 1.5], Eiche: [32, 0.017, 1.4], Ahorn: [32, 0.024, 1.4],
+  Esche: [32, 0.024, 1.4], Birke: [26, 0.035, 1.3], Erle: [28, 0.03, 1.3], Hainbuche: [24, 0.022, 1.4],
+};
+export function referenzHoehe(art, alter) {
+  const [A, k, p] = HOEHENKURVE[art] || (BAUMARTEN.nadel.arten.includes(art) ? HOEHENKURVE.Fichte : HOEHENKURVE.Buche);
+  return A * (1 - Math.exp(-k * alter)) ** p;
+}
+
+/** Wüchsigkeit: Verhältnis gemessene Oberhöhe zu Referenzhöhe gleichen Alters */
+export function wuechsigkeit(art, alter, oberhoehe) {
+  if (!(alter > 0) || !(oberhoehe > 0)) return null;
+  const ref = referenzHoehe(art, alter);
+  const v = oberhoehe / ref;
+  const klasse = v >= 1.12 ? 'stark' : v <= 0.88 ? 'schwach' : 'mittel';
+  return { ref, verhaeltnis: v, klasse };
+}

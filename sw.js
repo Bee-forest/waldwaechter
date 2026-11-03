@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v2.4.1';
+const VERSION = 'v2.5.0';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -20,7 +20,7 @@ const SHELL_FILES = [
   './js/app.js', './js/ui.js', './js/store.js', './js/geo.js', './js/mascot.js',
   './js/home.js', './js/profile.js', './js/measures.js', './js/placeholders.js',
   './js/map/basemap.js', './js/map/thueringen.js', './js/data/source.js', './js/data/demo-data.js',
-  './js/thinning/wizard.js', './js/thinning/plan.js', './js/thinning/gps.js', './js/thinning/feedback.js', './js/thinning/methode.js', './js/map/geoinfo.js',
+  './js/thinning/wizard.js', './js/thinning/plan.js', './js/thinning/gps.js', './js/thinning/feedback.js', './js/thinning/methode.js', './js/map/geoinfo.js', './js/map/bestand.js',
 ];
 
 const TILE_HOSTS = ['tile.openstreetmap.org', 'sgx.geodatenzentrum.de'];

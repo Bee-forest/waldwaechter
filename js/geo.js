@@ -82,7 +82,7 @@ export function destination([lat, lng], brg, dist) {
  * Liefert die Punkte in Schlangenlinien-Reihenfolge (Reihe für Reihe,
  * abwechselnd West→Ost und Ost→West), damit der Laufweg kurz bleibt.
  */
-export function generateGrid(ring, spacing) {
+export function generateGrid(ring, spacing, { rand = null } = {}) {
   const p = makeProjector(centroid(ring));
   const xy = ring.map(p.toXY);
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -91,8 +91,9 @@ export function generateGrid(ring, spacing) {
     minY = Math.min(minY, y); maxY = Math.max(maxY, y);
   }
   // Raster am Polygon-Mittelpunkt ausrichten, damit es symmetrisch sitzt
-  const offX = ((maxX - minX) % spacing) / 2 + spacing / 2;
-  const offY = ((maxY - minY) % spacing) / 2 + spacing / 2;
+  // rand: fester Abstand der ersten Reihe/Spalte vom Rand (Startpunkt im Nordwesten), sonst mittig
+  const offX = rand ?? ((maxX - minX) % spacing) / 2 + spacing / 2;
+  const offY = rand ?? ((maxY - minY) % spacing) / 2 + spacing / 2;
   const rows = [];
   for (let y = maxY - offY; y >= minY; y -= spacing) { // von Nord nach Süd
     const row = [];

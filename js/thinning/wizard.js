@@ -6,7 +6,7 @@ import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox } from '../geo.js';
 import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
-import { BAUMARTEN, HOECHSTMENGE, DIMENSION, KRONENSCHLUSS, ZUWACHS_RICHTWERT, gruppeVon, fmt, wuechsigkeit } from './methode.js';
+import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, anteilSatz, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
@@ -208,14 +208,14 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const s = st.sel?.stand;
     const art = s?.species || '';
     const dim = s ? (s.dg < 25 ? 'duenn' : s.dg < 50 ? 'mittel' : 'dick') : null;
-    return { art, gruppe: art ? gruppeVon(art) : null, dim, b: null, wuchs: null, zuwachs: null, gIst: null, gSoll: null, spacing: null, q: 0 };
+    return { v: 3, art, gruppe: art ? gruppeVon(art) : null, dim, b: null, hoKlasse: null, alter: null, spacing: null, q: 0 };
   }
 
-  const QUESTIONS = ['art', 'dim', 'b', 'zuwachs', 'grundflaeche', 'ergebnis'];
+  const QUESTIONS = ['art', 'dim', 'b', 'hoehe', 'ergebnis'];
 
   function renderParams() {
     drawSelection();
-    if (!st.params || st.params.main) st.params = defaultParams(); // alte Angaben (vorherige Version) verwerfen
+    if (!st.params || st.params.main || st.params.v !== 3) st.params = defaultParams(); // alte Angaben (vorherige Version) verwerfen
     const f = st.params;
     // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
     if (!st.auto || st.auto.ring !== st.sel.ring) {
@@ -239,91 +239,71 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       title = 'Welche Baumart prägt den Bestand?';
       const b = st.auto?.bestand;
       help = b?.art
-        ? `Laut Waldverzeichnis von ThüringenForst: ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Baumart, die die meisten Bäume stellt.`
-        : st.auto?.loading ? 'Suche Baumart im Waldverzeichnis …' : 'Wähle die Baumart, die die meisten Bäume stellt. Daraus ergibt sich die Baumartengruppe und damit die Höchstmenge.';
-      content = Object.entries(BAUMARTEN).map(([g, grp]) => h('div', { class: 'q-group' },
-        h('p', { class: 'sheet-label' }, grp.label, ` – höchstens ${HOECHSTMENGE[g]} Fm/ha im Jahrzehnt`),
-        h('div', { class: 'q-chips' }, grp.arten.map((a) => choice(f.art === a, () => { f.art = a; f.gruppe = g; renderParams(); }, a))),
+        ? `Laut Waldverzeichnis von ThüringenForst: ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.`
+        : st.auto?.loading ? 'Suche Baumart im Waldverzeichnis …' : 'Wähle die Hauptbaumart. Daraus ergibt sich die Baumartengruppe der Methode.';
+      content = Object.entries(GRUPPEN).map(([g, grp]) => h('div', { class: 'q-group' },
+        h('p', { class: 'sheet-label' }, grp.label),
+        h('div', { class: 'q-chips' }, grp.arten.map((a) => choice(f.art === a, () => { f.art = a; f.gruppe = gruppeVon(a); renderParams(); }, a))),
       ));
       canNext = !!f.art;
     } else if (q === 'dim') {
-      title = 'Wie dick sind die meisten Bäume?';
-      help = 'Gemessen in 1,3 m Höhe (Brusthöhe). Ohne Kluppe: Umfang mit dem Maßband messen.';
+      title = 'Welche Stärkeklasse stellt die meisten Bäume?';
+      help = 'Zähle grob die Stämme: Die Klasse mit mindestens 40 % der Bäume und 10 Prozentpunkten Vorsprung bestimmt das Szenario. Durchmesser in 1,3 m Höhe; ohne Kluppe den Umfang messen.';
       content = h('div', { class: 'q-cards' }, Object.entries(DIMENSION).map(([k, d]) => choice(f.dim === k, () => { f.dim = k; renderParams(); },
-        [h('span', { class: `stem stem-${k}`, 'aria-hidden': 'true' }), h('span', { class: 'q-text' }, h('strong', {}, d.label[0].toUpperCase() + d.label.slice(1)), h('span', {}, `Durchmesser ${d.bhd}`), h('small', {}, d.umfang))])));
+        [h('span', { class: `stem stem-${k}`, 'aria-hidden': 'true' }), h('span', { class: 'q-text' }, h('strong', {}, `Viele ${d.label[0].toUpperCase()}${d.label.slice(1)}e – Szenario ${SZENARIO[k]}`), h('span', {}, `Durchmesser ${d.bhd}`), h('small', {}, d.umfang))])));
       canNext = !!f.dim;
     } else if (q === 'b') {
       title = 'Wie dicht stehen die Kronen?';
-      help = 'Schau im Bestand nach oben: Wie viel Himmel siehst du zwischen den Kronen? Das entspricht dem Bestockungsgrad B°. Unter B° 0,8 sinkt die erlaubte Höchstmenge.';
+      help = 'Schau im Bestand nach oben: Wie viel Himmel siehst du zwischen den Kronen? Das entspricht dem Bestockungsgrad B° (in Stufen von 0,1).';
       content = h('div', { class: 'q-cards two' }, KRONENSCHLUSS.map((k) => choice(f.b === k.b, () => { f.b = k.b; renderParams(); },
-        [crownSvg(k.b), h('span', { class: 'q-text' }, h('strong', {}, `B° ${fmt(k.b, 1)} – ${k.label}`), h('small', {}, k.text))])));
+        [crownSvg(Math.min(k.b, 1.15)), h('span', { class: 'q-text' }, h('strong', {}, `B° ${bLabel(k.b)} – ${k.label}`), h('small', {}, k.text))])));
       canNext = f.b != null;
-    } else if (q === 'zuwachs') {
+    } else if (q === 'hoehe') {
       const a = st.auto || {};
-      const alter = f.alter ?? a.bestand?.alter ?? null;
-      const oh = a.oberhoehe?.oberhoehe ?? null;
-      const w = wuechsigkeit(f.art, alter, oh);
-      const klasse = w?.klasse || 'mittel';
-      f.wuchs = klasse;
-      f.zuwachs = w ? Math.round(w.zuwachs * 10) / 10 : ZUWACHS_RICHTWERT[f.gruppe][klasse];
-      f.wuchsQuelle = w?.gemessen ? 'lidar' : w ? 'tafel-mittel' : 'richtwert';
-      f.bonitaet = w?.bonitaet || null;
-      title = 'Wie wüchsig ist der Bestand?';
-      help = 'Das berechnet die App für dich: Oberhöhe (Laserscanning-Höhenmodell des Landes) und Alter (Waldverzeichnis von ThüringenForst) werden in der Ertragstafel eingeordnet.';
       const loading = a.loading;
-      const KL = { stark: 'Starkwüchsig', mittel: 'Mittelwüchsig', schwach: 'Schwachwüchsig' };
+      const alter = f.alter ?? a.bestand?.alter ?? null;
+      const lidar = a.oberhoehe?.oberhoehe ?? null;
+      const geschaetzt = lidar == null && alter ? oberhoeheAusAlter(f.art, alter) : null;
+      const ho = lidar ?? geschaetzt;
+      if (!f.hoKlasseManuell) f.hoKlasse = ho != null ? hoeheKlasse(ho) : null;
+      title = 'Wie hoch ist der Bestand?';
+      help = 'Gemeint ist die Oberhöhe, die Höhe der höchsten Bäume. Die App ermittelt sie für dich.';
       content = [
         h('div', { class: 'auto-grid' },
+          h('div', { class: 'auto-card' }, h('span', {}, 'Oberhöhe'),
+            h('strong', {}, loading ? '…' : ho != null ? `${lidar != null ? '' : 'ca. '}${fmt(ho, 0)} m` : 'unbekannt'),
+            h('small', {}, lidar != null ? `gemessen: Laserscanning (${a.oberhoehe.zellen} Höhenzellen)` : geschaetzt != null ? `geschätzt aus dem Alter (${alter} J.) mit der Ertragstafel, mittlere Bonität` : loading ? 'wird ermittelt' : 'kein Höhenmodell und kein Alter')),
           h('div', { class: 'auto-card' }, h('span', {}, 'Alter'),
             h('strong', {}, alter != null ? `${alter} Jahre` : loading ? '…' : 'unbekannt'),
-            h('small', {}, f.alter != null ? 'von dir angegeben' : a.bestand?.alter != null ? `Waldverzeichnis, Stand ${a.bestand.stichtag}: ${a.bestand.alterStichtag} J., hochgerechnet` : loading ? 'wird geladen' : 'nicht im Waldverzeichnis')),
-          h('div', { class: 'auto-card' }, h('span', {}, 'Oberhöhe'),
-            h('strong', {}, oh != null ? `${fmt(oh, 1)} m` : loading ? '…' : 'folgt'),
-            h('small', {}, oh != null ? `aus ${a.oberhoehe.zellen} Höhenzellen (LiDAR)` : 'Höhenmodell für diese Fläche noch nicht aufbereitet')),
+            h('small', {}, f.alter != null ? 'von dir angegeben' : a.bestand?.alter != null ? `Waldverzeichnis, Stand ${a.bestand.stichtag}, hochgerechnet` : 'nicht im Waldverzeichnis')),
         ),
-        alter == null && !loading ? h('label', { class: 'q-own' }, 'Für diese Fläche ist kein Alter hinterlegt. Wie alt ist der Bestand ungefähr? (Jahre)',
-          h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: f.alter ?? '', onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; renderParams(); } })) : null,
-        alter != null && !loading ? h('label', { class: 'q-own' }, 'Alter weicht ab? Hier anpassen (Jahre)',
-          h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: alter, onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; renderParams(); } })) : null,
-        loading ? null : h('div', { class: `wuchs-result wuchs-${klasse}` },
-          h('span', {}, 'Wüchsigkeit'),
-          h('strong', {}, w?.gemessen ? `${KL[klasse]} · ${w.bonitaet}` : 'Mittelwüchsig (angenommen)'),
-          h('small', {}, w?.gemessen
-            ? `${w.mittelhoehe ? `Mittelhöhe ca. ${fmt(w.hTafel, 1)} m (aus Oberhöhe)` : `Oberhöhe ${fmt(oh, 1)} m`} im Alter ${alter} → ${w.bonName} ${w.bonitaet}`
-            : w ? 'Ohne Höhenmessung rechnet die App mit der mittleren Bonität der Ertragstafel.' : 'Ohne Alter lässt sich die Ertragstafel nicht nutzen – vorläufiger Richtwert.'),
-          h('small', {}, `Laufender Zuwachs laut Ertragstafel: ${fmt(f.zuwachs, 1)} Vfm/ha/Jahr${w ? ` (${w.zuwachsArt})` : ''}`),
-        ),
-        w ? h('p', { class: 'hint' }, `Ertragstafel: ${w.quelle}${w.tafel.art !== f.art ? ` – für ${f.art} verwendet` : ''}. Quelle: Ertragstafelauszüge, Prof. Dr. A. Nicke, FH Schwarzburg.`) : null,
+        lidar == null && !loading ? h('label', { class: 'q-own' }, alter == null ? 'Kein Alter hinterlegt. Wie alt ist der Bestand ungefähr? (Jahre)' : 'Alter weicht ab? Hier anpassen (Jahre)',
+          h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: alter ?? '', onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; f.hoKlasseManuell = false; renderParams(); } })) : null,
+        loading ? null : h('p', { class: 'sheet-label' }, ho != null ? 'Höhenklasse (bei Bedarf korrigieren)' : 'Höhenklasse wählen'),
+        loading ? null : h('div', { class: 'q-cards' }, HOEHENKLASSEN.map((k) => choice(f.hoKlasse === k.key, () => { f.hoKlasse = k.key; f.hoKlasseManuell = true; renderParams(); },
+          h('span', { class: 'q-text' }, h('strong', {}, `${k.label}${ho != null && hoeheKlasse(ho) === k.key ? ' (ermittelt)' : ''}`), h('small', {}, k.text))))),
       ];
-      canNext = !loading && f.zuwachs > 0;
-    } else if (q === 'grundflaeche') {
-      title = 'Hast du die Grundfläche gemessen?';
-      help = 'Optional. Mit einer Winkelzählprobe vergleichst du deinen Bestand mit der Grundflächenleitkurve. Liegt er darüber, wird etwas mehr entnommen, liegt er darunter, etwas weniger.';
-      content = h('div', { class: 'form' },
-        h('div', { class: 'form-row' },
-          h('label', {}, 'Gemessene Grundfläche (m²/ha)', h('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: f.gIst ?? '', oninput: (e) => { f.gIst = Number(e.target.value) || null; } })),
-          h('label', {}, 'Sollwert laut Leitkurve (m²/ha)', h('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: f.gSoll ?? '', oninput: (e) => { f.gSoll = Number(e.target.value) || null; } })),
-        ),
-      );
-      nextLabel = 'Weiter (oder ohne Messung)';
+      canNext = !loading && !!f.hoKlasse;
     } else {
       const plan = computePlanMethode(st.sel.ring, f);
       st.plan = plan;
       title = 'Dein Eingriff';
-      help = `${BAUMARTEN[f.gruppe].label} (${f.art}), ${DIMENSION[f.dim].label}, B° ${fmt(f.b, 1)}`;
-      const bm = plan.jePunkt === 1 ? '1 Baum' : `${plan.jePunkt} Bäume`;
+      help = `${plan.gruppeLabel} · Szenario ${plan.szenario} · B° ${bLabel(f.b)} · Oberhöhe ${HOEHENKLASSEN.find((x) => x.key === f.hoKlasse).label}`;
+      const zeilen = ['dick', 'mittel', 'duenn'].filter((k) => plan.jePunkt[k] > 0);
       content = [
         h('div', { class: 'preview' },
-          h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.entnahmeFmHa)), h('span', {}, 'Fm/ha')),
-          h('div', {}, h('span', { class: 'pv-n' }, plan.perHa), h('span', {}, 'Bäume/ha')),
-          h('div', {}, h('span', { class: 'pv-n' }, `${plan.abstand} m`), h('span', {}, 'Rasterabstand')),
-          h('div', {}, h('span', { class: 'pv-n' }, plan.jePunkt), h('span', {}, 'Bäume je Punkt')),
+          h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'm²/ha Grundfläche')),
+          h('div', {}, h('span', { class: 'pv-n' }, `${RASTER_M} m`), h('span', {}, 'Raster')),
+          h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
+          h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume gesamt')),
         ),
         h('div', { class: 'raster-rule' },
-          h('strong', {}, `Alle ${plan.abstand} m: ${bm} mit ${DIMENSION[f.dim].bhd} Durchmesser`),
-          h('small', {}, `Das Raster ergibt sich aus der Methode: Bei ${plan.perHa} Bäumen je Hektar steht jeder Rasterpunkt für eine Fläche von ${plan.abstand} × ${plan.abstand} m, in der ${bm} entnommen ${plan.jePunkt === 1 ? 'wird' : 'werden'}. Auch ohne App abschreitbar.`)),
-        h('p', {}, `Auf ${formatHa(plan.areaHa)} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume (ca. ${fmt(plan.entnahmeFm)} Fm) mit einem Durchmesser von ${DIMENSION[f.dim].bhd}. Das entspricht der Nutzung für ein Jahrzehnt.`),
-        h('details', { class: 'calc' }, h('summary', {}, 'So wurde gerechnet'), h('ol', {}, plan.schritte.map((t) => h('li', {}, t)))),
+          h('strong', {}, `Je Rasterpunkt: ${plan.regel}`),
+          zeilen.map((k) => h('small', {}, `${DIMENSION[k].label[0].toUpperCase()}${DIMENSION[k].label.slice(1)} (${DIMENSION[k].bhd}): ${anteilSatz(plan.jePunkt[k])}`)),
+          h('small', {}, `Raster ${RASTER_M} m in Schlangenlinien, Start 10–15 m vom Rand, Entnahmekreis ca. ${KREIS_M} m. „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
+        h('p', {}, `Auf ${formatHa(plan.areaHa)} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume für ein Jahrzehnt (Ziel: ca. ${fmt(plan.stufe * plan.areaHa, 1)} m² Grundfläche).`),
+        h('p', { class: 'hint' }, plan.auswahl),
+        h('details', { class: 'calc' }, h('summary', {}, 'So wurde bestimmt'), h('ol', {}, plan.schritte.map((t) => h('li', {}, t)))),
       ];
       nextLabel = 'Raster auf die Karte legen';
     }
@@ -378,7 +358,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     st.plan ??= computePlanMethode(st.sel.ring, st.params);
     const plan = st.plan;
     drawGrid(plan.points, { numbers: true });
-    const radius = Math.round(st.params.spacing / Math.sqrt(Math.PI));
+    const radius = KREIS_M;
     const offline = h('button', { class: 'btn', onclick: (e) => prefetchTiles(st.sel.ring, base.basemap, e.currentTarget) }, h('span', { html: icon.download }), 'Karte für offline speichern');
 
     fill(panel, 
@@ -387,9 +367,9 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
         h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume gesamt')),
         h('div', {}, h('span', { class: 'pv-n' }, plan.perHa), h('span', {}, 'Bäume je ha')),
-        h('div', {}, h('span', { class: 'pv-n' }, plan.jePunkt), h('span', {}, 'Bäume je Punkt')),
+        h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'm²/ha Ziel')),
       ),
-      h('p', {}, `Die Punkte liegen im Abstand von ${st.params.spacing} m, wie es die Methode vorgibt. An jedem Punkt entnimmst du ${plan.jePunkt === 1 ? '1 Baum' : `${plan.jePunkt} Bäume`} im Umkreis von etwa ${radius} m. Die gestrichelte Linie zeigt die Laufreihenfolge.`),
+      h('p', {}, `Die Punkte liegen im festen Abstand von ${RASTER_M} m, Start 10–15 m vom Rand. Je Punkt: ${plan.regel}, im Umkreis von etwa ${KREIS_M} m. Die gestrichelte Linie zeigt die Laufreihenfolge (Schlangenlinien).`),
       h('p', { class: 'hint' }, 'Im Wald ist oft kein Netz. Speichere die Karte vorher, solange du noch Empfang hast.'),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn', onclick: () => { st.plan = null; go(1); } }, 'Angaben ändern'),
@@ -467,7 +447,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     if (targetIdx < 0) return;
     const pt = st.plan.points[targetIdx];
     navLayer.addLayer(L.marker(pt.at, { interactive: false, icon: L.divIcon({ className: 'target-pulse', html: '<span></span>', iconSize: [44, 44], iconAnchor: [22, 22] }) }));
-    navLayer.addLayer(L.circle(pt.at, { radius: st.params.spacing / Math.sqrt(Math.PI), color: '#D7263D', weight: 1.5, dashArray: '4 4', fillOpacity: 0.05, interactive: false }));
+    navLayer.addLayer(L.circle(pt.at, { radius: AUSWEICHEN_M, color: '#D7263D', weight: 1, dashArray: '2 6', fillOpacity: 0, interactive: false }));
+    navLayer.addLayer(L.circle(pt.at, { radius: KREIS_M, color: '#D7263D', weight: 1.5, dashArray: '4 4', fillOpacity: 0.05, interactive: false }));
   }
 
   function chooseTarget(i) {
@@ -583,20 +564,20 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function renderWork() {
     const pt = working;
-    const radius = Math.round(st.params.spacing / Math.sqrt(Math.PI));
+    const radius = KREIS_M;
     const remaining = pointRemaining(pt);
     const persist = () => saveMeasure();
 
     fill(hud, 
       h('div', { class: 'work-head' },
         h('p', { class: 'hud-label' }, `Rasterpunkt ${pt.id}: Entnahme`),
-        h('p', { class: 'muted' }, `Arbeite im Umkreis von etwa ${radius} m um den Punkt.`),
+        h('p', { class: 'muted' }, `Arbeite im Umkreis von etwa ${radius} m um den Punkt; steht dort kein passender Baum, bis ${AUSWEICHEN_M} m ausweichen.`),
       ),
       pt.removals.length
         ? h('ul', { class: 'removals' }, pt.removals.map((r) => h('li', { class: `removal ${r.marked >= r.count ? 'complete' : ''}` },
             h('div', { class: 'removal-text' },
               h('strong', {}, r.species),
-              h('span', {}, `Ziel-BHD ${r.dmin} bis ${r.dmax} cm`),
+              h('span', {}, r.dmax >= 99 ? `BHD über ${r.dmin} cm` : `BHD ${r.dmin} bis ${r.dmax} cm`),
             ),
             h('div', { class: 'counter' },
               h('button', { class: 'count-btn', 'aria-label': `Einen ${r.species} weniger`, disabled: r.marked <= 0, onclick: () => { r.marked--; persist(); renderWork(); } }, '−'),
@@ -605,6 +586,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
             ),
           )))
         : h('p', {}, 'An diesem Punkt ist keine Entnahme vorgesehen. Prüfe den Bestand und schließe den Punkt ab.'),
+      h('p', { class: 'hint' }, st.plan.auswahl || ''),
       h('p', { class: 'hint' }, st.plan.hint),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn', onclick: () => { working = null; highlightTarget(); renderHud(); } }, 'Zurück zur Navigation'),

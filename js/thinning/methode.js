@@ -1,36 +1,44 @@
-// Neue Durchforstungsmethode (Raster-Verfahren für den Privatwald)
-// ------------------------------------------------------------------
-// Festgelegt (Masterarbeit, Stand 02.11.2026):
-//  • Höchstmenge je Jahrzehnt: Laubholz 55, Nadelholz 80 Fm/ha
-//    – gilt ab Bestockungsgrad B° ≥ 0,8, darunter linear mit B° sinkend
-//  • Nutzungsanteil am Zehnjahreszuwachs: dünn 40 %, mittel 70 %, dick 110 %
-//    (starke Bestände bauen Vorrat ab, schwächere bauen Vorrat auf – aber immer Nutzung)
-//  • Stärkeklassen für alle Baumarten gleich: dünn 7–25 cm, mittel 25–50 cm, dick > 50 cm
-//  • Korrektur über die Grundflächenleitkurve in beide Richtungen
-//
-// VORLÄUFIG (bitte durch Werte aus der Arbeit ersetzen): Richtwerte für den
-// Zuwachs und das mittlere Volumen eines entnommenen Baums. Sie sind hier nur
-// gesetzt, damit die App rechnen kann, und in der Oberfläche als Richtwert markiert.
+// Neue Durchforstungsmethode (Raster-Verfahren für den Privatwald, Stand 03.11.2026)
+// ------------------------------------------------------------------------------
+// Quelle: Herleitung_NEU.xlsx / „Neue Durchforstungsmethode – alle Werte und ihre Herleitung“.
+// Im Gelände entscheiden vier Größen:
+//   Baumartengruppe der Hauptbaumart · Oberhöhe hₒ · Bestockungsgrad B° · Szenario
+// Tabelle 1 (Gruppe × Oberhöhe × B°) → Eingriffsstufe (Ziel-Entnahme Grundfläche, m²/ha)
+// Tabelle 2 (Szenario × Stufe)       → Bäume je Entnahmepunkt nach Stärkeklasse
+// Feste Parameter: Raster 25 m (16 Punkte/ha), Entnahmekreis ca. 10 m, Ausweichen bis 15 m,
+// Schlangenlinien mit Start 10–15 m vom Rand, „in jedem n-ten Punkt“ fortlaufend mitzählen.
+// Hinter den Tabellen steht die Zielregel (Ertragstafel-Zuwachs, Nutzungsanteile 1,1/0,7/0,4,
+// Grundflächenleitkurve FA_035 in beide Richtungen, Höchstmenge 80/55 m³/ha × min(1; B°/0,8)).
 
 export const BAUMARTEN = {
   nadel: { label: 'Nadelholz', arten: ['Fichte', 'Kiefer', 'Lärche', 'Douglasie', 'Tanne'] },
   laub: { label: 'Laubholz', arten: ['Buche', 'Eiche', 'Ahorn', 'Esche', 'Birke', 'Erle', 'Hainbuche'] },
 };
+export const HOECHSTMENGE = { nadel: 80, laub: 55 };          // m³/ha/Jahrzehnt (in die Tabellen eingerechnet)
+export const gruppeVon = (art) => (BAUMARTEN.nadel.arten.includes(art) ? 'nadel' : 'laub');
 
-export const HOECHSTMENGE = { nadel: 80, laub: 55 };          // Fm/ha/Jahrzehnt
-export const B_GRENZE = 0.8;
-export const NUTZUNGSANTEIL = { duenn: 0.4, mittel: 0.7, dick: 1.1 };
-
-export const DIMENSION = {
-  duenn: { label: 'dünn', bhd: '7–25 cm', dmin: 7, dmax: 25, umfang: 'Umfang bis ca. 80 cm',
-    hint: 'Entnimm vor allem Bedränger der besten Bäume sowie kranke und schlecht geformte Stämme. Die vitalsten, gerade gewachsenen Bäume bleiben stehen.' },
-  mittel: { label: 'mittel', bhd: '25–50 cm', dmin: 25, dmax: 50, umfang: 'Umfang ca. 80–160 cm',
-    hint: 'Löse die Kronen der besten Bäume frei: Entnimm die ein bis zwei stärksten Bedränger. Unterstand bleibt als Bodenschutz.' },
-  dick: { label: 'dick', bhd: 'über 50 cm', dmin: 50, dmax: null, umfang: 'Umfang über 160 cm',
-    hint: 'Nutze hiebsreife Bäume einzeln oder in kleinen Gruppen und fördere die Verjüngung. Biotop- und Höhlenbäume erhalten.' },
+// Baumartengruppen der Methode (nach Leitkurve und Höchstmenge)
+export const GRUPPEN = {
+  fichte: { label: 'Fichte, Tanne, Douglasie', arten: ['Fichte', 'Tanne', 'Douglasie'] },
+  kiefer: { label: 'Kiefer, Lärche', arten: ['Kiefer', 'Lärche'] },
+  buche: { label: 'Buche, Edel- und sonstiges Laubholz', arten: ['Buche', 'Ahorn', 'Esche', 'Birke', 'Erle', 'Hainbuche'] },
+  eiche: { label: 'Eiche', arten: ['Eiche'] },
 };
+export const gruppe4 = (art) => Object.keys(GRUPPEN).find((g) => GRUPPEN[g].arten.includes(art)) || 'buche';
 
+// Stärkeklassen (BHD), für alle Baumarten gleich
+export const DIMENSION = {
+  dick: { label: 'dick', bhd: 'über 50 cm', dmin: 50, dmax: null, umfang: 'Umfang über 160 cm' },
+  mittel: { label: 'mittel', bhd: '25–50 cm', dmin: 25, dmax: 50, umfang: 'Umfang ca. 80–160 cm' },
+  duenn: { label: 'dünn', bhd: '7–25 cm', dmin: 7, dmax: 25, umfang: 'Umfang bis ca. 80 cm' },
+};
+// Szenario = Schwerpunkt der Stammzahl (≥ 40 % der Stämme und ≥ 10 Prozentpunkte Vorsprung)
+export const SZENARIO = { dick: 1, mittel: 2, duenn: 3 };
+export const SZENARIO_TEXT = { 1: 'viele dicke (Entnahme dick + mittel)', 2: 'viele mittlere (Entnahme mittel + dick)', 3: 'viele dünne (Entnahme dünn + mittel)' };
+
+// Bestockungsgrad in Stufen von 0,1; unter 0,5 und ab 1,2 zusammengefasst
 export const KRONENSCHLUSS = [
+  { b: 1.2, label: 'sehr gedrängt', text: 'Kronen bedrängen sich stark, kein Himmel zu sehen (B° ab 1,2)' },
   { b: 1.1, label: 'gedrängt', text: 'Kronen greifen ineinander, kaum Himmel zu sehen' },
   { b: 1.0, label: 'geschlossen', text: 'Kronen berühren sich überall' },
   { b: 0.9, label: 'fast geschlossen', text: 'vereinzelt kleine Lücken' },
@@ -38,65 +46,85 @@ export const KRONENSCHLUSS = [
   { b: 0.7, label: 'licht', text: 'viele Lücken, Himmel gut sichtbar' },
   { b: 0.6, label: 'räumig', text: 'große Lücken zwischen den Kronen' },
   { b: 0.5, label: 'sehr räumig', text: 'Bäume stehen weitgehend frei' },
+  { b: 0.4, label: 'lückig', text: 'mehr Lücke als Krone (B° unter 0,5)' },
 ];
+export const bStufe = (b) => (b < 0.5 ? 'u05' : b >= 1.2 ? 'ab12' : (Math.floor(b * 10 + 1e-6) / 10).toFixed(1));
+export const bLabel = (b) => (b < 0.5 ? 'unter 0,5' : b >= 1.2 ? 'ab 1,2' : fmt(b, 1));
 
-// Rückfall, wenn kein Alter bekannt ist (sonst Ertragstafel, siehe wuechsigkeit): laufender Zuwachs in Vfm/ha/Jahr
-export const ZUWACHS_RICHTWERT = {
-  nadel: { schwach: 8, mittel: 11, stark: 15 },
-  laub: { schwach: 5, mittel: 7, stark: 9 },
-};
-// VORLÄUFIGE Richtwerte: mittleres Volumen eines entnommenen Baums (Vfm)
-export const BAUMVOLUMEN = {
-  nadel: { duenn: 0.25, mittel: 1.0, dick: 2.6 },
-  laub: { duenn: 0.2, mittel: 1.0, dick: 2.8 },
-};
+// Oberhöhe in drei Klassen
+export const HOEHENKLASSEN = [
+  { key: 'u25', label: 'unter 25 m', text: 'jüngere oder schwächer wüchsige Bestände' },
+  { key: '25_30', label: '25–30 m', text: 'mittelalte Bestände' },
+  { key: 'ab30', label: 'ab 30 m', text: 'hohe, ältere Bestände' },
+];
+export const hoeheKlasse = (ho) => (ho < 25 ? 'u25' : ho < 30 ? '25_30' : 'ab30');
 
-// Raster: Die Lage der Punkte folgt aus der Methode. Jeder Rasterpunkt steht für eine
-// quadratische Zelle; in ihr wird eine feste Zahl Bäume entnommen. Damit gilt
-//   Abstand = √(10 000 m² × Bäume je Punkt ÷ Bäume je ha).
-// Grundregel ist 1 Baum je Punkt. Würde der Abstand dadurch kürzer als MIN_ABSTAND
-// (GPS-Genauigkeit, im Bestand abschreitbar), werden je Punkt mehr Bäume entnommen.
-export const MIN_ABSTAND = 10;   // m
-export function raster(baeumeHa) {
-  if (!(baeumeHa > 0)) return null;
-  let jePunkt = 1;
-  while (Math.sqrt((10000 * jePunkt) / baeumeHa) < MIN_ABSTAND) jePunkt++;
-  const exakt = Math.sqrt((10000 * jePunkt) / baeumeHa);
-  const abstand = Math.max(MIN_ABSTAND, Math.round(exakt));   // auf ganze Meter (Schrittmaß)
-  return { jePunkt, abstand, exakt, zelleM2: abstand * abstand };
+// Tabelle 1 – Eingriffsstufe (Ziel-Entnahme Grundfläche in m²/ha je Jahrzehnt)
+export const TABELLE1 = {"fichte":{"u25":{"u05":1,"0.5":1,"0.6":3,"0.7":3,"0.8":5,"0.9":7,"1.0":7,"1.1":7,"ab12":7},"25_30":{"u05":1,"0.5":1,"0.6":2.5,"0.7":2.5,"0.8":4,"0.9":4,"1.0":5,"1.1":5,"ab12":6},"ab30":{"u05":1,"0.5":2,"0.6":2.5,"0.7":3,"0.8":4,"0.9":4,"1.0":5,"1.1":5,"ab12":5}},"kiefer":{"u25":{"u05":0.5,"0.5":1,"0.6":1,"0.7":1.5,"0.8":2,"0.9":3,"1.0":4,"1.1":5,"ab12":5},"25_30":{"u05":0.5,"0.5":1,"0.6":2,"0.7":2,"0.8":2,"0.9":3,"1.0":3,"1.1":5,"ab12":7},"ab30":{"u05":0.5,"0.5":1,"0.6":1.5,"0.7":2,"0.8":2,"0.9":3,"1.0":5,"1.1":5,"ab12":5}},"buche":{"u25":{"u05":0.5,"0.5":1,"0.6":2,"0.7":2,"0.8":3,"0.9":3,"1.0":5,"1.1":5,"ab12":5},"25_30":{"u05":0.5,"0.5":1,"0.6":1.5,"0.7":1.5,"0.8":3,"0.9":3,"1.0":4,"1.1":4,"ab12":4},"ab30":{"u05":1,"0.5":2,"0.6":2,"0.7":2.5,"0.8":3,"0.9":3,"1.0":3,"1.1":3,"ab12":3}},"eiche":{"u25":{"u05":0.5,"0.5":0.5,"0.6":1,"0.7":1.5,"0.8":1.5,"0.9":2,"1.0":3,"1.1":4,"ab12":4},"25_30":{"u05":0.5,"0.5":1,"0.6":1,"0.7":1.5,"0.8":2.5,"0.9":2.5,"1.0":3,"1.1":4,"ab12":4},"ab30":{"u05":0.5,"0.5":0.5,"0.6":1,"0.7":1,"0.8":2,"0.9":2,"1.0":2,"1.1":2.5,"ab12":2.5}}};
+// Tabelle 2 – Bäume je Entnahmepunkt [dick, mittel, dünn]; Bruchteile = „in jedem n-ten Punkt“
+export const TABELLE2 = {"1":{"0.5":[0.125,0,0],"1":[0.125,0.25,0],"1.5":[0.125,0.5,0],"2":[0.25,0.5,0],"2.5":[0.125,1.0,0],"3":[0.25,1.0,0],"4":[0.5,1.0,0],"5":[1.0,0,0],"6":[1.0,0.5,0],"7":[1.0,1.0,0],"8":[1.5,0.5,0]},"2":{"0.5":[0,0.25,0],"1":[0,0.5,0],"1.5":[0,1.0,0],"2":[0,1.0,0],"2.5":[0,1.5,0],"3":[0.125,1.5,0],"4":[0,2.5,0],"5":[0,3.0,0],"6":[0.125,3.0,0],"7":[0,4.0,0],"8":[0.25,4.0,0]},"3":{"0.5":[0,0,1.0],"1":[0,0,3.0],"1.5":[0,0,4.0],"2":[0,0,6.0],"2.5":[0,0.25,6.0],"3":[0,0,8.0],"4":[0,1.0,8.0],"5":[0,2.0,8.0],"6":[0,2.0,8.0],"7":[0,3.0,8.0],"8":[0,3.0,8.0]}};
+
+// Feste Verfahrensparameter
+export const RASTER_M = 25;          // m, 16 Punkte/ha
+export const RAND_M = 12.5;          // Start 10–15 m vom Rand
+export const KREIS_M = 10;           // Entnahmekreis
+export const AUSWEICHEN_M = 15;      // höchstens so weit ausweichen
+export const RANG = ['Fichte', 'Lärche', 'Buche', 'Kiefer', 'Eiche'];
+export const AUSWAHL_TEXT = 'Im Kreis zuerst Fichte nehmen, dann Lärche, Buche, Kiefer, zuletzt Eiche (andere Arten wie Buche). Einen Baum über wertvollem Unterstand bevorzugen, sonst den nächststehenden. Steht kein passender Baum im Kreis, bis 15 m ausweichen.';
+export const QUALITAET_TEXT = 'Vitale, gut geformte Zukunftsbäume stehen lassen; kranke, beschädigte und schlecht geformte Bäume bevorzugt entnehmen. Biotop- und Höhlenbäume erhalten.';
+
+/** Bruchteil als Geländeregel: 0,125 → „⅛“, 1,5 → „1½“ */
+export function anteilText(v) {
+  if (!v) return '0';
+  const g = Math.floor(v + 1e-9), r = v - g;
+  const fr = Math.abs(r - 0.125) < 1e-6 ? '⅛' : Math.abs(r - 0.25) < 1e-6 ? '¼' : Math.abs(r - 0.5) < 1e-6 ? '½' : Math.abs(r - 0.75) < 1e-6 ? '¾' : r > 1e-6 ? fmt(r, 2) : '';
+  return `${g || ''}${fr}` || '0';
+}
+/** Bruchteil als Satz: 0,125 → „1 Baum an jedem 8. Punkt“, 1,5 → „1 Baum, an jedem 2. Punkt 2“ */
+export function anteilSatz(v) {
+  if (!v) return null;
+  const g = Math.floor(v + 1e-9), r = v - g;
+  const baum = (n) => (n === 1 ? '1 Baum' : `${n} Bäume`);
+  if (r < 1e-6) return `${baum(g)} an jedem Punkt`;
+  const n = Math.round(1 / r);
+  return g ? `${baum(g)} an jedem Punkt, an jedem ${n}. Punkt ${g + 1}` : `1 Baum an jedem ${n}. Punkt`;
+}
+/** Bäume am i-ten Punkt (1-basiert, fortlaufend gezählt) bei durchschnittlich v je Punkt */
+export const amPunkt = (v, i) => Math.floor(i * v + 1e-9) - Math.floor((i - 1) * v + 1e-9);
+
+/** Eingriff nach der Methode */
+export function bestimme({ art, dim, b, hoKlasse }) {
+  const g = gruppe4(art);
+  const bs = bStufe(b);
+  const stufe = TABELLE1[g]?.[hoKlasse]?.[bs];
+  const sz = SZENARIO[dim];
+  const key = String(stufe);
+  const [dick, mittel, duenn] = TABELLE2[sz]?.[key] || [0, 0, 0];
+  const jePunkt = { dick, mittel, duenn };
+  const sum = dick + mittel + duenn;
+  const hl = HOEHENKLASSEN.find((x) => x.key === hoKlasse)?.label;
+  return {
+    gruppe: g, gruppeLabel: GRUPPEN[g].label, szenario: sz, stufe, jePunkt, baeumeJePunkt: sum,
+    baeumeHa: sum * 10000 / (RASTER_M * RASTER_M),
+    regel: ['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${anteilText(jePunkt[k])} ${DIMENSION[k].label}`).join(' + '),
+    schritte: [
+      `Baumartengruppe: ${GRUPPEN[g].label} (Hauptbaumart ${art})`,
+      `Oberhöhe ${hl}, Bestockungsgrad B° ${bLabel(b)}`,
+      `Tabelle 1 → Eingriffsstufe ${fmt(stufe, 1)} m²/ha Grundfläche im Jahrzehnt`,
+      `Szenario ${sz}: ${SZENARIO_TEXT[sz]}`,
+      `Tabelle 2 → je Punkt: ${['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunkt[k])}`).join(', ')}`,
+      `Raster ${RASTER_M} m (16 Punkte/ha) → ca. ${Math.round(sum * 16)} Bäume/ha`,
+    ],
+  };
 }
 
-export const gruppeVon = (art) => (BAUMARTEN.nadel.arten.includes(art) ? 'nadel' : 'laub');
-
-/**
- * Berechnet den Eingriff nach der neuen Methode.
- * @param {object} p  { art, gruppe, dim, b, zuwachs (Vfm/ha/a), gIst?, gSoll? }
- */
-export function berechne(p) {
-  const bFaktor = Math.min(1, p.b / B_GRENZE);
-  const hoechst = HOECHSTMENGE[p.gruppe] * bFaktor;                   // Fm/ha/Jahrzehnt
-  const zuwachs10 = p.zuwachs * 10;                                   // Vfm/ha/Jahrzehnt
-  const ausZuwachs = NUTZUNGSANTEIL[p.dim] * zuwachs10;
-  let kG = 1;
-  if (p.gIst > 0 && p.gSoll > 0) kG = Math.min(1.3, Math.max(0.7, p.gIst / p.gSoll));
-  const roh = ausZuwachs * kG;
-  const entnahme = Math.min(hoechst, roh);                            // Fm/ha/Jahrzehnt
-  const vol = BAUMVOLUMEN[p.gruppe][p.dim];
-  const baeumeHa = entnahme / vol;
-  const ra = raster(baeumeHa);
-  return {
-    bFaktor, hoechst, zuwachs10, ausZuwachs, kG, roh, entnahme, vol, baeumeHa, raster: ra,
-    begrenzt: roh > hoechst,
-    schritte: [
-      `Zehnjahreszuwachs: ${fmt(p.zuwachs, 1)} Vfm/ha/Jahr${p.bonitaet ? ` (Ertragstafel, ${p.bonitaet})` : ''} × 10 = ${fmt(zuwachs10)} Vfm/ha`,
-      `Nutzungsanteil „${DIMENSION[p.dim].label}“: ${Math.round(NUTZUNGSANTEIL[p.dim] * 100)} % → ${fmt(ausZuwachs)} Fm/ha`,
-      kG !== 1 ? `Korrektur Grundflächenleitkurve: × ${fmt(kG, 2)} → ${fmt(roh)} Fm/ha` : null,
-      `Höchstmenge ${BAUMARTEN[p.gruppe].label}: ${HOECHSTMENGE[p.gruppe]} Fm/ha${bFaktor < 1 ? ` × ${fmt(bFaktor, 2)} (B° ${fmt(p.b, 1)} < 0,8) = ${fmt(hoechst)} Fm/ha` : ''}`,
-      `Eingriff: ${fmt(entnahme)} Fm/ha${roh > hoechst ? ' (durch Höchstmenge begrenzt)' : ''}`,
-      `÷ ${fmt(vol, 2)} Fm je Baum (Richtwert ${DIMENSION[p.dim].label}) ≈ ${Math.round(baeumeHa)} Bäume/ha`,
-      ra ? `Raster: √(10 000 m² × ${ra.jePunkt} ${ra.jePunkt > 1 ? 'Bäume' : 'Baum'} je Punkt ÷ ${Math.round(baeumeHa)} Bäume/ha) = ${fmt(ra.exakt, 1)} m → ${ra.abstand} × ${ra.abstand} m${ra.jePunkt > 1 ? ` (mindestens ${MIN_ABSTAND} m Abstand, daher ${ra.jePunkt} Bäume je Punkt)` : ''}` : null,
-    ].filter(Boolean),
-  };
+/** Oberhöhe aus dem Alter schätzen (mittlere Bonität der Ertragstafel), falls keine LiDAR-Höhe vorliegt */
+export function oberhoeheAusAlter(art, alter) {
+  const w = wuechsigkeit(art, alter, null);
+  if (!w) return null;
+  const mid = w.werte[Math.floor((w.werte.length - 1) / 2)];
+  const h = w.werte.length % 2 ? mid.h : (mid.h + w.werte[w.werte.length / 2].h) / 2;
+  return w.tafel.hoehe === 'hm' ? h + 1.5 : h;
 }
 
 export const fmt = (v, d = 0) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });

@@ -1,6 +1,6 @@
 // Rechenkern der Durchforstungsmethode (ohne UI, gut testbar).
 import { areaHa, generateGrid } from '../geo.js';
-import { berechne, DIMENSION } from './methode.js';
+import { bestimme, DIMENSION, RASTER_M, RAND_M, amPunkt, QUALITAET_TEXT, AUSWAHL_TEXT } from './methode.js';
 
 export const SPECIES = ['Fichte', 'Kiefer', 'Lärche', 'Douglasie', 'Tanne', 'Buche', 'Eiche', 'Bergahorn', 'Esche', 'Birke', 'Erle'];
 
@@ -65,36 +65,35 @@ export const pointTotal = (pt) => pt.removals.reduce((s, r) => s + r.count, 0);
 
 export function computePlanMethode(ring, p) {
   const ha = areaHa(ring);
-  const r = berechne(p);
-  const ra = r.raster;
-  p.spacing = ra ? ra.abstand : 20;           // Lage der Punkte folgt aus der Methode
-  const grid = ra ? generateGrid(ring, ra.abstand) : [];
-  const d = DIMENSION[p.dim];
+  const r = bestimme(p);
+  p.spacing = RASTER_M;
+  const grid = generateGrid(ring, RASTER_M, { rand: RAND_M });
+  // „in jedem n-ten Punkt“: fortlaufend über alle Punkte mitzählen
   const points = grid.map((at, i) => ({
     id: i + 1,
     at,
     status: 'open',
-    removals: [{
-      species: p.art || (p.gruppe === 'nadel' ? 'Nadelholz' : 'Laubholz'),
-      count: ra.jePunkt,
-      dmin: d.dmin,
-      dmax: d.dmax ?? 99,
-      marked: 0,
-    }],
+    removals: ['dick', 'mittel', 'duenn'].map((k) => {
+      const d = DIMENSION[k];
+      return { klasse: k, species: `${d.label[0].toUpperCase()}${d.label.slice(1)}er Baum`, count: amPunkt(r.jePunkt[k], i + 1), dmin: d.dmin, dmax: d.dmax ?? 99, marked: 0 };
+    }).filter((x) => x.count > 0),
   }));
-  const total = points.length * (ra?.jePunkt || 0);
+  const total = points.reduce((s2, pt) => s2 + pt.removals.reduce((a2, x) => a2 + x.count, 0), 0);
   return {
-    methode: 'raster-2026',
+    methode: 'raster-2026-11',
     areaHa: ha,
+    stufe: r.stufe,
+    szenario: r.szenario,
+    gruppeLabel: r.gruppeLabel,
+    jePunkt: r.jePunkt,
+    regel: r.regel,
     perHa: Math.round(r.baeumeHa),
-    jePunkt: ra?.jePunkt || 0,
-    abstand: ra?.abstand || null,
     total,
-    entnahmeFmHa: r.entnahme,
-    entnahmeFm: total * r.vol,
+    gZielHa: r.stufe,
     schritte: r.schritte,
-    cellM2: ra ? ra.zelleM2 : 0,
+    cellM2: RASTER_M * RASTER_M,
     points,
-    hint: d.hint,
+    hint: QUALITAET_TEXT,
+    auswahl: AUSWAHL_TEXT,
   };
 }

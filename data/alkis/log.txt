@@ -1,6 +1,7 @@
-2026-11-03 08:24 UTC
+2026-11-03 08:26 UTC
 Region Ilmenau und Umgebung: 90 Kacheln
-  25/90 Kacheln, 0 Flurstücke
-  50/90 Kacheln, 0 Flurstücke
-  75/90 Kacheln, 0 Flurstücke
-Fertig: 0 Kacheln, 0 Flurstücke, 0 Fehler
+  Verwende adv_alkis_wfs mit Variante utm (90 Flurstücke in der Probe)
+  25/90 Kacheln, 15871 Flurstücke
+  50/90 Kacheln, 31555 Flurstücke
+  75/90 Kacheln, 45099 Flurstücke
+Fertig: 90 Kacheln, 54206 Flurstücke, 0 Fehler

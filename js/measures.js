@@ -37,7 +37,7 @@ async function render() {
 
   fill(root, 
     h('header', { class: 'view-head' },
-      h('h1', {}, 'Aufgaben'),
+      h('h1', {}, 'Maßnahmen'),
       h('p', { class: 'muted' }, list.length ? `${list.length} ${list.length === 1 ? 'Maßnahme' : 'Maßnahmen'} gebucht` : 'Plane und dokumentiere Maßnahmen auf deinen Flächen.'),
     ),
     h('button', { class: 'btn btn-primary btn-block btn-large', onclick: () => openNewMeasure() }, h('span', { html: icon.plus }), 'Neue Maßnahme beginnen'),

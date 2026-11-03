@@ -36,7 +36,7 @@ const TOUR = [
   'Hallo, ich bin der WaldWächter! Ich zeige dir kurz, wie die App funktioniert.',
   'Tippe in der Karte auf ein Flurstück. Unter der Karte siehst du dann Größe, Rettungspunkte und Besonderheiten.',
   'Mit „Flurstück suchen“ findest du Flächen nach Gemarkung, Flur und Nummer. Unter „Weitere Layer“ blendest du Standortkarte, Rettungspunkte und Schutzgebiete ein.',
-  'Unter „Aufgaben“ planst du Maßnahmen. Bei einer Durchforstung führe ich dich im Bestand von Rasterpunkt zu Rasterpunkt.',
+  'Unter „Maßnahmen“ planst du deine Arbeiten im Wald. Bei einer Durchforstung führe ich dich im Bestand von Rasterpunkt zu Rasterpunkt.',
 ];
 
 export function startTour(step = 0) {

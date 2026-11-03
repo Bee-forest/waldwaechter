@@ -21,10 +21,13 @@ export const MEASURE_TYPES = {
 const STATUS = { geplant: 'Geplant', arbeit: 'In Arbeit', fertig: 'Abgeschlossen' };
 
 // ---------- Verkehrssicherung: zweimal im Jahr (unbelaubt und belaubt) ----------
+// Einmal in der Vegetationsperiode (belaubt, Mai–September) und einmal im unbelaubten Zustand
+// (November–März, über den Jahreswechsel). Der Tag innerhalb des Zeitraums ist frei wählbar.
 export const VSP_TERMINE = [
-  { zustand: 'unbelaubt', label: 'im unbelaubten Zustand', monat: 2, tag: 15 },
-  { zustand: 'belaubt', label: 'im belaubten Zustand', monat: 7, tag: 15 },
+  { zustand: 'unbelaubt', label: 'im unbelaubten Zustand', zeitraum: 'November bis März', monate: [11, 12, 1, 2, 3], monat: 1, tag: 15 },
+  { zustand: 'belaubt', label: 'in der Vegetationsperiode (belaubt)', zeitraum: 'Mai bis September', monate: [5, 6, 7, 8, 9], monat: 7, tag: 15 },
 ];
+const vspDef = (z) => VSP_TERMINE.find((t) => t.zustand === z);
 export const hatVerkehrssicherung = (parcelId) => store.get().measures.some((m) => m.type === 'verkehrssicherung' && m.parcelId === parcelId && m.status !== 'fertig');
 export function erinnereVerkehrssicherung(p) {
   if (hatVerkehrssicherung(p.id)) return;
@@ -40,9 +43,18 @@ const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0
 function termine(m, von, bis) {
   if (m.serie) {
     const out = [];
-    for (let y = von.getFullYear(); y <= bis.getFullYear(); y++) for (const t of m.serie.termine) {
+    const ab = new Date(new Date(m.createdAt).setHours(0, 0, 0, 0));
+    for (let y = von.getFullYear() - 1; y <= bis.getFullYear(); y++) for (const t of m.serie.termine) {
       const d = new Date(y, t.monat - 1, t.tag);
-      if (d >= von && d < bis && d >= new Date(new Date(m.createdAt).setHours(0, 0, 0, 0))) out.push({ date: d, key: `${y}-${t.zustand}`, label: `Kontrolle ${t.label}`, done: !!m.erledigt?.[`${y}-${t.zustand}`] });
+      if (d < von || d >= bis) continue;
+      // Winterhalbjahr läuft über den Jahreswechsel: November–Dezember gehören zum Winter y/y+1, Januar–März zum Winter y−1/y
+      const winter = t.monat >= 11 ? `${y}/${String(y + 1).slice(2)}` : `${y - 1}/${String(y).slice(2)}`;
+      const key = t.zustand === 'unbelaubt' ? `winter-${winter}` : `sommer-${y}`;
+      const ende = t.zustand === 'unbelaubt' ? new Date(t.monat >= 11 ? y + 1 : y, 2, 31) : new Date(y, 8, 30);
+      if (ende < ab) continue; // Zeitraum vor dem Anlegen der Erinnerung
+      const def = vspDef(t.zustand) || t;
+      out.push({ date: d, key, done: !!m.erledigt?.[key],
+        label: t.zustand === 'unbelaubt' ? `Kontrolle im unbelaubten Zustand (Winter ${winter}, bis 31.03.)` : `Kontrolle in der Vegetationsperiode (Sommer ${y}, bis 30.09.)`, zeitraum: def.zeitraum });
     }
     return out;
   }
@@ -141,13 +153,17 @@ function datumFeld(m) {
 function vspFelder(m) {
   const nt = naechsterTermin(m);
   return h('div', { class: 'vsp-termine' },
-    h('p', { class: 'muted' }, `Zweimal im Jahr: im unbelaubten und im belaubten Zustand.${nt ? ` Nächste Kontrolle: ${nt.date.toLocaleDateString('de-DE')} (${nt.label.replace('Kontrolle ', '')}).` : ''}`),
-    m.serie.termine.map((t, i) => h('label', { class: 'date-field' }, `Kontrolle ${t.label}`,
-      h('input', { type: 'date', value: ymd(new Date(new Date().getFullYear(), t.monat - 1, t.tag)), onchange: (e) => {
-        const [, mo, ta] = e.target.value.split('-').map(Number);
-        if (!mo) return;
-        store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.serie.termine[i] = { ...x.serie.termine[i], monat: mo, tag: ta }; });
-      } }))),
+    h('p', { class: 'muted' }, `Einmal in der Vegetationsperiode (Mai–September) und einmal im unbelaubten Zustand (November–März, über den Jahreswechsel).${nt ? ` Nächste Kontrolle: ${nt.date.toLocaleDateString('de-DE')} – ${nt.label.replace('Kontrolle ', '')}.` : ''}`),
+    m.serie.termine.map((t, i) => {
+      const def = vspDef(t.zustand) || t;
+      return h('label', { class: 'date-field' }, `Kontrolle ${def.label} – geplanter Tag (${def.zeitraum})`,
+        h('input', { type: 'date', value: ymd(new Date(new Date().getFullYear(), t.monat - 1, t.tag)), onchange: (e) => {
+          const [, mo, ta] = e.target.value.split('-').map(Number);
+          if (!mo) return;
+          if (def.monate && !def.monate.includes(mo)) { toast(`Bitte einen Tag zwischen ${def.zeitraum} wählen.`); e.target.value = ymd(new Date(new Date().getFullYear(), t.monat - 1, t.tag)); return; }
+          store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.serie.termine[i] = { ...x.serie.termine[i], monat: mo, tag: ta }; });
+        } }));
+    }),
   );
 }
 

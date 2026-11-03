@@ -4,7 +4,7 @@ import { h, fill, icon, dialog, confirmDialog, toast } from '../ui.js';
 import { store, uid } from '../store.js';
 import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
-import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox, polysOf, areaM2Polys } from '../geo.js';
+import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox, polysOf, areaM2Polys, generateGrid, inPolys } from '../geo.js';
 import { parcelExact, amtlicheFlaecheHa } from '../map/thueringen.js';
 import { computePlanMethode, pointRemaining, pointTotal, zufallsLage } from './plan.js';
 import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, MAX_FM_EINGRIFF, EIN_EINGRIFF_BIS, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
@@ -182,7 +182,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         role: 'tab', 'aria-selected': String(st.mode === k), onclick: () => { if (k === st.mode) return; st.mode = k; st.draft = []; if (k === 'draw') st.sel = null; renderSelect(); },
       }, l)));
     const content = h('div', { class: 'select-content' });
-    const next = h('button', { class: 'btn btn-primary btn-block btn-large', disabled: !st.sel, onclick: () => go(1) }, 'Weiter zu den Angaben');
+    const next = h('button', { class: 'btn btn-primary btn-block btn-large', disabled: !st.sel, onclick: async () => { if (await pruefeKonflikt()) go(1); } }, 'Weiter zu den Angaben');
 
     ctxLayer.clearLayers();
     if (st.mode === 'parcel') {
@@ -476,7 +476,39 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     });
   }
 
+  // Nur eine laufende oder geplante Durchforstung je Fläche
+  function konflikt() {
+    if (!st.sel) return null;
+    const meine = polysOf(st.sel);
+    const proben = generateGrid(st.sel.ring, 10, { polys: meine }).filter((_, i) => i % 3 === 0).slice(0, 300);
+    return store.get().measures.find((m) => {
+      if (m.id === st.measureId || m.type !== 'durchforstung' || m.status === 'fertig' || !m.thinning) return false;
+      if (st.sel.parcelId && m.parcelId === st.sel.parcelId) return true;
+      const andere = polysOf(m.thinning);
+      if (!andere?.length || !andere[0]?.[0]?.length) return false;
+      return proben.some((pt) => inPolys(pt, andere)) || generateGrid(m.thinning.ring, 10, { polys: andere }).filter((_, i) => i % 3 === 0).slice(0, 300).some((pt) => inPolys(pt, meine));
+    }) || null;
+  }
+  async function pruefeKonflikt() {
+    const m = konflikt();
+    if (!m) return true;
+    const pts = m.thinning.plan?.points || [];
+    const erledigt = pts.filter((x) => x.status === 'done').length;
+    const ei = m.thinning.plan?.eingriffe;
+    const wann = m.status === 'geplant' ? `vorgemerkt für ${new Date(m.date).getFullYear()}` : `begonnen, ${erledigt} von ${pts.length} Rasterpunkten erledigt`;
+    const v = await dialog({
+      title: 'Auf dieser Fläche läuft schon eine Durchforstung',
+      body: h('div', {},
+        h('p', {}, `${m.thinning.label}${ei?.anzahl > 1 ? ` – Eingriff ${ei.nr} von ${ei.anzahl}` : ''}: ${wann}.`),
+        h('p', {}, 'Auf einer Fläche kann immer nur eine Durchforstung zur Zeit geplant oder durchgeführt werden. Schließe die bestehende zuerst ab oder lösche sie in der Maßnahmenübersicht.')),
+      actions: [{ label: 'Abbrechen', value: false }, { label: 'Bestehende öffnen', value: true, primary: true }],
+    });
+    if (v) { close(); openThinningWizard({ measureId: m.id }); }
+    return false;
+  }
+
   async function startThinning() {
+    if (!(await pruefeKonflikt())) return;
     unlockAudio(); // Nutzergeste → Audio für iOS-Fallback freischalten
     await requestCompass();
     saveMeasure({ status: 'arbeit' });

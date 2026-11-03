@@ -121,6 +121,7 @@ export function generateGrid(ring, spacing, { rand = null, polys = null, offset 
 }
 
 export function formatHa(ha) {
+  if (!Number.isFinite(ha)) return '– ha';
   return ha.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ha';
 }
 

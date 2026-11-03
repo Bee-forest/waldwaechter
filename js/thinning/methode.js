@@ -102,18 +102,33 @@ export function anteilSatz(v) {
 /** Bäume am i-ten Punkt (1-basiert, fortlaufend gezählt) bei durchschnittlich v je Punkt */
 export const amPunkt = (v, i) => Math.floor(i * v + 1e-9) - Math.floor((i - 1) * v + 1e-9);
 
-// Höchstens 50 Fm/ha je Eingriff. Unter 40 Fm/ha im Jahrzehnt ein Eingriff, sonst zwei
+// Höchstens 50 Fm/ha je Eingriff. Unter 40 Fm/ha Entnahme im Jahrzehnt ein Eingriff, sonst zwei
 // (bzw. so viele, dass je Eingriff höchstens 50 Fm/ha anfallen).
 export const MAX_FM_EINGRIFF = 50;
 export const EIN_EINGRIFF_BIS = 40;
-// Volumen ≈ Grundfläche × Formhöhe; Formhöhe ≈ 0,43 × Oberhöhe (aus den Thüringer Ertragstafeln,
-// z. B. Fichte M28/80 J.: 558 m³ / 49,1 m² = 11,4 m bei hₒ 26,3 m; Buche 30/100 J.: 14,1 m bei hₒ 31,1 m)
-export const FORMHOEHE_FAKTOR = 0.43;
-export const HO_KLASSENMITTE = { u25: 21, '25_30': 27.5, ab30: 33 };
-export function eingriffsplan(stufe, ho) {
-  const vZehn = stufe * FORMHOEHE_FAKTOR * ho;                 // Fm/ha im Jahrzehnt
+// Entnahmemenge im Jahrzehnt (Fm/ha) aus der Simulation der Methode an 3.500 Beständen
+// (Entnahme_Baumzahlen_NEU.xlsx): je Gruppe × Oberhöhe × B° × Szenario [V, Bestände],
+// bei wenigen Beständen Rückfall auf Gruppe × B° × Szenario.
+export const ENTNAHME_V = {"buche":{"u25":{"u05":{"2":[6.5,2],"3":[4,39]},"0.5":{"1":[7.4,1],"2":[7.8,1],"3":[9.3,27]},"0.6":{"3":[18.6,43]},"0.7":{"3":[17.6,22]},"0.8":{"3":[21.4,18]},"0.9":{"2":[23.9,1],"3":[29.7,18]},"1.0":{"3":[25.7,13]},"1.1":{"2":[43.4,1],"3":[25.8,9]},"ab12":{"3":[35.5,7]}},"25_30":{"u05":{"1":[7.2,11],"2":[5.7,48],"3":[2.9,34]},"0.5":{"1":[11.2,13],"2":[11,25],"3":[8.5,24]},"0.6":{"1":[25.1,5],"2":[19.5,28],"3":[11.5,17]},"0.7":{"1":[14.7,7],"2":[20.5,24],"3":[11.8,39]},"0.8":{"1":[28.5,2],"2":[28.7,10],"3":[23.8,5]},"0.9":{"1":[34.2,1],"2":[31.5,7],"3":[26.2,12]},"1.0":{"1":[46,2],"2":[50.7,5],"3":[40.1,7]},"1.1":{"1":[49.8,2],"2":[51.2,7],"3":[47.2,14]},"ab12":{"1":[47.4,1],"2":[49,6],"3":[34.9,4]}},"ab30":{"u05":{"1":[16.1,87],"2":[11.9,33],"3":[9.3,3]},"0.5":{"1":[31.2,50],"2":[25.2,24],"3":[8.8,2]},"0.6":{"1":[42.3,47],"2":[27.3,35],"3":[17.1,3]},"0.7":{"1":[44.1,76],"2":[34.9,52],"3":[29.3,6]},"0.8":{"1":[52.5,13],"2":[42.8,20]},"0.9":{"1":[51.1,32],"2":[43.9,24],"3":[19.5,2]},"1.0":{"1":[59,31],"2":[46.3,20],"3":[14.5,3]},"1.1":{"1":[63.9,24],"2":[47.4,17],"3":[17.2,6]},"ab12":{"1":[58.5,34],"2":[47,13],"3":[10.4,4]}}},"eiche":{"u25":{"u05":{"2":[4.7,8],"3":[3,44]},"0.5":{"2":[4.8,6],"3":[2.7,14]},"0.6":{"1":[17.3,1],"2":[9.2,5],"3":[9.8,22]},"0.7":{"3":[9.6,20]},"0.8":{"2":[19.4,1],"3":[8.2,6]},"0.9":{"1":[22,2],"2":[5.4,1],"3":[19.7,12]},"1.0":{"3":[24.8,14]},"1.1":{"2":[41,2],"3":[29.4,7]},"ab12":{"3":[29.7,5]}},"25_30":{"u05":{"1":[9.5,29],"2":[7,28],"3":[3.1,11]},"0.5":{"1":[12.7,9],"2":[13.3,19],"3":[6.5,6]},"0.6":{"1":[14.8,17],"2":[11.7,31],"3":[7.6,6]},"0.7":{"1":[23.4,11],"2":[26.1,17],"3":[8.6,6]},"0.8":{"1":[49,3],"2":[34.3,11],"3":[11.4,2]},"0.9":{"1":[30.8,6],"2":[38.2,11],"3":[16.5,5]},"1.0":{"1":[46.5,7],"2":[43.7,11],"3":[16.4,3]},"1.1":{"1":[58.5,4],"2":[58.1,3],"3":[49,3]},"ab12":{"1":[65,1],"2":[83.5,1],"3":[34.4,1]}},"ab30":{"u05":{"1":[10.9,33],"2":[12.8,2]},"0.5":{"1":[10.5,15],"2":[9.8,2]},"0.6":{"1":[16.8,23],"2":[12.2,4],"3":[7,1]},"0.7":{"1":[22.6,33],"2":[18.4,4]},"0.8":{"1":[31.5,12],"2":[26.5,7]},"0.9":{"1":[42.7,23],"2":[32.1,4]},"1.0":{"1":[48.5,17],"2":[19.4,3],"3":[13.4,1]},"1.1":{"1":[64.9,11],"3":[25.9,1]},"ab12":{"1":[42.4,7],"2":[54.2,1]}}},"fichte":{"u25":{"u05":{"3":[10.6,86]},"0.5":{"3":[11.5,9]},"0.6":{"3":[27.1,51]},"0.7":{"3":[25.3,26]},"0.8":{"3":[25.7,24]},"0.9":{"3":[35.9,25]},"1.0":{"3":[36.4,10]},"1.1":{"3":[41.2,5]},"ab12":{"3":[35.2,5]}},"25_30":{"u05":{"1":[8.9,3],"2":[9.7,19],"3":[8.7,15]},"0.5":{"1":[10.5,1],"2":[11.2,9],"3":[9.6,7]},"0.6":{"2":[26.6,10],"3":[23.6,12]},"0.7":{"2":[26.2,12],"3":[25.7,19]},"0.8":{"2":[48.5,4],"3":[48.4,5]},"0.9":{"2":[44.9,4],"3":[44.7,6]},"1.0":{"2":[65,3],"3":[60.2,8]},"1.1":{"2":[67.5,1],"3":[63.5,5]},"ab12":{"2":[56,2],"3":[57.2,8]}},"ab30":{"u05":{"1":[14.8,27],"2":[13.2,58],"3":[8.1,5]},"0.5":{"1":[29.6,8],"2":[26.5,33],"3":[14.5,4]},"0.6":{"1":[35.1,18],"2":[35.3,47],"3":[21.7,10]},"0.7":{"1":[47.4,17],"2":[39.5,49],"3":[15.9,8]},"0.8":{"1":[77,14],"2":[64.3,29],"3":[30.5,3]},"0.9":{"1":[78.3,16],"2":[64.9,29],"3":[41.8,6]},"1.0":{"1":[79.4,5],"2":[70.7,13],"3":[71.1,4]},"1.1":{"1":[89,6],"2":[76.9,24],"3":[51.8,6]},"ab12":{"1":[89.1,2],"2":[79.7,16]}}},"kiefer":{"u25":{"u05":{"2":[4.2,21],"3":[2.3,34]},"0.5":{"1":[9.1,2],"2":[9.8,8],"3":[9.2,15]},"0.6":{"1":[11.6,4],"2":[6.5,10],"3":[8.3,37]},"0.7":{"1":[11.3,1],"2":[14.4,4],"3":[9.5,22]},"0.8":{"1":[9.4,1],"2":[17.8,4],"3":[14.3,4]},"0.9":{"1":[17.1,2],"2":[20.8,8],"3":[21,21]},"1.0":{"2":[39.7,5],"3":[23.3,15]},"1.1":{"2":[46.3,3],"3":[34.4,14]},"ab12":{"3":[21.9,8]}},"25_30":{"u05":{"1":[8.3,3],"2":[4.5,17],"3":[2.3,6]},"0.5":{"1":[8.9,5],"2":[8.1,17],"3":[6.5,4]},"0.6":{"1":[17.2,4],"2":[23,12],"3":[11.1,1]},"0.7":{"1":[21.5,3],"2":[19.3,19],"3":[12.8,13]},"0.8":{"1":[20.4,2],"2":[23.9,8],"3":[25.9,2]},"0.9":{"2":[32.1,8],"3":[17.8,5]},"1.0":{"1":[27.1,5],"2":[35.3,8],"3":[27,3]},"1.1":{"1":[77.3,2],"2":[48.6,6],"3":[60.1,4]},"ab12":{"2":[70.7,6],"3":[76.3,9]}},"ab30":{"u05":{"1":[6.8,46],"2":[5.6,5]},"0.5":{"1":[15.3,49],"2":[11.6,7]},"0.6":{"1":[28.3,38],"2":[22.3,5]},"0.7":{"1":[36,72],"2":[23.1,15]},"0.8":{"2":[24,2]},"0.9":{"1":[50.6,6],"2":[38.7,8]},"1.0":{"1":[59.8,29],"2":[79.2,2]},"1.1":{"1":[71.5,20],"2":[80.3,8],"3":[59,2]},"ab12":{"1":[62.8,56],"2":[65.2,5]}}}};
+export const ENTNAHME_V_OHNE_HOEHE = {"buche":{"u05":{"1":[15.1,98],"2":[8.2,83],"3":[3.7,76]},"0.5":{"1":[26.8,64],"2":[17.7,50],"3":[9,53]},"0.6":{"1":[40.6,52],"2":[23.8,63],"3":[16.7,63]},"0.7":{"1":[41.6,83],"2":[30.3,76],"3":[15.3,67]},"0.8":{"1":[49.3,15],"2":[38.1,30],"3":[21.9,23]},"0.9":{"1":[50.5,33],"2":[40.6,32],"3":[27.7,32]},"1.0":{"1":[58.2,33],"2":[47.1,25],"3":[28.6,23]},"1.1":{"1":[62.8,26],"2":[48.3,25],"3":[34.4,29]},"ab12":{"1":[58.2,35],"2":[47.6,19],"3":[28.7,15]}},"eiche":{"u05":{"1":[10.3,62],"2":[6.9,38],"3":[3,55]},"0.5":{"1":[11.3,24],"2":[11.2,27],"3":[3.9,20]},"0.6":{"1":[16,41],"2":[11.5,40],"3":[9.3,29]},"0.7":{"1":[22.8,44],"2":[24.7,21],"3":[9.3,26]},"0.8":{"1":[35,15],"2":[30.6,19],"3":[9,8]},"0.9":{"1":[39.1,31],"2":[34.6,16],"3":[18.8,17]},"1.0":{"1":[47.9,24],"2":[38.5,14],"3":[22.8,18]},"1.1":{"1":[63.2,15],"2":[51.3,5],"3":[34.4,11]},"ab12":{"1":[45.2,8],"2":[68.9,2],"3":[30.5,6]}},"fichte":{"u05":{"1":[14.2,30],"2":[12.3,77],"3":[10.2,106]},"0.5":{"1":[27.5,9],"2":[23.2,42],"3":[11.4,20]},"0.6":{"1":[35.1,18],"2":[33.8,57],"3":[25.8,73]},"0.7":{"1":[47.4,17],"2":[36.9,61],"3":[24,53]},"0.8":{"1":[77,14],"2":[62.4,33],"3":[29.7,32]},"0.9":{"1":[78.3,16],"2":[62.4,33],"3":[38.3,37]},"1.0":{"1":[79.4,5],"2":[69.7,16],"3":[51.3,22]},"1.1":{"1":[89,6],"2":[76.5,25],"3":[52.1,16]},"ab12":{"1":[89.1,2],"2":[77.1,18],"3":[48.7,13]}},"kiefer":{"u05":{"1":[6.9,49],"2":[4.5,43],"3":[2.3,40]},"0.5":{"1":[14.5,56],"2":[9.3,32],"3":[8.6,19]},"0.6":{"1":[25.9,46],"2":[16.8,27],"3":[8.3,38]},"0.7":{"1":[35.1,76],"2":[20.3,38],"3":[10.8,35]},"0.8":{"1":[16.7,3],"2":[22.2,14],"3":[18.2,6]},"0.9":{"1":[42.2,8],"2":[30.5,24],"3":[20.4,26]},"1.0":{"1":[55,34],"2":[42.6,15],"3":[23.9,18]},"1.1":{"1":[72,22],"2":[63.1,17],"3":[42,20]},"ab12":{"1":[62.8,56],"2":[68.2,11],"3":[50.7,17]}}};
+const B_STUFEN = ['u05', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0', '1.1', 'ab12'];
+export function entnahmeV(g, hoKlasse, bs, sz) {
+  const z = String(sz);
+  const mitH = ENTNAHME_V[g]?.[hoKlasse]?.[bs]?.[z];
+  if (mitH && mitH[1] >= 5) return { v: mitH[0], n: mitH[1], quelle: 'Gruppe, Oberhöhe, B° und Szenario' };
+  const ohne = ENTNAHME_V_OHNE_HOEHE[g]?.[bs]?.[z];
+  if (ohne) return { v: ohne[0], n: ohne[1], quelle: 'Gruppe, B° und Szenario' };
+  // nächstgelegene B°-Stufe
+  const i = B_STUFEN.indexOf(bs);
+  for (let d = 1; d < B_STUFEN.length; d++) for (const j of [i - d, i + d]) {
+    const c = ENTNAHME_V_OHNE_HOEHE[g]?.[B_STUFEN[j]]?.[z];
+    if (c) return { v: c[0], n: c[1], quelle: `Gruppe, B° ${B_STUFEN[j]} und Szenario (nächste Stufe)` };
+  }
+  return null;
+}
+export function eingriffsplan(vZehn, stufe) {
   const anzahl = vZehn < EIN_EINGRIFF_BIS ? 1 : Math.max(2, Math.ceil(vZehn / MAX_FM_EINGRIFF));
-  return { anzahl, vZehn, vEingriff: vZehn / anzahl, gEingriff: stufe / anzahl, abstandJahre: Math.round(10 / anzahl), formhoehe: FORMHOEHE_FAKTOR * ho };
+  return { anzahl, vZehn, vEingriff: vZehn / anzahl, gEingriff: stufe / anzahl, abstandJahre: Math.round(10 / anzahl) };
 }
 
 /** Eingriff nach der Methode */
@@ -124,8 +139,8 @@ export function bestimme({ art, dim, b, hoKlasse, ho }) {
   const sz = SZENARIO[dim];
   const key = String(stufe);
   const [dick10, mittel10, duenn10] = TABELLE2[sz]?.[key] || [0, 0, 0];
-  const hoWert = ho > 0 ? ho : HO_KLASSENMITTE[hoKlasse];
-  const ep = eingriffsplan(stufe, hoWert);
+  const ev = entnahmeV(g, hoKlasse, bs, sz);
+  const ep = eingriffsplan(ev ? ev.v : 0, stufe);
   // Tabelle 2 gilt für das Jahrzehnt; bei mehreren Eingriffen wird sie aufgeteilt
   const dick = dick10 / ep.anzahl, mittel = mittel10 / ep.anzahl, duenn = duenn10 / ep.anzahl;
   const jePunkt = { dick, mittel, duenn };
@@ -133,7 +148,7 @@ export function bestimme({ art, dim, b, hoKlasse, ho }) {
   const sum = dick + mittel + duenn;
   const hl = HOEHENKLASSEN.find((x) => x.key === hoKlasse)?.label;
   return {
-    gruppe: g, gruppeLabel: GRUPPEN[g].label, szenario: sz, stufe, jePunkt, jePunktJahrzehnt, eingriffe: ep, hoWert, baeumeJePunkt: sum,
+    gruppe: g, gruppeLabel: GRUPPEN[g].label, szenario: sz, stufe, jePunkt, jePunktJahrzehnt, eingriffe: { ...ep, quelle: ev?.quelle, bestaende: ev?.n }, baeumeJePunkt: sum,
     baeumeHa: sum * 10000 / (RASTER_M * RASTER_M),
     regel: ['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 1e-9).map((k) => `${anteilText(jePunkt[k])} ${DIMENSION[k].label}`).join(' + '),
     schritte: [
@@ -142,9 +157,9 @@ export function bestimme({ art, dim, b, hoKlasse, ho }) {
       `Tabelle 1 → Eingriffsstufe: Ziel-Entnahme ${fmt(stufe, 1)} m²/ha Grundfläche im Jahrzehnt`,
       `Szenario ${sz}: ${SZENARIO_TEXT[sz]}`,
       `Tabelle 2 → je Punkt im Jahrzehnt: ${['dick', 'mittel', 'duenn'].filter((k) => jePunktJahrzehnt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunktJahrzehnt[k])}`).join(', ')}`,
-      `Menge im Jahrzehnt: ${fmt(stufe, 1)} m²/ha × Formhöhe ${fmt(ep.formhoehe, 1)} m (0,43 × Oberhöhe ${fmt(hoWert, 0)} m) ≈ ${fmt(ep.vZehn)} Fm/ha`,
+      ev ? `Entnahmemenge im Jahrzehnt: ca. ${fmt(ep.vZehn)} Fm/ha (Simulation der Methode, Mittel aus ${ev.n} Beständen nach ${ev.quelle})` : 'Entnahmemenge im Jahrzehnt: keine Simulationswerte für diese Kombination',
       ep.anzahl === 1
-        ? `Unter ${EIN_EINGRIFF_BIS} Fm/ha im Jahrzehnt → 1 Eingriff`
+        ? `Unter ${EIN_EINGRIFF_BIS} Fm/ha Entnahme im Jahrzehnt → 1 Eingriff`
         : `${fmt(ep.vZehn)} Fm/ha im Jahrzehnt → ${ep.anzahl} Eingriffe à ca. ${fmt(ep.vEingriff)} Fm/ha (höchstens ${MAX_FM_EINGRIFF} Fm/ha je Eingriff), etwa alle ${ep.abstandJahre} Jahre`,
       ep.anzahl > 1 ? `Je Eingriff ein Teil der Bäume aus Tabelle 2: ${['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunktJahrzehnt[k])} ÷ ${ep.anzahl} = ${anteilText(jePunkt[k])}`).join(', ')}` : null,
       `Raster ${RASTER_M} m (16 Punkte/ha), jedes Mal zufällig neu über den Bestand gelegt → ca. ${Math.round(sum * 16)} Bäume/ha je Eingriff`,

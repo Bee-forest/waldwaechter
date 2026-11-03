@@ -343,7 +343,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('strong', {}, ei.anzahl === 1 ? `Ein Eingriff im Jahrzehnt (ca. ${fmt(ei.vZehn)} Fm/ha)` : `${ei.anzahl} Eingriffe im Jahrzehnt, etwa alle ${ei.abstandJahre} Jahre`),
           h('small', {}, ei.anzahl === 1
             ? `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode) – unter ${EIN_EINGRIFF_BIS} Fm/ha geht das in einem Eingriff.`
-            : `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode). Je Eingriff sind höchstens ${MAX_FM_EINGRIFF} Fm/ha erlaubt, deshalb wird die Menge auf ${ei.anzahl} Eingriffe à ca. ${fmt(ei.vEingriff)} Fm/ha verteilt. Nach diesem Eingriff kannst du den nächsten vormerken.`),
+            : `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode). Ab ${EIN_EINGRIFF_BIS} Fm/ha wird die Menge auf mehrere Eingriffe verteilt (höchstens ${MAX_FM_EINGRIFF} Fm/ha je Eingriff): ${ei.anzahl} Eingriffe à ca. ${fmt(ei.vEingriff)} Fm/ha. Nach diesem Eingriff kannst du den nächsten vormerken.`),
           h('small', {}, 'Das Raster wird bei jedem Eingriff zufällig neu über den Bestand gelegt, damit nicht immer dieselben Stellen bearbeitet werden.')),
         h('div', { class: 'raster-rule' },
           h('strong', {}, `Je Rasterpunkt: ${plan.regel}`),

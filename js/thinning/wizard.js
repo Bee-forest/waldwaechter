@@ -368,8 +368,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', { class: 'calc-box eingriffe-box' },
           h('strong', {}, ei.anzahl === 1 ? `Ein Eingriff im Jahrzehnt (ca. ${fmt(ei.vZehn)} Fm/ha)` : `${ei.anzahl} Eingriffe im Jahrzehnt, etwa alle ${ei.abstandJahre} Jahre`),
           h('small', {}, ei.anzahl === 1
-            ? `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode) – unter ${EIN_EINGRIFF_BIS} Fm/ha geht das in einem Eingriff.`
-            : `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode). Ab ${EIN_EINGRIFF_BIS} Fm/ha wird die Menge auf mehrere Eingriffe verteilt (höchstens ${MAX_FM_EINGRIFF} Fm/ha je Eingriff): ${ei.anzahl} Eingriffe à ca. ${fmt(ei.vEingriff)} Fm/ha. Nach diesem Eingriff kannst du den nächsten vormerken.`),
+            ? `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode) – unter ${EIN_EINGRIFF_BIS} Fm/ha geht das in einem Eingriff. Beim Start trägt die App die nächste Durchforstung in ca. ${ei.abstandJahre} Jahren in den Maßnahmenkalender ein.`
+            : `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode). Ab ${EIN_EINGRIFF_BIS} Fm/ha wird die Menge auf mehrere Eingriffe verteilt (höchstens ${MAX_FM_EINGRIFF} Fm/ha je Eingriff): ${ei.anzahl} Eingriffe à ca. ${fmt(ei.vEingriff)} Fm/ha. Beim Start trägt die App den nächsten Eingriff in ca. ${ei.abstandJahre} Jahren in den Maßnahmenkalender ein.`),
           h('small', {}, 'Das Raster wird bei jedem Eingriff zufällig neu über den Bestand gelegt, damit nicht immer dieselben Stellen bearbeitet werden.')),
         h('div', { class: 'raster-rule' },
           h('strong', {}, `Je Rasterpunkt: ${plan.regel}`),
@@ -481,8 +481,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     if (!st.sel) return null;
     const meine = polysOf(st.sel);
     const proben = generateGrid(st.sel.ring, 10, { polys: meine }).filter((_, i) => i % 3 === 0).slice(0, 300);
+    const meineSerie = measure()?.thinning?.serie || st.measureId;
     return store.get().measures.find((m) => {
       if (m.id === st.measureId || m.type !== 'durchforstung' || m.status === 'fertig' || !m.thinning) return false;
+      if (meineSerie && (m.thinning.serie === meineSerie || m.thinning.vorgaenger === st.measureId)) return false;
       if (st.sel.parcelId && m.parcelId === st.sel.parcelId) return true;
       const andere = polysOf(m.thinning);
       if (!andere?.length || !andere[0]?.[0]?.length) return false;
@@ -512,7 +514,34 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     unlockAudio(); // Nutzergeste → Audio für iOS-Fallback freischalten
     await requestCompass();
     saveMeasure({ status: 'arbeit' });
+    legeFolgeAn();
     go(3);
+  }
+
+  // Nächste Durchforstung automatisch in den Kalender: innerhalb des Jahrzehnts der nächste Eingriff
+  // (Abstand je nach Zahl der Eingriffe, z. B. 5 Jahre bei zwei, 3 Jahre bei drei Eingriffen), danach die
+  // nächste Durchforstung im selben Rhythmus – dann mit neu zu erhebenden Angaben.
+  function legeFolgeAn() {
+    const ei = st.plan?.eingriffe;
+    const cur = measure();
+    if (!ei || !cur || store.get().measures.some((m) => m.thinning?.vorgaenger === cur.id)) return null;
+    const abstand = Math.max(1, ei.abstandJahre || Math.round(10 / (ei.anzahl || 1)));
+    const when = new Date(); when.setFullYear(when.getFullYear() + abstand); when.setHours(9, 0, 0, 0);
+    const serie = cur.thinning?.serie || cur.id;
+    const base = { mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, vorgaenger: cur.id, serie };
+    let thinning, note;
+    if (ei.nr < ei.anzahl) {
+      const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0 };
+      thinning = { ...base, params, plan: computePlanMethode(st.sel, params) };
+      note = `Eingriff ${ei.nr + 1} von ${ei.anzahl} – neues, zufällig gelegtes Raster.`;
+    } else {
+      thinning = { ...base, params: null, plan: null };
+      note = 'Nächste Durchforstung – Angaben (Kronenschluss, Stärkeklasse, Höhe) vor Ort neu erheben.';
+    }
+    store.update((s) => s.measures.push({ id: uid(), type: 'durchforstung', parcelId: st.sel.parcelId, date: when.getTime(), note, details: {}, status: 'geplant', createdAt: Date.now(), thinning }));
+    cur.thinning && store.update((s) => { const x = s.measures.find((m) => m.id === cur.id); x.thinning.serie = serie; });
+    toast(`Nächste Durchforstung für ${when.getFullYear()} im Kalender eingetragen`);
+    return when;
   }
 
   // ---------- Schritt 4: Navigation im Bestand ----------
@@ -787,22 +816,12 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   // Nächster Eingriff im Jahrzehnt: neue Maßnahme mit gleichen Angaben und neuer, zufälliger Rasterlage
   function naechsterEingriffButton() {
-    const ei = st.plan?.eingriffe;
-    if (!ei || ei.nr >= ei.anzahl) return null;
-    const exists = store.get().measures.some((m) => m.thinning?.vorgaenger === st.measureId);
-    if (exists) return h('p', { class: 'hint' }, `Eingriff ${ei.nr + 1} von ${ei.anzahl} ist bereits vorgemerkt.`);
-    return h('button', { class: 'btn btn-block', onclick: (e) => {
-      const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0 };
-      const plan = computePlanMethode(st.sel, params);
-      const when = new Date(); when.setFullYear(when.getFullYear() + ei.abstandJahre);
-      store.update((s) => s.measures.push({
-        id: uid(), type: 'durchforstung', parcelId: st.sel.parcelId, date: when.getTime(), note: `Eingriff ${ei.nr + 1} von ${ei.anzahl}`, details: {}, status: 'geplant', createdAt: Date.now(),
-        thinning: { mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params, plan, vorgaenger: st.measureId },
-      }));
-      e.currentTarget.replaceWith(h('p', { class: 'hint' }, `Eingriff ${ei.nr + 1} ist für ${when.getFullYear()} vorgemerkt – mit neuer, zufälliger Rasterlage.`));
-      toast('Nächster Eingriff vorgemerkt');
-    } }, `Eingriff ${ei.nr + 1} von ${ei.anzahl} vormerken (in ca. ${ei.abstandJahre} Jahren)`);
+    const f = store.get().measures.find((m) => m.thinning?.vorgaenger === st.measureId);
+    if (!f) { const when = legeFolgeAn(); if (!when) return null; }
+    const x = store.get().measures.find((m) => m.thinning?.vorgaenger === st.measureId);
+    return x ? h('p', { class: 'hint' }, `Die nächste Durchforstung ist für ${new Date(x.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })} im Maßnahmenkalender eingetragen. Das Datum kannst du dort ändern.`) : null;
   }
+
 
   go(st.step);
 }

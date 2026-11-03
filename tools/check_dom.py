@@ -34,6 +34,18 @@ def main():
                     break
         except Exception as e:  # noqa: BLE001
             log(f'{kind}: Fehler {e}')
+    # Weitere Wege zu Höhendaten (Stand-Prüfung)
+    for u in ['https://geoportal.geoportal-th.de/gaialight-th/_apps/dladownload/dl-dhm.html',
+              'https://geoportal.geoportal-th.de/dienste/atom_th_hoehendaten_dom?type=dataset&id=3b5d8d9c-775d-4617-8dfe-71480d6472a6',
+              'https://www.geoproxy.geoportal-th.de/geoproxy/services/DOM?REQUEST=GetCapabilities&SERVICE=WMS',
+              'https://www.geoproxy.geoportal-th.de/geoproxy/services/NDOM?REQUEST=GetCapabilities&SERVICE=WMS',
+              'https://www.geoproxy.geoportal-th.de/geoproxy/services/DGM?REQUEST=GetCapabilities&SERVICE=WCS',
+              'https://www.geoproxy.geoportal-th.de/geoproxy/services/DOM?REQUEST=GetCapabilities&SERVICE=WCS']:
+        try:
+            h, b = get(u); t = b.decode('utf-8', 'replace')
+            log(f'PRUEFE {u}: {len(t)} Zeichen, Wartung={"nicht verf" in t} | ' + re.sub(r'\s+', ' ', t)[:600])
+        except Exception as e:  # noqa: BLE001
+            log(f'PRUEFE {u}: Fehler {e}')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     open(OUT, 'w', encoding='utf-8').write('\n'.join(LOG) + '\n')
 if __name__ == '__main__':

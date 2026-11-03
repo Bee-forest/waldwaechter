@@ -6,8 +6,8 @@ import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox, polysOf, areaM2Polys } from '../geo.js';
 import { parcelExact, amtlicheFlaecheHa } from '../map/thueringen.js';
-import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
-import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
+import { computePlanMethode, pointRemaining, pointTotal, zufallsLage } from './plan.js';
+import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, MAX_FM_EINGRIFF, EIN_EINGRIFF_BIS, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
@@ -306,6 +306,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       const geschaetzt = lidar == null && alter ? oberhoeheAusAlter(f.art, alter) : null;
       const ho = lidar ?? geschaetzt;
       if (!f.hoKlasseManuell) f.hoKlasse = ho != null ? hoeheKlasse(ho) : null;
+      f.ho = ho != null && f.hoKlasse === hoeheKlasse(ho) ? ho : null; // sonst Klassenmitte
       title = 'Wie hoch ist der Bestand?';
       help = 'Gemeint ist die Oberhöhe, die Höhe der höchsten Bäume. Die App ermittelt sie für dich.';
       content = [
@@ -327,22 +328,29 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     } else {
       const plan = computePlanMethode(st.sel, f);
       st.plan = plan;
-      title = 'Dein Eingriff';
+      const ei = plan.eingriffe;
+      title = ei.anzahl > 1 ? `Dein Eingriff ${ei.nr} von ${ei.anzahl}` : 'Dein Eingriff';
       help = `${plan.gruppeLabel} · Szenario ${plan.szenario} · B° ${bLabel(f.b)} · Oberhöhe ${HOEHENKLASSEN.find((x) => x.key === f.hoKlasse).label}`;
       const zeilen = ['dick', 'mittel', 'duenn'].filter((k) => plan.jePunkt[k] > 0);
       content = [
         h('div', { class: 'preview' },
-          h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'Ziel-Entnahme Grundfläche (m²/ha im Jahrzehnt)')),
-          h('div', {}, h('span', { class: 'pv-n' }, `${RASTER_M} m`), h('span', {}, 'Raster')),
+          h('div', {}, h('span', { class: 'pv-n' }, `ca. ${fmt(ei.vEingriff)}`), h('span', {}, 'Fm/ha bei diesem Eingriff')),
+          h('div', {}, h('span', { class: 'pv-n' }, ei.anzahl), h('span', {}, ei.anzahl === 1 ? 'Eingriff im Jahrzehnt' : 'Eingriffe im Jahrzehnt')),
           h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
-          h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume gesamt')),
+          h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume bei diesem Eingriff')),
         ),
+        h('div', { class: 'calc-box eingriffe-box' },
+          h('strong', {}, ei.anzahl === 1 ? `Ein Eingriff im Jahrzehnt (ca. ${fmt(ei.vZehn)} Fm/ha)` : `${ei.anzahl} Eingriffe im Jahrzehnt, etwa alle ${ei.abstandJahre} Jahre`),
+          h('small', {}, ei.anzahl === 1
+            ? `Im Jahrzehnt fallen unter ${EIN_EINGRIFF_BIS} Fm/ha an – das geht in einem Eingriff.`
+            : `Im Jahrzehnt fallen ca. ${fmt(ei.vZehn)} Fm/ha an. Je Eingriff sind höchstens ${MAX_FM_EINGRIFF} Fm/ha erlaubt, deshalb wird die Menge auf ${ei.anzahl} Eingriffe à ca. ${fmt(ei.vEingriff)} Fm/ha verteilt. Nach diesem Eingriff kannst du den nächsten vormerken.`),
+          h('small', {}, 'Das Raster wird bei jedem Eingriff zufällig neu über den Bestand gelegt, damit nicht immer dieselben Stellen bearbeitet werden.')),
         h('div', { class: 'raster-rule' },
           h('strong', {}, `Je Rasterpunkt: ${plan.regel}`),
           zeilen.map((k) => h('small', {}, `${DIMENSION[k].label[0].toUpperCase()}${DIMENSION[k].label.slice(1)} (${DIMENSION[k].bhd}): ${anteilSatz(plan.jePunkt[k])}`)),
-          h('small', {}, `Raster ${RASTER_M} m in Schlangenlinien, Start 10–15 m vom Rand, Entnahmekreis ca. ${KREIS_M} m. „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
+          h('small', {}, `Raster ${RASTER_M} m in Schlangenlinien, Lage zufällig, Entnahmekreis ca. ${KREIS_M} m. „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
         parcelCard(),
-        h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume für ein Jahrzehnt (Ziel-Entnahme: ca. ${fmt(plan.stufe * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
+        h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst bei diesem Eingriff ${plan.total} Bäume (ca. ${fmt(ei.vEingriff * plan.areaHa)} Fm bzw. ${fmt(ei.gEingriff * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
         h('div', { class: 'calc-box' },
           h('strong', {}, 'So kommt die Baumzahl zustande'),
           zeilen.map((k) => { const n = plan.points.reduce((a, pt) => a + (pt.removals.find((x) => x.klasse === k)?.count || 0), 0);
@@ -419,7 +427,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', {}, h('span', { class: 'pv-n' }, plan.perHa), h('span', {}, 'Bäume je ha')),
         h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'Ziel-Entnahme Grundfläche (m²/ha)')),
       ),
-      h('p', {}, `Die Punkte liegen im festen Abstand von ${RASTER_M} m, Start 10–15 m vom Rand. Je Punkt: ${plan.regel}, im Umkreis von etwa ${KREIS_M} m. Die gestrichelte Linie zeigt die Laufreihenfolge (Schlangenlinien).`),
+      h('p', {}, `Die Punkte liegen im festen Abstand von ${RASTER_M} m; die Lage ist für diesen Eingriff zufällig gewählt. Je Punkt: ${plan.regel}, im Umkreis von etwa ${KREIS_M} m. Die gestrichelte Linie zeigt die Laufreihenfolge (Schlangenlinien).`),
       h('p', { class: 'hint' }, 'Im Wald ist oft kein Netz. Speichere die Karte vorher, solange du noch Empfang hast.'),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn', onclick: () => { st.plan = null; go(1); } }, 'Angaben ändern'),
@@ -714,8 +722,28 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('p', {}, `${pts.filter((p) => p.status === 'done').length} von ${pts.length} Rasterpunkten erledigt, ${removed} von ${st.plan.total} geplanten Bäumen dokumentiert.`),
         ),
       ),
+      naechsterEingriffButton(),
       h('button', { class: 'btn btn-primary btn-block', onclick: close }, 'Zur Maßnahmenübersicht'),
     );
+  }
+
+  // Nächster Eingriff im Jahrzehnt: neue Maßnahme mit gleichen Angaben und neuer, zufälliger Rasterlage
+  function naechsterEingriffButton() {
+    const ei = st.plan?.eingriffe;
+    if (!ei || ei.nr >= ei.anzahl) return null;
+    const exists = store.get().measures.some((m) => m.thinning?.vorgaenger === st.measureId);
+    if (exists) return h('p', { class: 'hint' }, `Eingriff ${ei.nr + 1} von ${ei.anzahl} ist bereits vorgemerkt.`);
+    return h('button', { class: 'btn btn-block', onclick: (e) => {
+      const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0 };
+      const plan = computePlanMethode(st.sel, params);
+      const when = new Date(); when.setFullYear(when.getFullYear() + ei.abstandJahre);
+      store.update((s) => s.measures.push({
+        id: uid(), type: 'durchforstung', parcelId: st.sel.parcelId, date: when.getTime(), note: `Eingriff ${ei.nr + 1} von ${ei.anzahl}`, details: {}, status: 'geplant', createdAt: Date.now(),
+        thinning: { mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params, plan, vorgaenger: st.measureId },
+      }));
+      e.currentTarget.replaceWith(h('p', { class: 'hint' }, `Eingriff ${ei.nr + 1} ist für ${when.getFullYear()} vorgemerkt – mit neuer, zufälliger Rasterlage.`));
+      toast('Nächster Eingriff vorgemerkt');
+    } }, `Eingriff ${ei.nr + 1} von ${ei.anzahl} vormerken (in ca. ${ei.abstandJahre} Jahren)`);
   }
 
   go(st.step);

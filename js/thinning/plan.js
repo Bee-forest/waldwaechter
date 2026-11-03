@@ -1,6 +1,6 @@
 // Rechenkern der Durchforstungsmethode (ohne UI, gut testbar).
 import { areaHa, generateGrid, polysOf, areaM2Polys } from '../geo.js';
-import { bestimme, DIMENSION, RASTER_M, RAND_M, amPunkt, QUALITAET_TEXT, AUSWAHL_TEXT } from './methode.js';
+import { bestimme, DIMENSION, RASTER_M, amPunkt, QUALITAET_TEXT, AUSWAHL_TEXT } from './methode.js';
 
 export const SPECIES = ['Fichte', 'Kiefer', 'Lärche', 'Douglasie', 'Tanne', 'Buche', 'Eiche', 'Bergahorn', 'Esche', 'Birke', 'Erle'];
 
@@ -63,6 +63,10 @@ export const pointTotal = (pt) => pt.removals.reduce((s, r) => s + r.count, 0);
 
 // ---------- Neue Methode (Raster-Verfahren, siehe methode.js) ----------
 
+export function zufallsLage() {
+  return { offset: [Math.random() * RASTER_M, Math.random() * RASTER_M], umkehren: Math.random() < 0.5, erzeugt: Date.now() };
+}
+
 export function computePlanMethode(sel, p) {
   // sel: { ring, polys?, flaecheHa? } – bei Flurstücken amtliche Fläche und vollständige Geometrie
   const sh = Array.isArray(sel) ? { ring: sel } : sel;
@@ -71,7 +75,12 @@ export function computePlanMethode(sel, p) {
   const ha = sh.flaecheHa ?? geoHa;
   const r = bestimme(p);
   p.spacing = RASTER_M;
-  const grid = generateGrid(sh.ring, RASTER_M, { rand: RAND_M, polys });
+  // Rasterlage bei jedem Eingriff zufällig neu (Versatz 0–25 m, Startecke zufällig), damit der Bestand
+  // nicht immer an denselben Stellen bearbeitet wird. Einmal gewählt, bleibt sie für diesen Eingriff fest.
+  p.eingriffNr ??= 1;
+  p.lage ??= zufallsLage();
+  let grid = generateGrid(sh.ring, RASTER_M, { offset: p.lage.offset, polys });
+  if (p.lage.umkehren) grid = grid.reverse();
   // „in jedem n-ten Punkt“: fortlaufend über alle Punkte mitzählen
   const points = grid.map((at, i) => ({
     id: i + 1,
@@ -89,6 +98,9 @@ export function computePlanMethode(sel, p) {
     areaAmtlich: sh.flaecheHa != null,
     areaGeoHa: geoHa,
     stufe: r.stufe,
+    eingriffe: { ...r.eingriffe, nr: p.eingriffNr },
+    jePunktJahrzehnt: r.jePunktJahrzehnt,
+    lage: p.lage,
     szenario: r.szenario,
     gruppeLabel: r.gruppeLabel,
     jePunkt: r.jePunkt,

@@ -61,7 +61,7 @@ function measureCard(m, byId) {
       h('span', { class: 'progress-label' }, `${done} von ${pts.length} Rasterpunkten erledigt`),
     );
     action = h('button', { class: `btn ${m.status === 'fertig' ? '' : 'btn-primary'}`, onclick: () => openThinningWizard({ measureId: m.id }) },
-      m.status === 'fertig' ? 'Ansehen' : 'Im Bestand fortsetzen');
+      m.status === 'fertig' ? 'Ansehen' : m.status === 'geplant' ? 'Öffnen' : 'Im Bestand fortsetzen');
   } else if (m.type === 'durchforstung') {
     action = h('button', { class: 'btn btn-primary', onclick: () => openThinningWizard({ measureId: m.id }) }, 'Planung fortsetzen');
   }
@@ -79,7 +79,7 @@ function measureCard(m, byId) {
     h('p', { class: 'measure-where' }, where),
     h('p', { class: 'muted' }, `Termin ${m.date ? fmtDate(m.date) : 'offen'}`),
     details.length ? h('p', { class: 'measure-details' }, details.join('; ')) : null,
-    m.thinning?.plan ? h('p', { class: 'measure-details' }, `${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.total} Bäume Entnahme geplant`) : null,
+    m.thinning?.plan ? h('p', { class: 'measure-details' }, `${m.thinning.plan.eingriffe?.anzahl > 1 ? `Eingriff ${m.thinning.plan.eingriffe.nr} von ${m.thinning.plan.eingriffe.anzahl}, ` : ''}${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.total} Bäume Entnahme geplant`) : null,
     m.note ? h('p', { class: 'measure-note' }, m.note) : null,
     progress,
     h('div', { class: 'measure-actions' },

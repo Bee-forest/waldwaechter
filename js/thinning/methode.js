@@ -74,48 +74,81 @@ export const AUSWAHL_TEXT = 'Im Kreis zuerst Fichte nehmen, dann Lärche, Buche,
 export const AUSWEICH_TEXT = 'Kein Baum der verlangten Stärke bis 15 m? Dann den Baum nehmen, der ihr am ähnlichsten ist – also den mit dem Durchmesser, der am nächsten an der Klasse liegt.';
 export const QUALITAET_TEXT = 'Vitale, gut geformte Zukunftsbäume stehen lassen; kranke, beschädigte und schlecht geformte Bäume bevorzugt entnehmen. Biotop- und Höhlenbäume erhalten.';
 
-/** Bruchteil als Geländeregel: 0,125 → „⅛“, 1,5 → „1½“ */
+/** Bruchteil r als k/d mit kleinem Nenner (d ≤ 24) */
+function bruch(r) {
+  for (let d = 1; d <= 24; d++) { const k = Math.round(r * d); if (Math.abs(r * d - k) < 1e-6) return [k, d]; }
+  return [Math.round(r * 24), 24];
+}
+const ZEICHEN = { '1/2': '½', '1/4': '¼', '3/4': '¾', '1/8': '⅛', '3/8': '⅜', '5/8': '⅝', '7/8': '⅞', '1/3': '⅓', '2/3': '⅔' };
+/** Bruchteil als Geländeregel: 0,125 → „⅛“, 1,5 → „1½“, 0,0625 → „1/16“ */
 export function anteilText(v) {
   if (!v) return '0';
   const g = Math.floor(v + 1e-9), r = v - g;
-  const fr = Math.abs(r - 0.125) < 1e-6 ? '⅛' : Math.abs(r - 0.25) < 1e-6 ? '¼' : Math.abs(r - 0.5) < 1e-6 ? '½' : Math.abs(r - 0.75) < 1e-6 ? '¾' : r > 1e-6 ? fmt(r, 2) : '';
-  return `${g || ''}${fr}` || '0';
+  if (r < 1e-6) return String(g);
+  const [k, d] = bruch(r);
+  const fr = ZEICHEN[`${k}/${d}`] || `${k}/${d}`;
+  return g ? `${g}${ZEICHEN[`${k}/${d}`] ? '' : ' '}${fr}` : fr;
 }
-/** Bruchteil als Satz: 0,125 → „1 Baum an jedem 8. Punkt“, 1,5 → „1 Baum, an jedem 2. Punkt 2“ */
+/** Bruchteil als Satz: 0,125 → „1 Baum an jedem 8. Punkt“, 1,5 → „1 Baum an jedem Punkt, an jedem 2. Punkt 2“ */
 export function anteilSatz(v) {
   if (!v) return null;
   const g = Math.floor(v + 1e-9), r = v - g;
   const baum = (n) => (n === 1 ? '1 Baum' : `${n} Bäume`);
   if (r < 1e-6) return `${baum(g)} an jedem Punkt`;
-  const n = Math.round(1 / r);
-  return g ? `${baum(g)} an jedem Punkt, an jedem ${n}. Punkt ${g + 1}` : `1 Baum an jedem ${n}. Punkt`;
+  const [k, d] = bruch(r);
+  const rest = k === 1 ? `an jedem ${d}. Punkt ${g ? g + 1 : '1 Baum'}` : `zusammen ${baum(k)} zusätzlich je ${d} Punkte`;
+  return g ? `${baum(g)} an jedem Punkt, ${rest}` : (k === 1 ? `1 Baum an jedem ${d}. Punkt` : `${baum(k)} je ${d} Punkte (die App sagt, an welchen)`);
 }
 /** Bäume am i-ten Punkt (1-basiert, fortlaufend gezählt) bei durchschnittlich v je Punkt */
 export const amPunkt = (v, i) => Math.floor(i * v + 1e-9) - Math.floor((i - 1) * v + 1e-9);
 
+// Höchstens 50 Fm/ha je Eingriff. Unter 40 Fm/ha im Jahrzehnt ein Eingriff, sonst zwei
+// (bzw. so viele, dass je Eingriff höchstens 50 Fm/ha anfallen).
+export const MAX_FM_EINGRIFF = 50;
+export const EIN_EINGRIFF_BIS = 40;
+// Volumen ≈ Grundfläche × Formhöhe; Formhöhe ≈ 0,43 × Oberhöhe (aus den Thüringer Ertragstafeln,
+// z. B. Fichte M28/80 J.: 558 m³ / 49,1 m² = 11,4 m bei hₒ 26,3 m; Buche 30/100 J.: 14,1 m bei hₒ 31,1 m)
+export const FORMHOEHE_FAKTOR = 0.43;
+export const HO_KLASSENMITTE = { u25: 21, '25_30': 27.5, ab30: 33 };
+export function eingriffsplan(stufe, ho) {
+  const vZehn = stufe * FORMHOEHE_FAKTOR * ho;                 // Fm/ha im Jahrzehnt
+  const anzahl = vZehn < EIN_EINGRIFF_BIS ? 1 : Math.max(2, Math.ceil(vZehn / MAX_FM_EINGRIFF));
+  return { anzahl, vZehn, vEingriff: vZehn / anzahl, gEingriff: stufe / anzahl, abstandJahre: Math.round(10 / anzahl), formhoehe: FORMHOEHE_FAKTOR * ho };
+}
+
 /** Eingriff nach der Methode */
-export function bestimme({ art, dim, b, hoKlasse }) {
+export function bestimme({ art, dim, b, hoKlasse, ho }) {
   const g = gruppe4(art);
   const bs = bStufe(b);
   const stufe = TABELLE1[g]?.[hoKlasse]?.[bs];
   const sz = SZENARIO[dim];
   const key = String(stufe);
-  const [dick, mittel, duenn] = TABELLE2[sz]?.[key] || [0, 0, 0];
+  const [dick10, mittel10, duenn10] = TABELLE2[sz]?.[key] || [0, 0, 0];
+  const hoWert = ho > 0 ? ho : HO_KLASSENMITTE[hoKlasse];
+  const ep = eingriffsplan(stufe, hoWert);
+  // Tabelle 2 gilt für das Jahrzehnt; bei mehreren Eingriffen wird sie aufgeteilt
+  const dick = dick10 / ep.anzahl, mittel = mittel10 / ep.anzahl, duenn = duenn10 / ep.anzahl;
   const jePunkt = { dick, mittel, duenn };
+  const jePunktJahrzehnt = { dick: dick10, mittel: mittel10, duenn: duenn10 };
   const sum = dick + mittel + duenn;
   const hl = HOEHENKLASSEN.find((x) => x.key === hoKlasse)?.label;
   return {
-    gruppe: g, gruppeLabel: GRUPPEN[g].label, szenario: sz, stufe, jePunkt, baeumeJePunkt: sum,
+    gruppe: g, gruppeLabel: GRUPPEN[g].label, szenario: sz, stufe, jePunkt, jePunktJahrzehnt, eingriffe: ep, hoWert, baeumeJePunkt: sum,
     baeumeHa: sum * 10000 / (RASTER_M * RASTER_M),
-    regel: ['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${anteilText(jePunkt[k])} ${DIMENSION[k].label}`).join(' + '),
+    regel: ['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 1e-9).map((k) => `${anteilText(jePunkt[k])} ${DIMENSION[k].label}`).join(' + '),
     schritte: [
       `Baumartengruppe: ${GRUPPEN[g].label} (Hauptbaumart ${art})`,
       `Oberhöhe ${hl}, Bestockungsgrad B° ${bLabel(b)}`,
       `Tabelle 1 → Eingriffsstufe: Ziel-Entnahme ${fmt(stufe, 1)} m²/ha Grundfläche im Jahrzehnt`,
       `Szenario ${sz}: ${SZENARIO_TEXT[sz]}`,
-      `Tabelle 2 → je Punkt: ${['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunkt[k])}`).join(', ')}`,
-      `Raster ${RASTER_M} m (16 Punkte/ha) → ca. ${Math.round(sum * 16)} Bäume/ha`,
-    ],
+      `Tabelle 2 → je Punkt im Jahrzehnt: ${['dick', 'mittel', 'duenn'].filter((k) => jePunktJahrzehnt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunktJahrzehnt[k])}`).join(', ')}`,
+      `Menge im Jahrzehnt: ${fmt(stufe, 1)} m²/ha × Formhöhe ${fmt(ep.formhoehe, 1)} m (0,43 × Oberhöhe ${fmt(hoWert, 0)} m) ≈ ${fmt(ep.vZehn)} Fm/ha`,
+      ep.anzahl === 1
+        ? `Unter ${EIN_EINGRIFF_BIS} Fm/ha im Jahrzehnt → 1 Eingriff`
+        : `${fmt(ep.vZehn)} Fm/ha im Jahrzehnt → ${ep.anzahl} Eingriffe à ca. ${fmt(ep.vEingriff)} Fm/ha (höchstens ${MAX_FM_EINGRIFF} Fm/ha je Eingriff), etwa alle ${ep.abstandJahre} Jahre`,
+      ep.anzahl > 1 ? `Je Eingriff ein Teil der Bäume aus Tabelle 2: ${['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunktJahrzehnt[k])} ÷ ${ep.anzahl} = ${anteilText(jePunkt[k])}`).join(', ')}` : null,
+      `Raster ${RASTER_M} m (16 Punkte/ha), jedes Mal zufällig neu über den Bestand gelegt → ca. ${Math.round(sum * 16)} Bäume/ha je Eingriff`,
+    ].filter(Boolean),
   };
 }
 

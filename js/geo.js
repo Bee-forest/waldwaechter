@@ -90,7 +90,7 @@ export function destination([lat, lng], brg, dist) {
  * Liefert die Punkte in Schlangenlinien-Reihenfolge (Reihe für Reihe,
  * abwechselnd West→Ost und Ost→West), damit der Laufweg kurz bleibt.
  */
-export function generateGrid(ring, spacing, { rand = null, polys = null } = {}) {
+export function generateGrid(ring, spacing, { rand = null, polys = null, offset = null } = {}) {
   const ps = polys?.length ? polys : [[ring]];
   const p = makeProjector(centroid(ring));
   const xy = ps.flatMap((poly) => poly[0]).map(p.toXY);
@@ -101,8 +101,9 @@ export function generateGrid(ring, spacing, { rand = null, polys = null } = {}) 
   }
   // Raster am Polygon-Mittelpunkt ausrichten, damit es symmetrisch sitzt
   // rand: fester Abstand der ersten Reihe/Spalte vom Rand (Startpunkt im Nordwesten), sonst mittig
-  const offX = rand ?? ((maxX - minX) % spacing) / 2 + spacing / 2;
-  const offY = rand ?? ((maxY - minY) % spacing) / 2 + spacing / 2;
+  // offset: [x, y] in m ab Westrand/Nordrand (zufällige Rasterlage), 0 ≤ x, y < spacing
+  const offX = offset ? offset[0] : rand ?? ((maxX - minX) % spacing) / 2 + spacing / 2;
+  const offY = offset ? offset[1] : rand ?? ((maxY - minY) % spacing) / 2 + spacing / 2;
   const rows = [];
   for (let y = maxY - offY; y >= minY; y -= spacing) { // von Nord nach Süd
     const row = [];

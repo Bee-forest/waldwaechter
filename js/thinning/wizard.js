@@ -3,7 +3,8 @@
 import { h, fill, icon, dialog, confirmDialog, toast } from '../ui.js';
 import { store, uid } from '../store.js';
 import { source } from '../data/source.js';
-import { createBaseMap, tileUrls } from '../map/basemap.js';
+import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
+import { OVERLAYS, overlayLayer } from '../map/thueringen.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox } from '../geo.js';
 import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
 import { BAUMARTEN, HOECHSTMENGE, DIMENSION, KRONENSCHLUSS, ZUWACHS_RICHTWERT, RASTER, rasterVorschlag, gruppeVon, fmt } from './methode.js';
@@ -46,6 +47,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   // ---------- Grundgerüst ----------
   const stepper = h('ol', { class: 'stepper', 'aria-label': 'Fortschritt' });
   const mapEl = h('div', { class: 'thin-map' });
+  // Kartenleiste wie auf der Startseite: OSM/Luftbild und Standortkarte (ohne weitere Layer)
+  const baseSwitch = h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Basiskarte' });
+  const standortBtn = h('button', { class: 'map-chip', 'aria-pressed': 'false', onclick: () => toggleStandort() }, h('span', { class: 'dot' }), 'Standort');
+  const mapTools = h('div', { class: 'thin-map-tools' }, baseSwitch, standortBtn);
   const panel = h('div', { class: 'thin-panel' });
   const page = h('section', { class: 'page thin', role: 'dialog', 'aria-label': 'Durchforstung' },
     h('header', { class: 'page-head' },
@@ -53,7 +58,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       h('h1', {}, 'Durchforstung'),
       stepper,
     ),
-    h('div', { class: 'thin-map-wrap' }, mapEl),
+    h('div', { class: 'thin-map-wrap' }, mapEl, mapTools),
     panel,
   );
   document.getElementById('app').append(page);
@@ -61,6 +66,19 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   const settings = store.get().settings;
   const base = createBaseMap(mapEl, { center: st.sel ? st.sel.ring[0] : source.center, zoom: 16, basemap: settings.basemap, alkis: settings.layers.alkis !== false });
   const map = base.map;
+  L.control.zoom({ position: 'topleft', zoomInTitle: 'Hineinzoomen', zoomOutTitle: 'Herauszoomen' }).addTo(map);
+  const renderBaseSwitch = () => fill(baseSwitch, ...Object.entries(BASEMAP_LABELS).map(([k, l]) => h('button', {
+    role: 'radio', 'aria-checked': String(base.basemap === k),
+    onclick: () => { base.setBasemap(k); store.update((x) => { x.settings.basemap = k; }); renderBaseSwitch(); },
+  }, l)));
+  renderBaseSwitch();
+  const standortLayer = overlayLayer(OVERLAYS.find((o) => o.key === 'standort'));
+  function toggleStandort(on = !map.hasLayer(standortLayer)) {
+    if (on) standortLayer.addTo(map); else map.removeLayer(standortLayer);
+    standortBtn.setAttribute('aria-pressed', String(on));
+    store.update((x) => { x.settings.thinStandort = on; });
+  }
+  if (settings.thinStandort) toggleStandort(true);
   const ctxLayer = L.layerGroup().addTo(map);
   const selLayer = L.layerGroup().addTo(map);
   const gridLayer = L.layerGroup().addTo(map);
@@ -90,7 +108,11 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     ctxLayer.clearLayers(); gridLayer.clearLayers(); navLayer.clearLayers();
     if (step !== 3) stopNav();
     [renderSelect, renderParams, renderGrid, renderNav][step]();
-    requestAnimationFrame(() => map.invalidateSize());
+    // Kartengröße ändert sich je Schritt → Größe neu messen und Fläche wieder einpassen
+    setTimeout(() => {
+      map.invalidateSize();
+      if (step !== 3 && st.sel?.ring?.length >= 3) map.fitBounds(L.polygon(st.sel.ring).getBounds(), { paddingTopLeft: [24, 76], paddingBottomRight: [24, 24], maxZoom: 18 });
+    }, 60);
   }
 
   function drawSelection(fit = true) {
@@ -280,17 +302,31 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   // ---------- Schritt 3: Raster ----------
+  // Punktgröße an den Bildschirmabstand der Rasterpunkte anpassen (keine Überlappung)
+  function pointRadius(big = false) {
+    const spacing = st.params?.spacing || 20;
+    const c = map.getCenter();
+    const mpp = 40075016.686 * Math.cos(c.lat * Math.PI / 180) / 2 ** (map.getZoom() + 8);
+    const px = spacing / mpp;
+    return Math.max(3, Math.min(big ? 14 : 11, px * (big ? 0.5 : 0.38)));
+  }
+  map.on('zoomend', () => {
+    pointMarkers.forEach((mk, i) => mk.setRadius(pointRadius(i === targetIdx)));
+    map.getPane('tooltipPane')?.classList.toggle('hide-numbers', pointRadius() < 9);
+  });
+
   function drawGrid(points, { numbers = false } = {}) {
     gridLayer.clearLayers();
     pointMarkers = [];
     gridLayer.addLayer(L.polyline(points.map((p) => p.at), { color: '#D7263D', weight: 1.5, opacity: 0.45, dashArray: '3 6', interactive: false }));
     points.forEach((p, i) => {
-      const m = L.circleMarker(p.at, { radius: 11, color: '#fff', weight: 2.5, fillColor: COLORS[p.status], fillOpacity: 1 });
-      if (numbers) m.bindTooltip(String(p.id), { permanent: points.length <= 80, direction: 'center', className: 'pt-tip', interactive: false });
+      const m = L.circleMarker(p.at, { radius: pointRadius(), color: '#fff', weight: 2, fillColor: COLORS[p.status], fillOpacity: 1 });
+      if (numbers) m.bindTooltip(String(p.id), { permanent: points.length <= 150, direction: 'center', className: 'pt-tip', interactive: false });
       m.on('click', (e) => { L.DomEvent.stop(e); if (st.step === 3) chooseTarget(i); });
       gridLayer.addLayer(m);
       pointMarkers.push(m);
     });
+    map.getPane('tooltipPane')?.classList.toggle('hide-numbers', pointRadius() < 9);
   }
 
   function renderGrid() {
@@ -383,7 +419,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function highlightTarget() {
     navLayer.clearLayers();
-    pointMarkers.forEach((mk, i) => mk.setStyle({ fillColor: COLORS[st.plan.points[i].status], radius: i === targetIdx ? 14 : 11 }));
+    pointMarkers.forEach((mk, i) => { mk.setStyle({ fillColor: COLORS[st.plan.points[i].status] }); mk.setRadius(pointRadius(i === targetIdx)); });
     if (targetIdx < 0) return;
     const pt = st.plan.points[targetIdx];
     navLayer.addLayer(L.marker(pt.at, { interactive: false, icon: L.divIcon({ className: 'target-pulse', html: '<span></span>', iconSize: [44, 44], iconAnchor: [22, 22] }) }));

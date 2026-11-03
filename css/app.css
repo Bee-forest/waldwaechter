@@ -595,3 +595,20 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 
 .thin.q-mode { grid-template-rows: auto 120px 1fr; }
 .thin.q-mode .thin-panel { max-height: none; }
+
+.code-line { font-size: 15px; }
+.code-line .code { display: inline-block; padding: 1px 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); font-weight: 700; }
+.code-line small { display: block; color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+.link-btn { border: 0; background: none; color: var(--primary); font-weight: 700; text-decoration: underline; padding: 0; cursor: pointer; font-size: inherit; }
+
+.thin-map-tools { position: absolute; top: 10px; right: 10px; left: 64px; z-index: 450; display: flex; justify-content: flex-end; align-items: center; gap: 8px; pointer-events: none; }
+.thin-map-tools > * { pointer-events: auto; box-shadow: var(--shadow); }
+.thin-map-tools .segmented.compact { background: var(--surface); }
+.map-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 14px; border: 2px solid #8B6A2E; background: var(--surface); color: var(--ink); font-weight: 700; cursor: pointer; }
+.map-chip .dot { width: 12px; height: 12px; border-radius: 50%; background: #8B6A2E; }
+.map-chip[aria-pressed='true'] { background: #8B6A2E; color: #fff; }
+.map-chip[aria-pressed='true'] .dot { background: #fff; }
+.thin.q-mode .thin-map-tools { display: none; }
+
+.hide-numbers .pt-tip { display: none; }
+.leaflet-tooltip-pane.hide-numbers .pt-tip { display: none; }

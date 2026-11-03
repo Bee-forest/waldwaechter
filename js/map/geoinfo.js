@@ -88,29 +88,57 @@ export async function queryPoint(latlng) {
 }
 
 // ---------- Standort verständlich machen ----------
-// Nährkraftstufen der forstlichen Standortserkundung: A arm … R reich
+// Schlüssel der Standortsformengruppe (forstliche Standortserkundung Thüringen):
+// [Feuchtebereich] Nährkraftstufe Feuchtestufe [C = carbonatisch], z. B. M2, WM1, R2C, NZ2
 export const NAEHRKRAFT = [
-  { k: 'A', label: 'arm' }, { k: 'Z', label: 'ziemlich arm' }, { k: 'M', label: 'mittel' }, { k: 'K', label: 'kräftig' }, { k: 'R', label: 'reich' },
+  { k: 'A', label: 'arm' }, { k: 'Z', label: 'ziemlich arm' }, { k: 'M', label: 'mäßig nährstoffhaltig' }, { k: 'K', label: 'kräftig' }, { k: 'R', label: 'reich' },
 ];
-// Feuchte aus der Beschreibung ablesen (nass … trocken)
-export const FEUCHTE = [
-  { re: /trocken/, label: 'trocken', v: 1 }, { re: /mäßig trocken|maessig trocken|mässig trocken/, label: 'mäßig trocken', v: 2 },
-  { re: /mäßig frisch|maessig frisch|mässig frisch/, label: 'mäßig frisch', v: 3 }, { re: /ziemlich frisch/, label: 'ziemlich frisch', v: 3.5 },
-  { re: /frisch/, label: 'frisch', v: 4 }, { re: /wechselfeucht|feucht/, label: 'feucht', v: 5 }, { re: /nass|sumpf|moor/, label: 'nass', v: 6 },
-];
+export const WASSER_SKALA = ['sehr trocken', 'trockener', 'mittelfrisch', 'frisch', 'feucht', 'nass'];
+
+const BEREICH = {
+  '': { label: 'unvernässter (normaler) Standort', stufen: { 1: ['frischere', 3], 2: ['mittelfrische', 2], 3: ['trockenere', 1] } },
+  T: { label: 'unvernässter (normaler) Standort', stufen: { 1: ['frischere', 3], 2: ['mittelfrische', 2], 3: ['trockenere', 1] } },
+  W: { label: 'Standort mit Wechselfeuchte', wechsel: true, stufen: { 1: ['wechselfeucht', 4], 2: ['wechselfrisch', 3], 3: ['wechseltrocken', 1] } },
+  N: { label: 'mineralischer Nassstandort', stufen: { 1: ['nass', 5], 2: ['feucht', 4] } },
+  O: { label: 'organischer Nassstandort (Moor)', stufen: { 1: ['nass (Moor)', 5], 2: ['nass (Moor)', 5], 3: ['feucht (Moor)', 4] } },
+  B: { label: 'Bachtälchen-Standort', stufen: { 1: ['feucht', 4], 2: ['frisch', 3] } },
+  Ü: { label: 'auenähnlicher Standort', stufen: { 1: ['feucht', 4], 2: ['frisch', 3] } },
+  X: { label: 'unvernässter, schwer bewirtschaftbarer bzw. schutzwürdiger Standort', stufen: { F: ['sehr frisch, kühlfeucht', 4], S1: ['frischere', 3], S2: ['mittelfrische', 2], S3: ['trockenere', 1], X: ['sehr trockene', 0] } },
+};
+const ROMAN = { I: '1', II: '2', III: '3' };
+
+/** Entschlüsselt z. B. „WM1“ → wechselfeucht, mäßig nährstoffhaltig */
+export function decodeGruppe(code = '') {
+  let c = code.trim().toUpperCase().replace('UE', 'Ü');
+  const out = { code: code.trim(), bereich: '', nk: -1, stufe: null, wasser: -1, carbonat: false };
+  if (!c) return out;
+  if (c.endsWith('C')) { out.carbonat = true; c = c.slice(0, -1); }
+  const nkIdx = (ch) => NAEHRKRAFT.findIndex((n) => n.k === ch);
+  if (/^[TWNOBÜX]/.test(c) && nkIdx(c[1]) >= 0) { out.bereich = c[0]; c = c.slice(1); }
+  if (nkIdx(c[0]) >= 0) { out.nk = nkIdx(c[0]); c = c.slice(1); }
+  let st = c.replace(/^\(|\)$/g, '');
+  st = ROMAN[st] || st;
+  const b = BEREICH[out.bereich] || BEREICH[''];
+  const hit = b.stufen[st] || b.stufen[st.replace(/\D/g, '')];
+  if (hit) { out.stufe = hit[0]; out.wasser = hit[1]; }
+  out.bereichLabel = b.label;
+  out.wechsel = !!b.wechsel;
+  return out;
+}
 
 export function explainStandort(p) {
   const desc = umlaut(p.Beschreibung || '');
-  const gruppe = p.Standortsguppe || p.Standortsgruppe || '';
-  const nk = NAEHRKRAFT.findIndex((n) => n.k === gruppe.trim()[0]?.toUpperCase());
-  const lower = desc.toLowerCase();
-  // spezifischere Muster zuerst prüfen
-  const fe = [...FEUCHTE].sort((a, b) => String(b.re).length - String(a.re).length).find((f) => f.re.test(lower));
+  const gruppe = (p.Standortsguppe || p.Standortsgruppe || '').trim();
+  const d = decodeGruppe(gruppe);
   const tips = [];
-  if (nk >= 0 && nk <= 1) tips.push('Nährstoffarm: genügsame Baumarten wie Kiefer, Birke, Traubeneiche; Nadelstreu nicht entfernen.');
-  if (nk === 2) tips.push('Mittlere Nährstoffversorgung: Buche, Fichte, Lärche, Douglasie und Mischungen wachsen hier gut.');
-  if (nk >= 3) tips.push('Gut nährstoffversorgt: anspruchsvolle Laubbäume wie Edellaubholz (Ahorn, Kirsche, Esche) und Eiche möglich.');
-  if (fe && fe.v <= 2) tips.push('Eher trocken: trockenheitsertragende Baumarten bevorzugen (Kiefer, Eiche, Elsbeere); Fichte meiden.');
-  if (fe && fe.v >= 5) tips.push('Feucht bis nass: Bodenschutz beim Befahren beachten (nur bei Frost oder Trockenheit); Erle, Esche, Stieleiche geeignet.');
-  return { desc, gruppe, einheit: p.Standortseinheiten || '', bodenform: p.Bodenform || '', wasser: p.Wasserhaushaltsstufe || '', nk, fe, tips };
+  const nk = d.nk;
+  if (nk >= 0 && nk <= 1) tips.push('Nährstoffarm: genügsame Baumarten wie Kiefer, Birke, Traubeneiche. Nadelstreu und Totholz im Bestand lassen.');
+  if (nk === 2) tips.push('Mäßige Nährstoffversorgung: Buche, Fichte, Lärche, Douglasie, Tanne und Mischungen wachsen hier gut.');
+  if (nk >= 3) tips.push('Gut nährstoffversorgt: auch anspruchsvolle Laubbäume wie Bergahorn, Kirsche, Esche, Eiche und Linde möglich.');
+  if (d.wechsel) tips.push('Wechselfeucht: im Frühjahr nass, im Sommer oft trocken. Tiefwurzler wie Eiche, Tanne und Hainbuche bevorzugen; Fichte ist hier sturmgefährdet. Nur bei Frost oder Trockenheit befahren.');
+  else if (d.wasser >= 4) tips.push('Feucht bis nass: Boden ist empfindlich – nur bei Frost oder Trockenheit befahren, Rückegassen nutzen. Geeignet sind z. B. Erle, Esche, Stieleiche, Moorbirke.');
+  else if (d.wasser >= 0 && d.wasser <= 1) tips.push('Eher trocken: trockenheitsertragende Baumarten bevorzugen (Kiefer, Traubeneiche, Elsbeere, Douglasie); Fichte meiden.');
+  if (d.carbonat) tips.push('Kalkhaltiger Boden: Buche, Elsbeere, Feldahorn und Kiefer geeignet; Douglasie und Fichte meiden.');
+  if (d.bereich === 'X') tips.push('Schwer bewirtschaftbar bzw. schutzwürdig (z. B. Steilhang, Blockschutt): nur vorsichtige Eingriffe, Bodenschutz hat Vorrang.');
+  return { desc, gruppe, d, einheit: p.Standortseinheiten || '', bodenform: p.Bodenform || '', wasserStufe: p.Wasserhaushaltsstufe || '', tips };
 }

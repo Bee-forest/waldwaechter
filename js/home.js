@@ -8,7 +8,7 @@ import { areaHa, formatHa, formatDist, centroid, compassLabel } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
 import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls } from './map/thueringen.js';
 import { openProfile } from './profile.js';
-import { queryPoint, explainStandort, NAEHRKRAFT, umlaut } from './map/geoinfo.js';
+import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
   nsg: 'Naturschutz',
@@ -276,14 +276,16 @@ function renderGeoInfo(info) {
   // Standort
   if (info.standort) {
     const st = explainStandort(info.standort);
-    const fIdx = st.fe ? ['trocken', 'mäßig trocken', 'mäßig frisch', 'frisch', 'feucht', 'nass'].indexOf(st.fe.label === 'ziemlich frisch' ? 'frisch' : st.fe.label) : -1;
+    const d = st.d;
+    const decoded = [d.stufe, d.nk >= 0 ? NAEHRKRAFT[d.nk].label : null, d.carbonat ? 'carbonatisch (kalkhaltig)' : null].filter(Boolean).join(', ');
     blocks.push(h('div', { class: 'geo-card' },
       h('p', { class: 'geo-kicker' }, 'Standort'),
-      h('h4', {}, st.desc ? st.desc[0].toUpperCase() + st.desc.slice(1) : `Standortsgruppe ${st.gruppe}`),
-      meter(NAEHRKRAFT.map((n) => n.label), st.nk, 'Nährstoffe', ['#C9B98A', '#B9C27A', '#8FAF4E', '#5E9A3A', '#2F7D3A']),
-      meter(['trocken', 'mäßig trocken', 'mäßig frisch', 'frisch', 'feucht', 'nass'], fIdx, 'Wasserversorgung', ['#D9B36A', '#CFC07C', '#A9C48A', '#7FB59A', '#5A9EB5', '#3F7FB0']),
+      h('h4', {}, st.desc ? st.desc[0].toUpperCase() + st.desc.slice(1) : decoded || `Standortsgruppe ${st.gruppe}`),
+      st.gruppe ? h('p', { class: 'code-line' }, h('span', { class: 'code' }, st.gruppe), decoded ? ` = ${decoded}` : '', h('small', {}, d.bereichLabel)) : null,
+      meter(NAEHRKRAFT.map((n) => n.label), d.nk, 'Nährstoffe', ['#C9B98A', '#B9C27A', '#8FAF4E', '#5E9A3A', '#2F7D3A']),
+      meter(WASSER_SKALA, d.wasser, d.wechsel ? 'Wasserversorgung (wechselnd)' : 'Wasserversorgung', ['#D9B36A', '#CFC07C', '#A9C48A', '#7FB59A', '#5A9EB5', '#3F7FB0']),
       st.tips.length ? h('div', { class: 'geo-tips' }, h('strong', {}, 'Was heißt das für dich?'), h('ul', {}, st.tips.map((t) => h('li', {}, t)))) : null,
-      h('p', { class: 'geo-facts' }, [st.gruppe && `Standortsgruppe ${st.gruppe}`, st.einheit && `Einheit ${st.einheit}`, st.bodenform && `Bodenform ${st.bodenform}`, st.wasser && `Wasserhaushaltsstufe ${st.wasser}`].filter(Boolean).join(' · ')),
+      h('p', { class: 'geo-facts' }, [st.einheit && `Standortseinheit ${st.einheit}`, st.bodenform && `Bodenform ${st.bodenform}`, st.wasserStufe && `Wasserhaushaltsstufe ${st.wasserStufe}`].filter(Boolean).join(' · ')),
     ));
   } else {
     blocks.push(h('div', { class: 'geo-card muted-card' }, h('p', { class: 'geo-kicker' }, 'Standort'), h('p', {}, 'Für diesen Punkt ist keine forstliche Standortskartierung hinterlegt (meist außerhalb des Waldes).')));
@@ -324,14 +326,17 @@ function renderGeoInfo(info) {
       })),
     ));
   }
-  // Zuständigkeit
-  if (info.zustaendig) {
-    blocks.push(h('div', { class: 'geo-card' },
-      h('p', { class: 'geo-kicker' }, 'Zuständig'),
-      h('p', {}, h('strong', {}, `Forstamt ${info.zustaendig.Forstamt || '–'}`), info.zustaendig.Revier ? `, Revier ${info.zustaendig.Revier}` : ''),
-      h('p', { class: 'hint' }, 'Ansprechpartner für Beratung, Förderung und Holzverkauf: ThüringenForst.'),
-    ));
-  }
+  // Zuständigkeit: Forstamt/Revier und die eigene FBG
+  const fbg = store.get().profile.fbg;
+  blocks.push(h('div', { class: 'geo-card' },
+    h('p', { class: 'geo-kicker' }, 'Zuständig'),
+    info.zustaendig ? h('p', {}, h('strong', {}, `Forstamt ${info.zustaendig.Forstamt || '–'}`), info.zustaendig.Revier ? `, Revier ${info.zustaendig.Revier}` : '') : null,
+    info.zustaendig ? h('p', { class: 'hint' }, 'ThüringenForst berät zu Waldbau, Förderung und Waldschutz.') : null,
+    fbg
+      ? h('p', {}, h('strong', {}, 'Deine FBG: '), fbg)
+      : h('p', { class: 'hint' }, 'Bist du Mitglied einer Forstbetriebsgemeinschaft? ',
+          h('button', { class: 'link-btn', onclick: () => openProfile() }, 'Im Profil eintragen')),
+  ));
   return blocks;
 }
 

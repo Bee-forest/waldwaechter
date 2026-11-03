@@ -44,7 +44,7 @@ export function wmsTileUrl(base, layers, format, transparent, z, x, y) {
 
 export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = true } = {}) {
   if (!BASEMAPS[basemap]) basemap = 'dop';
-  const map = L.map(el, { zoomControl: false, attributionControl: true, tap: true, maxZoom: 21 })
+  const map = L.map(el, { zoomControl: false, attributionControl: true, tap: true, maxZoom: 21, zoomSnap: 0.5 })
     .setView(center, zoom);
   map.attributionControl.setPrefix(false);
   let base = BASEMAPS[basemap]().addTo(map);

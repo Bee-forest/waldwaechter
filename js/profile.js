@@ -3,7 +3,8 @@ import { h, fill, icon, openPage, confirmDialog, toast } from './ui.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { CATEGORIES } from './map/basemap.js';
-import { areaHa, formatHa } from './geo.js';
+import { formatHa } from './geo.js';
+import { amtlicheFlaecheHa, nutzungAnteile, parcelExact } from './map/thueringen.js';
 import { focusParcel, removeParcel, parcelTitle } from './home.js';
 import { startTour } from './mascot.js';
 import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.js';
@@ -13,29 +14,49 @@ export async function openProfile() {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const body = h('div', { class: 'profile' });
+  // Ältere gespeicherte Flurstücke (ohne amtliche Fläche oder Teilflächen) einmal nachladen
+  (async () => {
+    let changed = false;
+    for (const sp of store.get().parcels) {
+      const p = byId[sp.id];
+      if (!p || p.source !== 'alkis' || (p.flaecheAmtlich && p.polys)) continue;
+      const fresh = await parcelExact(p).catch(() => p);
+      if (fresh && fresh !== p) { byId[sp.id] = fresh; changed = true; store.update((s) => { const i = s.parcels.findIndex((x) => x.id === sp.id); if (i >= 0) s.parcels[i] = { ...s.parcels[i], ...fresh, category: s.parcels[i].category, addedAt: s.parcels[i].addedAt }; }); }
+    }
+    if (changed) render();
+  })();
   const page = openPage('Mein Profil', body);
 
   function render() {
     const s = store.get();
     const list = s.parcels.filter((p) => byId[p.id]);
-    const sums = Object.fromEntries(Object.keys(CATEGORIES).map((k) => [k, { n: 0, ha: 0 }]));
-    for (const p of list) { const a = areaHa(byId[p.id].ring); sums[p.category].n++; sums[p.category].ha += a; }
-    const total = Object.values(sums).reduce((t, x) => t + x.ha, 0);
+    // Flächenbilanz: amtliche Fläche je Flurstück, aufgeteilt nach tatsächlicher Nutzung (ALKIS).
+    // Ohne Nutzungsangabe zählt das ganze Flurstück zur gewählten Kategorie.
+    const KAT = { ...CATEGORIES, Sonstiges: { color: '#B9B2A3', label: 'Wege, Sonstiges' } };
+    const sums = Object.fromEntries(Object.keys(KAT).map((k) => [k, { n: 0, ha: 0 }]));
+    for (const p of list) {
+      const full = byId[p.id];
+      const teile = nutzungAnteile(full) || { [p.category]: amtlicheFlaecheHa(full) };
+      for (const [k, ha] of Object.entries(teile)) { const key = sums[k] ? k : 'Sonstiges'; sums[key].ha += ha; sums[key].n++; }
+    }
+    const total = list.reduce((t, p) => t + amtlicheFlaecheHa(byId[p.id]), 0);
+    const anyAmtlich = list.some((p) => byId[p.id].flaecheAmtlich);
 
     const field = (label, key, attrs = {}) => h('label', {}, label,
       h('input', { value: s.profile[key] || '', ...attrs, onchange: (e) => store.update((st) => { st.profile[key] = e.target.value.trim(); }) }));
 
     fill(body, 
       h('section', { class: 'card summary' },
-        h('div', { class: 'summary-total' }, h('span', { class: 'summary-ha' }, formatHa(total)), h('span', {}, `${list.length} ${list.length === 1 ? 'Fläche' : 'Flächen'} insgesamt`)),
+        h('div', { class: 'summary-total' }, h('span', { class: 'summary-ha' }, formatHa(total)), h('span', {}, `${list.length} ${list.length === 1 ? 'Flurstück' : 'Flurstücke'} insgesamt${anyAmtlich ? ' (amtliche Fläche)' : ''}`)),
         total > 0 ? h('div', { class: 'summary-bar', 'aria-hidden': 'true' },
-          Object.entries(sums).filter(([, v]) => v.ha > 0).map(([k, v]) => h('span', { style: `flex:${v.ha};background:${CATEGORIES[k].color}` }))) : null,
-        h('ul', { class: 'summary-list' }, Object.entries(sums).map(([k, v]) => h('li', {},
-          h('span', { class: 'swatch', style: `background:${CATEGORIES[k].color}` }),
-          h('span', { class: 'summary-cat' }, CATEGORIES[k].label),
-          h('span', { class: 'summary-n' }, `${v.n}×`),
+          Object.entries(sums).filter(([, v]) => v.ha > 0).map(([k, v]) => h('span', { style: `flex:${v.ha};background:${KAT[k].color}` }))) : null,
+        h('ul', { class: 'summary-list' }, Object.entries(sums).filter(([k, v]) => k !== 'Sonstiges' || v.ha > 0).map(([k, v]) => h('li', {},
+          h('span', { class: 'swatch', style: `background:${KAT[k].color}` }),
+          h('span', { class: 'summary-cat' }, KAT[k].label),
+          h('span', { class: 'summary-n' }, v.n ? `in ${v.n} ${v.n === 1 ? 'Flurstück' : 'Flurstücken'}` : ''),
           h('span', { class: 'summary-v' }, formatHa(v.ha)),
         ))),
+        h('p', { class: 'hint' }, 'Aufteilung nach tatsächlicher Nutzung laut ALKIS. Die Summe entspricht der amtlichen Fläche deiner Flurstücke.'),
       ),
 
       h('section', { class: 'card' },
@@ -45,7 +66,7 @@ export async function openProfile() {
               const full = byId[p.id];
               return h('li', { class: 'parcel-item' },
                 h('span', { class: 'swatch tall', style: `background:${CATEGORIES[p.category].color}` }),
-                h('div', { class: 'parcel-text' }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}`), h('span', { class: 'muted' }, `${CATEGORIES[p.category].label}, ${formatHa(areaHa(full.ring))}`)),
+                h('div', { class: 'parcel-text' }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}`), h('span', { class: 'muted' }, `${CATEGORIES[p.category].label}, ${formatHa(amtlicheFlaecheHa(full))}${full.flaecheAmtlich ? ' (amtlich)' : ''}`), full.nutzungText ? h('span', { class: 'muted small' }, full.nutzungText) : null),
                 h('button', { class: 'icon-btn', 'aria-label': `Auf ${parcelTitle(full)} zoomen`, html: icon.zoom, onclick: () => { page.close(); focusParcel(p.id); } }),
                 h('button', { class: 'icon-btn danger', 'aria-label': `${parcelTitle(full)} löschen`, html: icon.trash, onclick: async () => { if (await removeParcel(p.id)) render(); } }),
               );

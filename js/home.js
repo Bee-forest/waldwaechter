@@ -6,7 +6,7 @@ import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, formatDist, centroid, compassLabel, polysOf } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
-import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls } from './map/thueringen.js';
+import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 import { bestandAt } from './map/bestand.js';
 import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
@@ -413,7 +413,7 @@ async function renderInfo() {
   const box = document.getElementById('infobox');
   const m = mine(p.id);
   const rescue = await source.nearestRescuePoints(latlng, 2, p);
-  const ha = p.flaecheAmtlich ? p.flaecheAmtlich / 10000 : areaHa(p.ring);
+  const ha = amtlicheFlaecheHa(p);
   const isAlkis = p.source === 'alkis';
 
   const catChips = (current, onPick) => h('div', { class: 'chips', role: 'radiogroup', 'aria-label': 'Kategorie' },
@@ -524,7 +524,7 @@ function openSearch() {
         }
         fill(results, ...(list.length
           ? list.slice(0, 30).map((p) => h('li', {}, h('button', { class: 'result', type: 'button', onclick: () => { close(null); focusParcel(p.id); } },
-              h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(p.flaecheAmtlich ? p.flaecheAmtlich / 10000 : areaHa(p.ring))}${p.lage ? `, ${p.lage}` : ''}`))))
+              h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(amtlicheFlaecheHa(p))}${p.lage ? `, ${p.lage}` : ''}`))))
           : [h('li', { class: 'muted' }, 'Kein Flurstück gefunden. Prüfe Gemarkung, Flur und Nummer.')]));
       } },
         h('label', {}, 'Gemarkung', h('input', { name: 'gemarkung', list: 'gemarkungen', autocomplete: 'off', placeholder: 'z. B. Manebach', required: true })),

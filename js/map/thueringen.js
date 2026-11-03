@@ -1,7 +1,7 @@
 // Amtliche Geodienste des Freistaats Thüringen (Geoproxy, GDI-Th).
 // Lizenz: Datenlizenz Deutschland – Namensnennung 2.0 bzw. CC BY 4.0, Quelle „© GDI-Th“.
 /* global L */
-import { pointInPolygon, inPolys, polysOf, areaHa, toUTM32, fromUTM32, generateGrid } from '../geo.js';
+import { pointInPolygon, inPolys, polysOf, areaHa, areaM2Polys, toUTM32, fromUTM32, generateGrid } from '../geo.js';
 
 const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
 export const TH_ATTR = '© <a href="https://www.geoportal-th.de" target="_blank" rel="noopener">GDI-Th</a>, dl-de/by-2-0';
@@ -207,7 +207,36 @@ export function categorize(t = '') {
   return 'Wald';
 }
 
-export const amtlicheFlaecheHa = (p) => (p.flaecheAmtlich ? p.flaecheAmtlich / 10000 : areaHa(p.ring));
+export const amtlicheFlaecheHa = (p) => (p.flaecheAmtlich ? p.flaecheAmtlich / 10000 : areaM2Polys(polysOf(p)) / 10000);
+
+// Nutzungsart → Kategorie für die Flächenbilanz (Wege, Straßen usw. getrennt als „Sonstiges“)
+function kategorieTeil(name = '') {
+  if (/wald|gehölz|forst/i.test(name)) return 'Wald';
+  if (/fließ|stehend|gewässer|see|teich|bach|graben|fluss|hafen/i.test(name)) return 'Gewässer';
+  if (/wohn|gebäude|industrie|gewerbe|hof|siedlung|bau|sport|freizeit|friedhof|öffentlich|mischnutzung/i.test(name)) return 'Gebäude';
+  if (/acker|grünland|landwirtschaft|wiese|weide|garten|obst|gartenland|brach/i.test(name)) return 'Landwirtschaft';
+  return 'Sonstiges';
+}
+/**
+ * Flächenanteile eines Flurstücks nach tatsächlicher Nutzung (ALKIS), in ha.
+ * Die gerundeten Teilwerte aus dem Nutzungstext werden auf die amtliche Fläche abgeglichen,
+ * damit die Summe exakt der amtlichen Fläche entspricht.
+ */
+export function nutzungAnteile(p) {
+  const total = amtlicheFlaecheHa(p);
+  const teile = {};
+  for (const seg of String(p.nutzungText || '').split(/,\s+/)) {
+    const m = seg.trim().match(/^(.*?)\s+([\d.]+(?:,\d+)?)\s*(ha|m²)$/);
+    if (!m) continue;
+    const v = Number(m[2].replace(/\./g, '').replace(',', '.')) / (m[3] === 'ha' ? 1 : 10000);
+    const k = kategorieTeil(m[1]);
+    teile[k] = (teile[k] || 0) + v;
+  }
+  const summe = Object.values(teile).reduce((a, b) => a + b, 0);
+  if (!summe) return null;
+  for (const k of Object.keys(teile)) teile[k] = (teile[k] / summe) * total;
+  return teile;
+}
 
 // ---------- Lokale ALKIS-Kacheln (data/alkis, erzeugt von tools/alkis_tiles.py) ----------
 

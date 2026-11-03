@@ -3,7 +3,8 @@ import { h, fill, icon, openPage, confirmDialog, toast, fmtDate } from './ui.js'
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { CATEGORIES } from './map/basemap.js';
-import { areaHa, formatHa } from './geo.js';
+import { formatHa } from './geo.js';
+import { amtlicheFlaecheHa } from './map/thueringen.js';
 import { openThinningWizard } from './thinning/wizard.js';
 import { SPECIES } from './thinning/plan.js';
 import { WANZE_SVG } from './mascot.js';
@@ -142,7 +143,7 @@ async function openNewMeasure({ parcelId } = {}) {
       h('label', {}, 'Fläche',
         h('select', { name: 'parcel' },
           h('option', { value: '' }, mine.length ? 'Fläche wählen' : 'Noch keine eigenen Flächen'),
-          mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${CATEGORIES[p.category].label}, ${formatHa(areaHa(byId[p.id].ring))})`)),
+          mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${CATEGORIES[p.category].label}, ${formatHa(amtlicheFlaecheHa(byId[p.id]))})`)),
         )),
       t.fields.map(([k, label, kind]) => h('label', {}, label,
         Array.isArray(kind) ? h('select', { name: k }, kind.map((o) => h('option', {}, o)))

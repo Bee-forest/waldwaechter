@@ -45,6 +45,41 @@ def x2lon(x): return x / 2 ** Z * 360 - 180
 def y2lat(y): return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / 2 ** Z))))
 
 
+# --- ETRS89/UTM 32N (EPSG:25832) <-> geografisch, GRS80 ---
+_A, _F, _K0, _E0 = 6378137.0, 1 / 298.257222101, 0.9996, 500000.0
+_E2 = _F * (2 - _F)
+_EP2 = _E2 / (1 - _E2)
+_L0 = math.radians(9)
+
+
+def to_utm(lat, lon):
+    la, lo = math.radians(lat), math.radians(lon)
+    n = _A / math.sqrt(1 - _E2 * math.sin(la) ** 2)
+    t, c = math.tan(la) ** 2, _EP2 * math.cos(la) ** 2
+    a = math.cos(la) * (lo - _L0)
+    m = _A * ((1 - _E2 / 4 - 3 * _E2 ** 2 / 64 - 5 * _E2 ** 3 / 256) * la - (3 * _E2 / 8 + 3 * _E2 ** 2 / 32 + 45 * _E2 ** 3 / 1024) * math.sin(2 * la)
+              + (15 * _E2 ** 2 / 256 + 45 * _E2 ** 3 / 1024) * math.sin(4 * la) - (35 * _E2 ** 3 / 3072) * math.sin(6 * la))
+    x = _E0 + _K0 * n * (a + (1 - t + c) * a ** 3 / 6 + (5 - 18 * t + t * t + 72 * c - 58 * _EP2) * a ** 5 / 120)
+    y = _K0 * (m + n * math.tan(la) * (a * a / 2 + (5 - t + 9 * c + 4 * c * c) * a ** 4 / 24 + (61 - 58 * t + t * t + 600 * c - 330 * _EP2) * a ** 6 / 720))
+    return x, y
+
+
+def from_utm(x, y):
+    m = y / _K0
+    mu = m / (_A * (1 - _E2 / 4 - 3 * _E2 ** 2 / 64 - 5 * _E2 ** 3 / 256))
+    e1 = (1 - math.sqrt(1 - _E2)) / (1 + math.sqrt(1 - _E2))
+    p = mu + (3 * e1 / 2 - 27 * e1 ** 3 / 32) * math.sin(2 * mu) + (21 * e1 ** 2 / 16 - 55 * e1 ** 4 / 32) * math.sin(4 * mu) \
+        + (151 * e1 ** 3 / 96) * math.sin(6 * mu) + (1097 * e1 ** 4 / 512) * math.sin(8 * mu)
+    n1 = _A / math.sqrt(1 - _E2 * math.sin(p) ** 2)
+    t1, c1 = math.tan(p) ** 2, _EP2 * math.cos(p) ** 2
+    r1 = _A * (1 - _E2) / (1 - _E2 * math.sin(p) ** 2) ** 1.5
+    d = (x - _E0) / (n1 * _K0)
+    lat = p - (n1 * math.tan(p) / r1) * (d * d / 2 - (5 + 3 * t1 + 10 * c1 - 4 * c1 * c1 - 9 * _EP2) * d ** 4 / 24
+                                         + (61 + 90 * t1 + 298 * c1 + 45 * t1 * t1 - 252 * _EP2 - 3 * c1 * c1) * d ** 6 / 720)
+    lon = _L0 + (d - (1 + 2 * t1 + c1) * d ** 3 / 6 + (5 - 2 * c1 + 28 * t1 - 3 * c1 * c1 + 8 * _EP2 + 24 * t1 * t1) * d ** 5 / 120) / math.cos(p)
+    return math.degrees(lat), math.degrees(lon)
+
+
 def slug(s):
     s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode().lower()
     return re.sub(r'[^a-z0-9]+', '-', s).strip('-') or 'unbekannt'
@@ -70,7 +105,9 @@ def parse(xml_bytes):
         if len(nums) < 6:
             continue
         pts = list(zip(nums[0::2], nums[1::2]))
-        if pts[0][0] < 30 < pts[0][1]:          # Achsreihenfolge (lon, lat) → (lat, lon)
+        if pts[0][0] > 1000:                     # UTM (Rechtswert, Hochwert) → (lat, lon)
+            pts = [from_utm(a, b) if a < 1e6 else from_utm(b, a) for a, b in pts]
+        elif pts[0][0] < 30 < pts[0][1]:         # Achsreihenfolge (lon, lat) → (lat, lon)
             pts = [(b, a) for a, b in pts]
         if pts[0] == pts[-1]:
             pts = pts[:-1]
@@ -104,32 +141,57 @@ def get(url, tries=4):
             time.sleep(3 * (k + 1))
 
 
-WORKING = None
+WORKING = None   # (url, ns, variante)
+VARIANTS = ['utm', 'urn', 'lonlat']
+
+
+def variant_params(v, s, w, n, e):
+    if v == 'urn':
+        return {'SRSNAME': 'urn:ogc:def:crs:EPSG::4326', 'BBOX': f'{s},{w},{n},{e},urn:ogc:def:crs:EPSG::4326'}
+    if v == 'lonlat':
+        return {'SRSNAME': 'EPSG:4326', 'BBOX': f'{w},{s},{e},{n},EPSG:4326'}
+    xs, ys = zip(*[to_utm(la, lo) for la in (s, n) for lo in (w, e)])
+    return {'SRSNAME': 'urn:ogc:def:crs:EPSG::25832',
+            'BBOX': f'{min(xs):.1f},{min(ys):.1f},{max(xs):.1f},{max(ys):.1f},urn:ogc:def:crs:EPSG::25832'}
+
+
+def query(url, ns, v, s, w, n, e):
+    feats, start = [], 0
+    while True:
+        q = urllib.parse.urlencode({
+            'SERVICE': 'WFS', 'VERSION': '2.0.0', 'REQUEST': 'GetFeature', 'TYPENAMES': 'ave:Flurstueck',
+            'NAMESPACES': f'xmlns(ave,{ns})', 'COUNT': PAGE, 'STARTINDEX': start, **variant_params(v, s, w, n, e),
+        })
+        raw = get(f'{url}?{q}')
+        page = parse(raw)
+        if start == 0 and not page and not WORKING:
+            log(f'  Probe {url.rsplit("/", 1)[-1]} [{v}]: 0 Treffer. Antwort: {raw[:400]!r}')
+        feats += page
+        if len(page) < PAGE:
+            return feats
+        start += PAGE
+
+
+def probe(s, w, n, e):
+    """Findet Endpunkt und Koordinaten-Variante, die Flurstücke liefert."""
+    global WORKING
+    for url, ns in WFS:
+        for v in VARIANTS:
+            try:
+                f = query(url, ns, v, s, w, n, e)
+            except Exception as ex:  # noqa: BLE001
+                log(f'  Probe {url.rsplit("/", 1)[-1]} [{v}]: Fehler {str(ex)[:200]}')
+                continue
+            if f:
+                WORKING = (url, ns, v)
+                log(f'  Verwende {url.rsplit("/", 1)[-1]} mit Variante {v} ({len(f)} Flurstücke in der Probe)')
+                return True
+    return False
 
 
 def fetch_bbox(s, w, n, e):
-    global WORKING
-    order = [WORKING] + [x for x in WFS if x != WORKING] if WORKING else WFS
-    last = None
-    for url, ns in order:
-        feats, start = [], 0
-        try:
-            while True:
-                q = urllib.parse.urlencode({
-                    'SERVICE': 'WFS', 'VERSION': '2.0.0', 'REQUEST': 'GetFeature', 'TYPENAMES': 'ave:Flurstueck',
-                    'NAMESPACES': f'xmlns(ave,{ns})', 'SRSNAME': 'urn:ogc:def:crs:EPSG::4326',
-                    'BBOX': f'{s},{w},{n},{e},urn:ogc:def:crs:EPSG::4326', 'COUNT': PAGE, 'STARTINDEX': start,
-                })
-                page = parse(get(f'{url}?{q}'))
-                feats += page
-                if len(page) < PAGE:
-                    break
-                start += PAGE
-            WORKING = (url, ns)
-            return feats
-        except Exception as ex:  # noqa: BLE001
-            last = ex
-    raise RuntimeError(f'WFS fehlgeschlagen: {last}')
+    url, ns, v = WORKING
+    return query(url, ns, v, s, w, n, e)
 
 
 def run_region(name, bbox, gem_index, stats):
@@ -138,6 +200,10 @@ def run_region(name, bbox, gem_index, stats):
     ys = range(lat2y(maxlat), lat2y(minlat) + 1)
     tiles = [(x, y) for x in xs for y in ys]
     log(f'Region {name}: {len(tiles)} Kacheln')
+    if not WORKING:
+        cx, cy = tiles[len(tiles) // 2]
+        if not probe(y2lat(cy + 1), x2lon(cx), y2lat(cy), x2lon(cx + 1)):
+            raise RuntimeError('Keine Variante liefert Flurstücke (siehe Probe-Zeilen)')
 
     def job(t):
         x, y = t
@@ -204,7 +270,7 @@ def main():
 
     stats = {'tiles': 0, 'parcels': 0, 'errors': 0}
     for nm, bb in regions:
-        if index['regionen'].get(nm, {}).get('bbox') == bb and index['regionen'][nm].get('ok'):
+        if index['regionen'].get(nm, {}).get('bbox') == bb and index['regionen'][nm].get('ok') and index['regionen'][nm].get('flurstuecke'):
             log(f'Region {nm}: bereits vorhanden, übersprungen')
             continue
         before = dict(stats)
@@ -214,7 +280,7 @@ def main():
         except Exception as ex:  # noqa: BLE001
             log(f'Region {nm} abgebrochen: {ex}')
             ok = False
-        index['regionen'][nm] = {'bbox': bb, 'ok': ok and stats['errors'] == before['errors'],
+        index['regionen'][nm] = {'bbox': bb, 'ok': ok and stats['errors'] == before['errors'] and stats['parcels'] > before['parcels'],
                                  'flurstuecke': stats['parcels'] - before['parcels'], 'stand': time.strftime('%Y-%m-%d')}
 
     os.makedirs(os.path.join(OUT, 'gem'), exist_ok=True)

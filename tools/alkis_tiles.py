@@ -114,10 +114,10 @@ def parse(xml_bytes):
             pts = pts[:-1]
         kennz = vals.get('flstkennz', '')
         zae, nen = vals.get('flstnrzae', ''), vals.get('flstnrnen', '')
-        if not zae and re.match(r'^\d{18}', kennz):   # LL GGGG FFF ZZZZZ NNNN __
+        if not zae and re.match(r'^\d{14}', kennz):   # LL GGGG FFF ZZZZZ NNNN|____ __
             zae = str(int(kennz[9:14]))
-            nen = str(int(kennz[14:18])) if int(kennz[14:18]) else ''
-        fm = re.search(r'\d+', vals.get('flur', '')) or (re.match(r'^\d{18}', kennz) and re.search(r'\d+', str(int(kennz[6:9]))))
+            nen = str(int(kennz[14:18])) if kennz[14:18].isdigit() and int(kennz[14:18]) else ''
+        fm = re.search(r'\d+', vals.get('flur', '')) or (re.match(r'^\d{9}', kennz) and re.search(r'\d+', str(int(kennz[6:9]))))
         flur = str(int(fm.group())) if fm else vals.get('flur', '')
         try:
             area = round(float(vals.get('flaeche', '') or 0))
@@ -137,7 +137,7 @@ def parse(xml_bytes):
 
 def nutzung_text(raw):
     """'Wald; 3200|Grünland; 400' → 'Wald 0,32 ha, Grünland 400 m²' (größte zuerst)"""
-    parts = []
+    sums = {}
     for seg in raw.split('|'):
         name, _, a = seg.partition(';')
         try:
@@ -145,8 +145,9 @@ def nutzung_text(raw):
         except ValueError:
             a = 0
         if name.strip():
-            parts.append((a, name.strip().replace('Strassen', 'Straßen')))
-    parts.sort(reverse=True)
+            k = name.strip().replace('Strassen', 'Straßen')
+            sums[k] = sums.get(k, 0) + a
+    parts = sorted(((a, n) for n, a in sums.items()), reverse=True)
 
     def fmt(a):
         return f"{a / 10000:.2f} ha".replace('.', ',') if a >= 10000 else f"{a:,.0f} m²".replace(',', '.')

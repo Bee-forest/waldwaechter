@@ -1,8 +1,0 @@
-2026-11-03 08:28 UTC
-Region Ilmenau und Umgebung: 90 Kacheln
-  Felder: identifier=DETHL56P0000gU6SFL, oid=DETHL56P0000gU6SFL, aktualit=2026-02-19, idflurst=DETHL56P0000gU6S, flaeche=9320, flstkennz=16292202602231______, land=Thüringen, gemarkung=Ilmenau, flur=Flur 26, flurstnr=2231, gmdschl=16070029, regbezirk=unbesetzt, kreis=Ilm-Kreis, gemeinde=Ilmenau, lagebeztxt=Goetheallee, tntxt=Wohnbauflaeche; 642|Strassenve
-  Verwende adv_alkis_wfs mit Variante utm (90 Flurstücke in der Probe)
-  25/90 Kacheln, 15871 Flurstücke
-  50/90 Kacheln, 31555 Flurstücke
-  75/90 Kacheln, 45099 Flurstücke
-Fertig: 90 Kacheln, 54206 Flurstücke, 0 Fehler

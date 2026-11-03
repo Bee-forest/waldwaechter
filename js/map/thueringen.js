@@ -135,11 +135,11 @@ function parseOne(el) {
 
   const kennz = val(el, 'flstkennz');
   let zae = val(el, 'flstnrzae'), nen = val(el, 'flstnrnen');
-  if (!zae && /^\d{18}/.test(kennz)) { // LL GGGG FFF ZZZZZ NNNN __
+  if (!zae && /^\d{14}/.test(kennz)) { // LL GGGG FFF ZZZZZ NNNN|____ __
     zae = String(Number(kennz.slice(9, 14)));
-    nen = Number(kennz.slice(14, 18)) ? String(Number(kennz.slice(14, 18))) : '';
+    nen = /^\d{4}$/.test(kennz.slice(14, 18)) && Number(kennz.slice(14, 18)) ? String(Number(kennz.slice(14, 18))) : '';
   }
-  const flurRaw = val(el, 'flur').match(/\d+/)?.[0] || (/^\d{18}/.test(kennz) ? kennz.slice(6, 9) : '');
+  const flurRaw = val(el, 'flur').match(/\d+/)?.[0] || (/^\d{9}/.test(kennz) ? kennz.slice(6, 9) : '');
   const flaeche = Number(val(el, 'flaeche')) || null;
   const nutzung = nutzungText(val(el, 'tntxt'));
   const gemarkung = val(el, 'gemarkung');
@@ -165,8 +165,13 @@ function parseOne(el) {
 /** 'Wald; 3200|Grünland; 400' → 'Wald 0,32 ha, Grünland 400 m²' */
 export function nutzungText(raw = '') {
   if (!raw.includes(';')) return raw;
-  return raw.split('|').map((seg) => { const [n, a] = seg.split(';'); return [Number(a) || 0, (n || '').trim().replace('Strassen', 'Straßen')]; })
-    .filter(([, n]) => n).sort((a, b) => b[0] - a[0])
+  const sums = new Map();
+  for (const seg of raw.split('|')) {
+    const [n, a] = seg.split(';');
+    const k = (n || '').trim().replace('Strassen', 'Straßen');
+    if (k) sums.set(k, (sums.get(k) || 0) + (Number(a) || 0));
+  }
+  return [...sums].map(([n, a]) => [a, n]).sort((a, b) => b[0] - a[0])
     .map(([a, n]) => (a ? `${n} ${a >= 10000 ? `${(a / 10000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} ha` : `${Math.round(a).toLocaleString('de-DE')} m²`}` : n))
     .join(', ');
 }

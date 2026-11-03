@@ -86,6 +86,9 @@ def slug(s):
     return re.sub(r'[^a-z0-9]+', '-', s).strip('-') or 'unbekannt'
 
 
+FORMAT = 2
+
+
 def local(tag): return tag.rsplit('}', 1)[-1]
 
 
@@ -331,7 +334,8 @@ def main():
 
     stats = {'tiles': 0, 'parcels': 0, 'errors': 0}
     for nm, bb in regions:
-        if index['regionen'].get(nm, {}).get('bbox') == bb and index['regionen'][nm].get('ok') and index['regionen'][nm].get('flurstuecke'):
+        # Format 2: Teilflächen und Löcher (Feld x) – ältere Kacheln neu laden
+        if index.get('format') == FORMAT and index['regionen'].get(nm, {}).get('bbox') == bb and index['regionen'][nm].get('ok') and index['regionen'][nm].get('flurstuecke'):
             log(f'Region {nm}: bereits vorhanden, übersprungen')
             continue
         before = dict(stats)
@@ -350,6 +354,8 @@ def main():
         index['gemarkungen'][g] = f
         with open(os.path.join(OUT, 'gem', f), 'w', encoding='utf-8') as fh:
             json.dump(entries, fh, ensure_ascii=False, separators=(',', ':'))
+    if all(index['regionen'].get(nm, {}).get('ok') for nm, _ in regions):
+        index['format'] = FORMAT
     index['zoom'] = Z
     index['quelle'] = '© GDI-Th, dl-de/by-2-0 (ALKIS vereinfacht, Geoproxy Thüringen)'
     with open(idx_path, 'w', encoding='utf-8') as f:

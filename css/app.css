@@ -523,3 +523,7 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .leaflet-control-zoom { border: 1px solid var(--line) !important; border-radius: 12px !important; overflow: hidden; box-shadow: 0 2px 8px rgba(23,58,38,.12) !important; }
 .leaflet-control-zoom a { width: 38px !important; height: 38px !important; line-height: 38px !important; font-size: 22px !important; color: var(--ink) !important; }
 .view-head h1 { font-weight: 400; }
+
+.rescue-access { margin-top: 6px; }
+.rescue-access .label { font-weight: 700; }
+.rp-tip { background: #fff; color: #C62828; font-weight: 700; border: 1px solid #C62828; }

@@ -4,9 +4,9 @@ import { h, fill, icon, dialog, confirmDialog, toast } from './ui.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
-import { areaHa, formatHa, formatDist, centroid } from './geo.js';
+import { areaHa, formatHa, formatDist, centroid, compassLabel } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
-import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES } from './map/thueringen.js';
+import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 
 export const FEATURE_TYPES = {
@@ -63,7 +63,7 @@ export async function initHome(root) {
     const pr = store.get().profile;
     const initials = (pr.name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
     fill(head,
-      h('img', { class: 'app-logo', src: 'img/logo.png', alt: 'WaldWächter-Logo' }),
+      h('img', { class: 'app-logo', src: 'img/logo.svg', alt: 'WaldWächter-Logo' }),
       h('div', { class: 'app-title' },
         h('h1', {}, 'WaldWächter'),
         h('p', {}, 'Digitale Wald- und Flächenbewirtschaftung für morgen.'),
@@ -219,15 +219,45 @@ function clearSelection() {
 const geoFrame = (title, src, height = 200) => h('iframe', { class: 'wms-info', src, title, loading: 'lazy', referrerpolicy: 'no-referrer', style: `height:${height}px` });
 
 function rescueBlock(latlng) {
+  const list = h('div', { class: 'rescue-live', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Suche die nächsten Rettungspunkte …'));
+  nearestRescue(latlng, 2).then((pts) => {
+    if (!pts.length) { fill(list, h('p', { class: 'muted' }, 'Im Umkreis von 8 km ist kein Rettungspunkt verzeichnet.')); return; }
+    fill(list, h('ul', { class: 'rescue-list' }, pts.map((rp) => h('li', { class: 'rescue' },
+      h('div', { class: 'rescue-head' },
+        h('span', { class: 'rescue-badge', 'aria-hidden': 'true' }, '+'),
+        h('strong', {}, rp.id),
+        h('span', { class: 'rescue-dist' }, `${formatDist(rp.dist)} ${compassLabel(rp.brg)}`),
+      ),
+      rp.access ? h('p', { class: 'rescue-access' }, h('span', { class: 'label' }, 'Anfahrt: '), rp.access) : null,
+      h('p', { class: 'hint' }, [rp.signed ? `beschildert: ${rp.signed}` : null, rp.source ? `Quelle: ${rp.source}` : null].filter(Boolean).join(', ')),
+      h('div', { class: 'rescue-actions' },
+        h('a', { class: 'btn btn-small', href: `https://www.google.com/maps/dir/?api=1&destination=${rp.at[0]},${rp.at[1]}`, target: '_blank', rel: 'noopener' }, h('span', { html: icon.nav }), 'Google Maps'),
+        h('a', { class: 'btn btn-small', href: `https://maps.apple.com/?daddr=${rp.at[0]},${rp.at[1]}&dirflg=d`, target: '_blank', rel: 'noopener' }, h('span', { html: icon.nav }), 'Apple Karten'),
+        h('button', { class: 'btn btn-small', onclick: () => showRescueOnMap(rp, latlng) }, 'Auf Karte zeigen'),
+      ),
+    ))));
+  }).catch(() => {
+    fill(list,
+      h('p', { class: 'hint' }, 'Die Rettungspunkte konnten gerade nicht abgefragt werden (keine Verbindung zum Geoportal). Blende die Ebene „Rettungspunkte“ ein oder nutze den ThüringenViewer.'),
+      h('a', { class: 'btn btn-small', href: 'https://www.thueringenforst.de/aktuelles-service/info-karten/rettungspunkte', target: '_blank', rel: 'noopener' }, 'Rettungspunkte bei ThüringenForst'));
+  });
   return h('div', { class: 'info-block' },
-    h('h3', {}, 'Rettungspunkte in der Nähe'),
-    h('p', { class: 'hint' }, 'Rettungspunkte von ThüringenForst im Umkreis von etwa 2 km. Blende die Ebene „Rettungspunkte“ ein, um sie auf der Karte zu sehen.'),
-    geoFrame('Rettungspunkte in der Nähe', INFO_SOURCES.rettung(latlng), 170),
-    h('div', { class: 'rescue-actions' },
-      h('a', { class: 'btn btn-small', href: 'https://www.thueringenforst.de/aktuelles-service/info-karten/rettungspunkte', target: '_blank', rel: 'noopener' }, 'Rettungspunkte-Info (ThüringenForst)'),
-    ),
-    h('p', { class: 'hint' }, 'Im Notfall: 112 wählen und die Rettungspunkt-Nummer nennen.'),
+    h('h3', {}, 'Nächste Rettungspunkte'),
+    list,
+    h('p', { class: 'hint' }, 'Entfernung in Luftlinie vom angetippten Punkt. Im Notfall: 112 wählen und die Rettungspunkt-Nummer nennen. Daten: © GDI-Th / ThüringenForst.'),
   );
+}
+
+let rescueMarkers;
+function showRescueOnMap(rp, from) {
+  rescueMarkers?.remove();
+  rescueMarkers = L.layerGroup([
+    L.polyline([from, rp.at], { color: '#C62828', weight: 3, dashArray: '6 8', interactive: false }),
+    L.marker(rp.at, { icon: L.divIcon({ className: 'rpoint', html: '<span>+</span>', iconSize: [28, 28], iconAnchor: [14, 14] }), title: rp.id })
+      .bindTooltip(rp.id, { permanent: true, direction: 'top', offset: [0, -12], className: 'rp-tip' }),
+  ]).addTo(map);
+  map.fitBounds(L.latLngBounds([from, rp.at]), { padding: [50, 50], maxZoom: 16 });
+  document.querySelector('.map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function geoInfoBlock(latlng) {

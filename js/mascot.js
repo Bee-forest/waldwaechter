@@ -3,7 +3,7 @@ import { h } from './ui.js';
 import { store } from './store.js';
 
 // Die Wanze aus dem WaldWächter-Logo (img/wanze.png, freigestellt)
-export const WANZE_SVG = '<img src="img/wanze.png" alt="" class="wanze-img" draggable="false">';
+export const WANZE_SVG = '<img src="img/wanze.svg" alt="" class="wanze-img" draggable="false">';
 window.__wanzeSvg = WANZE_SVG;
 
 let bubble, hideTimer;

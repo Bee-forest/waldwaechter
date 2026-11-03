@@ -13,7 +13,7 @@ const defaults = () => ({
     simulateGps: false,     // Entwicklermodus: Standort per Tippen auf die Karte
     basemap: 'osm',         // osm | dop (Luftbild TH)
     demo: false,            // Demo-Flurstücke (Raum Ilmenau) zusätzlich zeigen
-    layers: { alkis: true, demo: false, rettung: true, schutz: false, natura: false, biotope: false, schaden: false, standort: false, rettungswege: false, Wald: true, Landwirtschaft: true, Gewässer: true, Gebäude: true, info: true, rescue: false },
+    layers: { alkis: true, demo: false, rettung: true, schutz: false, natura: false, biotope: false, schaden: false, standort: false, Wald: true, Landwirtschaft: true, Gewässer: true, Gebäude: true, info: true, rescue: false },
   },
   onboardingDone: false,
 });

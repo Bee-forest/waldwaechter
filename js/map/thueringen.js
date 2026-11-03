@@ -1,7 +1,7 @@
 // Amtliche Geodienste des Freistaats Thüringen (Geoproxy, GDI-Th).
 // Lizenz: Datenlizenz Deutschland – Namensnennung 2.0 bzw. CC BY 4.0, Quelle „© GDI-Th“.
 /* global L */
-import { pointInPolygon, areaHa } from '../geo.js';
+import { pointInPolygon, areaHa, toUTM32, fromUTM32 } from '../geo.js';
 
 const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
 export const TH_ATTR = '© <a href="https://www.geoportal-th.de" target="_blank" rel="noopener">GDI-Th</a>, dl-de/by-2-0';
@@ -58,7 +58,7 @@ async function wfsGet(params) {
   for (const w of candidates) {
     const q = new URLSearchParams({
       SERVICE: 'WFS', VERSION: '2.0.0', REQUEST: 'GetFeature', TYPENAMES: 'ave:Flurstueck',
-      NAMESPACES: `xmlns(ave,${w.ns})`, SRSNAME: 'urn:ogc:def:crs:EPSG::4326', COUNT: '30',
+      NAMESPACES: `xmlns(ave,${w.ns})`, SRSNAME: 'urn:ogc:def:crs:EPSG::25832', COUNT: '30',
       ...params(w),
     });
     try {
@@ -86,8 +86,10 @@ async function wfsGet(params) {
 
 /** Flurstück am Punkt [lat, lng] */
 export async function wfsParcelAt([lat, lng]) {
-  const d = 0.00004; // ca. 4 m
-  const list = await wfsGet(() => ({ BBOX: `${lat - d},${lng - d},${lat + d},${lng + d},urn:ogc:def:crs:EPSG::4326` }));
+  // Der Geoproxy beantwortet BBOX-Abfragen zuverlässig nur im Landessystem UTM 32 (EPSG:25832)
+  const [x, y] = toUTM32([lat, lng]);
+  const d = 4; // m
+  const list = await wfsGet(() => ({ BBOX: `${x - d},${y - d},${x + d},${y + d},urn:ogc:def:crs:EPSG::25832` }));
   return list.find((p) => pointInPolygon([lat, lng], p.ring)) || list[0] || null;
 }
 
@@ -129,8 +131,9 @@ function parseOne(el) {
   if (nums.length < 6) return null;
   let ring = [];
   for (let i = 0; i + 1 < nums.length; i += 2) ring.push([nums[i], nums[i + 1]]);
+  if (ring[0][0] > 1000) ring = ring.map(([a, b]) => (a < 1e6 ? fromUTM32([a, b]) : fromUTM32([b, a]))); // UTM 32 → lat/lon
   // Achsreihenfolge prüfen: Thüringen liegt bei ca. 50–52° N und 9,8–13° O
-  if (ring[0][0] < 30 && ring[0][1] > 30) ring = ring.map(([a, b]) => [b, a]);
+  else if (ring[0][0] < 30 && ring[0][1] > 30) ring = ring.map(([a, b]) => [b, a]);
   if (ring.length > 3 && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1]) ring.pop();
 
   const kennz = val(el, 'flstkennz');
@@ -280,7 +283,6 @@ export function featureInfoUrl([lat, lng]) {
 const FORST = `${GP}/forst/FORST`; // ThüringenForst (Maßstab bis 1:150.000 → ab Zoom 12)
 export const OVERLAYS = [
   { key: 'rettung', label: 'Rettungspunkte', group: 'Sicherheit', url: FORST, layers: 'rettungspunkte', minZoom: 11 },
-  { key: 'rettungswege', label: 'Rettungswege', group: 'Sicherheit', url: GP, layers: 'rettungswege', minZoom: 12 },
   { key: 'standort', label: 'Standortkarte (Forst)', group: 'Wald', url: FORST, layers: 'standort_fl', opacity: 0.6, minZoom: 12 },
   { key: 'waldfunktionen', label: 'Waldfunktionen', group: 'Wald', url: FORST, layers: 'bodenschutzfunktion,erholungswald,erholungsfunktion,klimaschutzfunktion,immissionsschutzfunktion,laermschutzfunktion,sichtschutzfunktion', opacity: 0.55, minZoom: 12 },
   { key: 'schaden', label: 'Waldschadflächen', group: 'Wald', url: FORST, layers: 'waldschaeden', opacity: 0.65, minZoom: 12 },
@@ -319,4 +321,89 @@ export const INFO_SOURCES = {
 
 export function overlayLayer(o) {
   return wms(o.url, o.layers, { opacity: o.opacity ?? 0.85, minZoom: o.minZoom ?? 10 });
+}
+
+// ---------- Nächste Rettungspunkte (live, ohne Speicherung) ----------
+// Der Dienst bietet keinen Download und keine Umkreissuche. Deshalb: Kartenbild
+// der Ebene laden, Symbole finden, je Symbol die Objektinformation abfragen
+// (Punktnummer, WGS-Koordinaten, Anfahrtsbeschreibung). Ergebnisse nur im Speicher.
+const rescueCache = new Map();
+
+function mercBBox([lat, lng], spanM) {
+  const R = 6378137;
+  const x = (lng * Math.PI / 180) * R;
+  const y = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R;
+  const half = (spanM / 2) / Math.cos(lat * Math.PI / 180);
+  return [x - half, y - half, x + half, y + half];
+}
+
+function findBlobs(alpha, w, h) {
+  const seen = new Uint8Array(w * h);
+  const out = [];
+  for (let i = 0; i < alpha.length; i++) {
+    if (seen[i] || alpha[i] < 60) continue;
+    const stack = [i]; seen[i] = 1;
+    let sx = 0, sy = 0, n = 0;
+    while (stack.length) {
+      const j = stack.pop(); const x = j % w, y = (j / w) | 0;
+      sx += x; sy += y; n++;
+      for (const k of [j + 1, j - 1, j + w, j - w]) {
+        if (k < 0 || k >= alpha.length || seen[k] || alpha[k] < 60) continue;
+        if ((k === j + 1 && x === w - 1) || (k === j - 1 && x === 0)) continue;
+        seen[k] = 1; stack.push(k);
+      }
+    }
+    if (n >= 20) out.push({ x: sx / n, y: sy / n, n });
+  }
+  return out;
+}
+
+async function scanRescue(latlng, spanM, px) {
+  const bb = mercBBox(latlng, spanM);
+  const common = { SERVICE: 'WMS', VERSION: '1.3.0', LAYERS: 'rettungspunkte', STYLES: '', CRS: 'EPSG:3857', BBOX: bb.join(','), WIDTH: String(px), HEIGHT: String(px) };
+  const res = await fetch(`${FORST}?${new URLSearchParams({ ...common, REQUEST: 'GetMap', FORMAT: 'image/png', TRANSPARENT: 'true' })}`, { mode: 'cors' });
+  if (!res.ok || !/png/.test(res.headers.get('content-type') || '')) throw new Error('Kartenbild der Rettungspunkte nicht verfügbar');
+  const bmp = await createImageBitmap(await res.blob());
+  const cv = document.createElement('canvas'); cv.width = px; cv.height = px;
+  const ctx = cv.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+  const data = ctx.getImageData(0, 0, px, px).data;
+  const alpha = new Uint8Array(px * px);
+  for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+  const blobs = findBlobs(alpha, px, px)
+    .map((b) => ({ ...b, d: Math.hypot(b.x - px / 2, b.y - px / 2) }))
+    .sort((a, b) => a.d - b.d).slice(0, 8);
+
+  const points = new Map();
+  await Promise.all(blobs.map(async (b) => {
+    const q = new URLSearchParams({ ...common, REQUEST: 'GetFeatureInfo', QUERY_LAYERS: 'rettungspunkte', INFO_FORMAT: 'application/vnd.ogc.gml',
+      I: String(Math.round(b.x)), J: String(Math.round(b.y)), FEATURE_COUNT: '3' });
+    try {
+      const xml = await (await fetch(`${FORST}?${q}`, { mode: 'cors' })).text();
+      const doc = new DOMParser().parseFromString(xml, 'application/xml');
+      for (const f of doc.getElementsByTagNameNS('*', 'featureMember').length ? doc.getElementsByTagNameNS('*', 'featureMember') : [doc.documentElement]) {
+        const get = (n) => f.getElementsByTagNameNS('*', n)[0]?.textContent.trim() || '';
+        const nr = get('Punktnummer');
+        const lat = Number(get('WGS_Breite').replace(',', '.')), lng = Number(get('WGS_Laenge').replace(',', '.'));
+        if (!nr || !Number.isFinite(lat) || !Number.isFinite(lng) || !lat) continue;
+        points.set(nr, { id: nr, at: [lat, lng], access: get('Anfahrtsbeschreibung'), signed: get('beschildert'), source: get('Urheber') });
+      }
+    } catch { /* einzelner Punkt nicht abfragbar */ }
+  }));
+  return [...points.values()];
+}
+
+/** Nächste Rettungspunkte zum Punkt [lat, lng], sortiert nach Luftlinie */
+export async function nearestRescue(latlng, n = 2) {
+  const key = latlng.map((v) => v.toFixed(3)).join(',');
+  if (rescueCache.has(key)) return rescueCache.get(key);
+  const job = (async () => {
+    let pts = await scanRescue(latlng, 6000, 512);
+    if (pts.length < n) pts = [...new Map([...pts, ...(await scanRescue(latlng, 16000, 768))].map((p) => [p.id, p])).values()];
+    const { distance, bearing } = await import('../geo.js');
+    return pts.map((p) => ({ ...p, dist: distance(latlng, p.at), brg: bearing(latlng, p.at) }))
+      .sort((a, b) => a.dist - b.dist).slice(0, n);
+  })();
+  rescueCache.set(key, job);
+  job.catch(() => rescueCache.delete(key));
+  return job;
 }

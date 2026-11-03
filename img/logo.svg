@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-label="WaldWächter">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="70%">
+      <stop offset="0" stop-color="#FBFCF6"/>
+      <stop offset=".65" stop-color="#F2F4E5"/>
+      <stop offset="1" stop-color="#DEE4CB"/>
+    </radialGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#93AC3C"/>
+      <stop offset=".55" stop-color="#6E8526"/>
+      <stop offset="1" stop-color="#4D6A1E"/>
+    </linearGradient>
+    <linearGradient id="leafR" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#93AC3C"/>
+      <stop offset=".55" stop-color="#6E8526"/>
+      <stop offset="1" stop-color="#4D6A1E"/>
+    </linearGradient>
+    <radialGradient id="head" cx="45%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#7C9A34"/>
+      <stop offset=".55" stop-color="#3F6020"/>
+      <stop offset="1" stop-color="#21451B"/>
+    </radialGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A6B22"/>
+      <stop offset="1" stop-color="#1B3D17"/>
+    </linearGradient>
+    <radialGradient id="panel" cx="50%" cy="20%" r="85%">
+      <stop offset="0" stop-color="#FAFCF2"/>
+      <stop offset=".6" stop-color="#E9EDD6"/>
+      <stop offset="1" stop-color="#C9D09A"/>
+    </radialGradient>
+    <clipPath id="panelClip">
+      <path d="M246 352 C246 320 280 292 320 292 C360 292 394 320 394 352 L394 420 C380 448 352 472 320 488 C288 472 260 448 246 420 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Kachel -->
+  <rect x="8" y="8" width="624" height="624" rx="120" fill="url(#bg)"/>
+
+  <!-- Beine -->
+  <g fill="none" stroke="#0C2A14" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M232 262 L200 222 L196 196"/>
+    <path d="M408 262 L440 222 L444 196"/>
+    <path d="M236 418 L196 452 L178 512 M178 512 L160 520 M178 512 L190 528"/>
+    <path d="M404 418 L444 452 L462 512 M462 512 L480 520 M462 512 L450 528"/>
+    <path d="M276 470 L258 500 L262 532"/>
+    <path d="M364 470 L382 500 L378 532"/>
+  </g>
+
+  <!-- Fühler mit Blattspitzen -->
+  <g fill="none" stroke="#21451B" stroke-width="10" stroke-linecap="round">
+    <path d="M300 160 C292 132 270 112 244 104"/>
+    <path d="M340 160 C348 132 370 112 396 104"/>
+  </g>
+  <g fill="#7FA032" stroke="#21451B" stroke-width="5" stroke-linejoin="round">
+    <path d="M246 104 C232 82 214 80 204 90 C214 104 230 110 246 104 Z"/>
+    <path d="M244 102 C246 80 238 66 226 64 C222 80 230 94 244 102 Z"/>
+    <path d="M394 104 C408 82 426 80 436 90 C426 104 410 110 394 104 Z"/>
+    <path d="M396 102 C394 80 402 66 414 64 C418 80 410 94 396 102 Z"/>
+  </g>
+
+  <!-- Flügel: je zwei Blätter -->
+  <g stroke="#1E3D17" stroke-width="7" stroke-linejoin="round">
+    <path d="M214 300 C176 330 150 400 128 512 C176 470 206 430 222 392 Z" fill="url(#leaf)"/>
+    <path d="M218 268 C150 262 82 300 56 368 C50 392 58 412 72 424 C132 440 190 408 220 352 Z" fill="url(#leaf)"/>
+    <path d="M426 300 C464 330 490 400 512 512 C464 470 434 430 418 392 Z" fill="url(#leafR)"/>
+    <path d="M422 268 C490 262 558 300 584 368 C590 392 582 412 568 424 C508 440 450 408 420 352 Z" fill="url(#leafR)"/>
+  </g>
+  <g fill="none" stroke="#C8D08E" stroke-width="5" stroke-linecap="round" opacity=".9">
+    <path d="M214 286 C170 320 120 360 76 414"/>
+    <path d="M186 312 L170 280 M160 340 L138 306 M134 372 L106 344 M168 326 L180 360 M140 358 L148 394 M110 392 L116 420"/>
+    <path d="M426 286 C470 320 520 360 564 414"/>
+    <path d="M454 312 L470 280 M480 340 L502 306 M506 372 L534 344 M472 326 L460 360 M500 358 L492 394 M530 392 L524 420"/>
+    <path d="M206 330 C186 390 164 440 140 494" opacity=".7"/>
+    <path d="M434 330 C454 390 476 440 500 494" opacity=".7"/>
+  </g>
+
+  <!-- Schild (Hinterleib) -->
+  <path d="M222 254 L418 254 L430 330 C430 408 386 462 320 508 C254 462 210 408 210 330 Z" fill="url(#shield)" stroke="#0C2A14" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M232 266 L408 266 L418 332 C418 400 380 450 320 492 C260 450 222 400 222 332 Z" fill="none" stroke="#C7C984" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- helles Feld mit Fichtenwald -->
+  <path d="M246 352 C246 320 280 292 320 292 C360 292 394 320 394 352 L394 420 C380 448 352 472 320 488 C288 472 260 448 246 420 Z" fill="url(#panel)" stroke="#C7C984" stroke-width="5"/>
+  <g clip-path="url(#panelClip)" fill="#1F4A1E">
+    <path d="M320 300 L334 340 L328 340 L342 372 L334 372 L350 408 L340 408 L356 446 L344 446 L360 492 L280 492 L296 446 L284 446 L300 408 L290 408 L306 372 L298 372 L312 340 L306 340 Z"/>
+    <path d="M284 350 L294 380 L289 380 L300 408 L294 408 L306 440 L298 440 L310 492 L258 492 L270 440 L262 440 L274 408 L268 408 L279 380 L274 380 Z" fill="#2C5A22"/>
+    <path d="M356 350 L366 380 L361 380 L372 408 L366 408 L378 440 L370 440 L382 492 L330 492 L342 440 L334 440 L346 408 L340 408 L351 380 L346 380 Z" fill="#2C5A22"/>
+    <path d="M256 392 L264 418 L260 418 L270 446 L264 446 L274 492 L238 492 L248 446 L242 446 L252 418 L248 418 Z" fill="#3E6B26"/>
+    <path d="M384 392 L392 418 L388 418 L398 446 L392 446 L402 492 L366 492 L376 446 L370 446 L380 418 L376 418 Z" fill="#3E6B26"/>
+  </g>
+
+  <!-- Halsschild -->
+  <path d="M222 254 C246 236 282 228 320 228 C358 228 394 236 418 254 C392 272 358 280 320 280 C282 280 248 272 222 254 Z" fill="#2F5420" stroke="#C7C984" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- Kopf -->
+  <ellipse cx="320" cy="200" rx="66" ry="54" fill="url(#head)" stroke="#0C2A14" stroke-width="7"/>
+  <g>
+    <circle cx="268" cy="212" r="20" fill="#E8ECD8" stroke="#0C2A14" stroke-width="5"/>
+    <circle cx="372" cy="212" r="20" fill="#E8ECD8" stroke="#0C2A14" stroke-width="5"/>
+    <circle cx="270" cy="214" r="10" fill="#0C2A14"/>
+    <circle cx="370" cy="214" r="10" fill="#0C2A14"/>
+    <circle cx="265" cy="208" r="3.5" fill="#fff"/>
+    <circle cx="365" cy="208" r="3.5" fill="#fff"/>
+  </g>
+  <ellipse cx="304" cy="172" rx="18" ry="10" fill="#9DBA4E" opacity=".55"/>
+</svg>

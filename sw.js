@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v2.1.0';
+const VERSION = 'v2.2.0';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -16,7 +16,7 @@ const SHELL_FILES = [
   './vendor/leaflet/images/layers.png', './vendor/leaflet/images/layers-2x.png',
   './vendor/leaflet/images/marker-icon.png', './vendor/leaflet/images/marker-icon-2x.png', './vendor/leaflet/images/marker-shadow.png',
   './fonts/AtkinsonHyperlegible-Regular.woff', './fonts/AtkinsonHyperlegible-Bold.woff',
-  './img/logo.png', './img/wanze.png', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
+  './img/logo.svg', './img/wanze.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
   './js/app.js', './js/ui.js', './js/store.js', './js/geo.js', './js/mascot.js',
   './js/home.js', './js/profile.js', './js/measures.js', './js/placeholders.js',
   './js/map/basemap.js', './js/map/thueringen.js', './js/data/source.js', './js/data/demo-data.js',

@@ -292,7 +292,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       const zeilen = ['dick', 'mittel', 'duenn'].filter((k) => plan.jePunkt[k] > 0);
       content = [
         h('div', { class: 'preview' },
-          h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'm²/ha Grundfläche')),
+          h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'Ziel-Entnahme Grundfläche (m²/ha im Jahrzehnt)')),
           h('div', {}, h('span', { class: 'pv-n' }, `${RASTER_M} m`), h('span', {}, 'Raster')),
           h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
           h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume gesamt')),
@@ -301,7 +301,11 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('strong', {}, `Je Rasterpunkt: ${plan.regel}`),
           zeilen.map((k) => h('small', {}, `${DIMENSION[k].label[0].toUpperCase()}${DIMENSION[k].label.slice(1)} (${DIMENSION[k].bhd}): ${anteilSatz(plan.jePunkt[k])}`)),
           h('small', {}, `Raster ${RASTER_M} m in Schlangenlinien, Start 10–15 m vom Rand, Entnahmekreis ca. ${KREIS_M} m. „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
-        h('p', {}, `Auf ${formatHa(plan.areaHa)} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume für ein Jahrzehnt (Ziel: ca. ${fmt(plan.stufe * plan.areaHa, 1)} m² Grundfläche).`),
+        h('p', {}, `Auf ${formatHa(plan.areaHa)} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume für ein Jahrzehnt (Ziel-Entnahme: ca. ${fmt(plan.stufe * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
+        h('details', { class: 'calc' }, h('summary', {}, 'Was bedeutet die Ziel-Entnahme Grundfläche?'),
+          h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
+          h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),
+          h('p', {}, 'Im Wald zählt die Baumzahl je Rasterpunkt. Wie viel Grundfläche dabei tatsächlich herauskommt, hängt von den Bäumen vor Ort ab und liegt meist etwas unter dem Zielwert.')),
         h('p', { class: 'hint' }, plan.auswahl),
         h('details', { class: 'calc' }, h('summary', {}, 'So wurde bestimmt'), h('ol', {}, plan.schritte.map((t) => h('li', {}, t)))),
       ];
@@ -367,7 +371,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
         h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume gesamt')),
         h('div', {}, h('span', { class: 'pv-n' }, plan.perHa), h('span', {}, 'Bäume je ha')),
-        h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'm²/ha Ziel')),
+        h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'Ziel-Entnahme Grundfläche (m²/ha)')),
       ),
       h('p', {}, `Die Punkte liegen im festen Abstand von ${RASTER_M} m, Start 10–15 m vom Rand. Je Punkt: ${plan.regel}, im Umkreis von etwa ${KREIS_M} m. Die gestrichelte Linie zeigt die Laufreihenfolge (Schlangenlinien).`),
       h('p', { class: 'hint' }, 'Im Wald ist oft kein Netz. Speichere die Karte vorher, solange du noch Empfang hast.'),

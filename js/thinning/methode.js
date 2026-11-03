@@ -111,7 +111,7 @@ export function bestimme({ art, dim, b, hoKlasse }) {
     schritte: [
       `Baumartengruppe: ${GRUPPEN[g].label} (Hauptbaumart ${art})`,
       `Oberhöhe ${hl}, Bestockungsgrad B° ${bLabel(b)}`,
-      `Tabelle 1 → Eingriffsstufe ${fmt(stufe, 1)} m²/ha Grundfläche im Jahrzehnt`,
+      `Tabelle 1 → Eingriffsstufe: Ziel-Entnahme ${fmt(stufe, 1)} m²/ha Grundfläche im Jahrzehnt`,
       `Szenario ${sz}: ${SZENARIO_TEXT[sz]}`,
       `Tabelle 2 → je Punkt: ${['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunkt[k])}`).join(', ')}`,
       `Raster ${RASTER_M} m (16 Punkte/ha) → ca. ${Math.round(sum * 16)} Bäume/ha`,

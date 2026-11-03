@@ -1,0 +1,7 @@
+FORST: 1 Ebenen
+SCHUTZGEB: 12 Ebenen
+services: 600 Ebenen
+services WFS: 0 Typen, Treffer: []
+FORST WFS: 4 Typen, Treffer: []
+Rettungspunkte https://www.geoproxy.geoportal-th.de/geoproxy/services tmlnu:rettungspunkte: Fehler b'<ExceptionReport version="2.0.0" xmlns="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ows/1.1 http://schemas.opengi
+Rettungspunkte https://www.geoproxy.geoportal-th.de/geoproxy/services/FORST tmlnu:rettungspunkte: Fehler b'<ExceptionReport version="2.0.0" xmlns="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ows/1.1 http://schemas.opengi

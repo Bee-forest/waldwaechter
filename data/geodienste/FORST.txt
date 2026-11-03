@@ -1,0 +1,2 @@
+# https://www.geoproxy.geoportal-th.de/geoproxy/services/FORST
+waldschaeden	Waldschadflächen 	q=1	999.0-150001.0

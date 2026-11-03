@@ -1,0 +1,13 @@
+# https://www.geoproxy.geoportal-th.de/geoproxy/services/SCHUTZGEB
+-	Schutzgebiete des Naturschutzes	q=0	-
+nsg	Naturschutzgebiete	q=1	5000.0-1000000.0
+nnm	Nationales Naturmonument	q=1	-
+ffh_geb	FFH-Gebiete	q=1	5000.0-1000000.0
+ffh_obj	FFH-Objekte	q=1	-
+spa	EU-Vogelschutzgebiete	q=1	5000.0-1000000.0
+nationalpark	Nationalpark	q=1	5000.0-1000000.0
+biosreserv	Biosphaerenreservate	q=1	5000.0-1000000.0
+biosreserv_zon	Biosphaerenreservatszonen	q=1	-
+naturpark	Naturparke	q=1	5000.0-1000000.0
+lsg	Landschaftsschutzgebiete	q=1	5000.0-1000000.0
+sgzonen	Schutzgebietszonen	q=1	-

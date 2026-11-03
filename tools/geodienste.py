@@ -95,10 +95,54 @@ def rettungspunkte(url, typename):
     return pts
 
 
+GEOMIS = 'https://geomis.geoportal-th.de/geonetwork/srv'
+RECORDS = {  # GeoMIS-Datensätze → Dienst-URLs auslesen
+    'Standortskartierung': '98024be1-7c82-463e-b358-46e24918d100',
+    'Waldbiotope': 'c70f0858-af9b-4395-9a0d-1b577e6d09e6',
+    'Waldlebensraumtypen': 'cf94acf6-a09a-4588-95c4-91b607c60a90',
+    'Waldflaechen': 'e0933608-2a3a-49f5-9028-69317a82c23a',
+    'WMS-FORST': '5d4999ba-b26a-446e-ba4f-0356e66c5a38',
+    'Offenlandbiotope': 'BEDA6822-A838-11D5-9EA4-009027776ED8',
+}
+
+
+def geomis_urls():
+    urls = {}
+    for name, rid in RECORDS.items():
+        try:
+            raw = get(f'{GEOMIS}/api/records/{rid}/formatters/xml').decode('utf-8', 'replace')
+        except Exception as e:  # noqa: BLE001
+            log(f'GeoMIS {name}: Fehler {e}')
+            continue
+        found = sorted(set(re.findall(r'https?://www\.geoproxy\.geoportal-th\.de/geoproxy/services[^\s"<>?]*', raw)))
+        log(f'GeoMIS {name}: {found}')
+        for u in found:
+            urls[u.replace('http://', 'https://')] = name
+    # Volltextsuche nach Rettungspunkten
+    for term in ('Rettungspunkt', 'Standort'):
+        try:
+            q = urllib.parse.urlencode({'service': 'CSW', 'version': '2.0.2', 'request': 'GetRecords', 'typeNames': 'csw:Record',
+                                        'resultType': 'results', 'elementSetName': 'full', 'constraintLanguage': 'CQL_TEXT',
+                                        'constraint_language_version': '1.1.0', 'constraint': f"AnyText like '%{term}%'", 'maxRecords': '25'})
+            raw = get(f'{GEOMIS}/ger/csw?{q}').decode('utf-8', 'replace')
+            titles = re.findall(r'<dc:title>([^<]+)</dc:title>', raw)
+            found = sorted(set(re.findall(r'https?://www\.geoproxy\.geoportal-th\.de/geoproxy/services[^\s"<>?]*', raw)))
+            log(f'GeoMIS-Suche {term}: {titles[:25]}')
+            log(f'GeoMIS-Suche {term} URLs: {found}')
+            for u in found:
+                urls.setdefault(u.replace('http://', 'https://'), f'Suche {term}')
+        except Exception as e:  # noqa: BLE001
+            log(f'GeoMIS-Suche {term}: Fehler {e}')
+    return urls
+
+
 def main():
+    for u, name in geomis_urls().items():
+        if u.rstrip('/').endswith('/services'):
+            continue
+        wms_layers(re.sub(r'[^A-Za-z0-9]+', '_', u.split('/services/', 1)[-1]) or name, u.rstrip('/'))
     wms_layers('FORST', f'{GP}/FORST')
     wms_layers('SCHUTZGEB', f'{GP}/SCHUTZGEB')
-    wms_layers('services', GP)
     hits = wfs_types('services', GP, r'rettung')
     hits += wfs_types('FORST', f'{GP}/FORST', r'rettung|standort')
     done = False

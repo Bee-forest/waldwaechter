@@ -79,7 +79,7 @@ export function computePlanMethode(sel, p) {
     status: 'open',
     removals: ['dick', 'mittel', 'duenn'].map((k) => {
       const d = DIMENSION[k];
-      return { klasse: k, species: `${d.label[0].toUpperCase()}${d.label.slice(1)}er Baum`, count: amPunkt(r.jePunkt[k], i + 1), dmin: d.dmin, dmax: d.dmax ?? 99, marked: 0 };
+      return { klasse: k, species: d.baum, count: amPunkt(r.jePunkt[k], i + 1), dmin: d.dmin, dmax: d.dmax ?? 99, marked: 0 };
     }).filter((x) => x.count > 0),
   }));
   const total = points.reduce((s2, pt) => s2 + pt.removals.reduce((a2, x) => a2 + x.count, 0), 0);

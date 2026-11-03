@@ -290,7 +290,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       title = 'Welche Stärkeklasse stellt die meisten Bäume?';
       help = 'Zähle grob die Stämme: Die Klasse mit mindestens 40 % der Bäume und 10 Prozentpunkten Vorsprung bestimmt das Szenario. Durchmesser in 1,3 m Höhe; ohne Kluppe den Umfang messen.';
       content = h('div', { class: 'q-cards' }, Object.entries(DIMENSION).map(([k, d]) => choice(f.dim === k, () => { f.dim = k; renderParams(); },
-        [h('span', { class: `stem stem-${k}`, 'aria-hidden': 'true' }), h('span', { class: 'q-text' }, h('strong', {}, `Viele ${d.label[0].toUpperCase()}${d.label.slice(1)}e – Szenario ${SZENARIO[k]}`), h('span', {}, `Durchmesser ${d.bhd}`), h('small', {}, d.umfang))])));
+        [h('span', { class: `stem stem-${k}`, 'aria-hidden': 'true' }), h('span', { class: 'q-text' }, h('strong', {}, `${d.viele} – Szenario ${SZENARIO[k]}`), h('span', {}, `Durchmesser ${d.bhd}`), h('small', {}, d.umfang))])));
       canNext = !!f.dim;
     } else if (q === 'b') {
       title = 'Wie dicht stehen die Kronen?';

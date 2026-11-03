@@ -8,7 +8,7 @@
     50.96
    ],
    "ok": true,
-   "flurstuecke": 283254,
+   "flurstuecke": 283291,
    "stand": "2026-11-03"
   },
   "Saale-Orla-Kreis": {
@@ -19,7 +19,7 @@
     50.83
    ],
    "ok": true,
-   "flurstuecke": 363936,
+   "flurstuecke": 363969,
    "stand": "2026-11-03"
   },
   "Ilmenau und Umgebung": {
@@ -30,7 +30,7 @@
     50.74
    ],
    "ok": true,
-   "flurstuecke": 54206,
+   "flurstuecke": 54207,
    "stand": "2026-11-03"
   }
  },
@@ -806,5 +806,6 @@
   "Lehmannsbrück": "lehmannsbruck.json"
  },
  "zoom": 14,
- "quelle": "© GDI-Th, dl-de/by-2-0 (ALKIS vereinfacht, Geoproxy Thüringen)"
+ "quelle": "© GDI-Th, dl-de/by-2-0 (ALKIS vereinfacht, Geoproxy Thüringen)",
+ "format": 2
 }

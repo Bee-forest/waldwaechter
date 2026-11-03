@@ -1,5 +1,84 @@
-2026-11-03 16:43 UTC
-Region Landkreis Greiz: bereits vorhanden, übersprungen
-Region Saale-Orla-Kreis: bereits vorhanden, übersprungen
-Region Ilmenau und Umgebung: bereits vorhanden, übersprungen
-Fertig: 0 Kacheln, 0 Flurstücke, 0 Fehler
+2026-11-03 17:12 UTC
+Region Landkreis Greiz: 810 Kacheln
+  Felder: identifier=DETHL58P0000vQTkFL, oid=DETHL58P0000vQTkFL, aktualit=2017-08-24, idflurst=DETHL58P0000vQTk, flaeche=5768, flstkennz=162329010011340002__, land=Thüringen, gemarkung=Weida, flur=Flur 10, flurstnr=1134/2, gmdschl=16076079, regbezirk=unbesetzt, kreis=Greiz, gemeinde=Weida, lagebeztxt=Am Lilienthalweg; In der unter, tntxt=Gehoelz; 5768
+  Verwende adv_alkis_wfs mit Variante utm (501 Flurstücke in der Probe)
+  25/810 Kacheln, 9749 Flurstücke
+  50/810 Kacheln, 19939 Flurstücke
+  75/810 Kacheln, 31282 Flurstücke
+  100/810 Kacheln, 43150 Flurstücke
+  125/810 Kacheln, 55892 Flurstücke
+  150/810 Kacheln, 66945 Flurstücke
+  175/810 Kacheln, 78602 Flurstücke
+  200/810 Kacheln, 89050 Flurstücke
+  225/810 Kacheln, 98341 Flurstücke
+  250/810 Kacheln, 106382 Flurstücke
+  275/810 Kacheln, 117552 Flurstücke
+  300/810 Kacheln, 126392 Flurstücke
+  325/810 Kacheln, 139858 Flurstücke
+  350/810 Kacheln, 148998 Flurstücke
+  375/810 Kacheln, 161525 Flurstücke
+  400/810 Kacheln, 174131 Flurstücke
+  425/810 Kacheln, 184805 Flurstücke
+  450/810 Kacheln, 198083 Flurstücke
+  475/810 Kacheln, 208636 Flurstücke
+  500/810 Kacheln, 216213 Flurstücke
+  525/810 Kacheln, 223746 Flurstücke
+  550/810 Kacheln, 232499 Flurstücke
+  575/810 Kacheln, 239773 Flurstücke
+  600/810 Kacheln, 246846 Flurstücke
+  625/810 Kacheln, 255222 Flurstücke
+  650/810 Kacheln, 260395 Flurstücke
+  675/810 Kacheln, 266013 Flurstücke
+  700/810 Kacheln, 270869 Flurstücke
+  725/810 Kacheln, 273113 Flurstücke
+  750/810 Kacheln, 275608 Flurstücke
+  775/810 Kacheln, 279552 Flurstücke
+  800/810 Kacheln, 283291 Flurstücke
+Region Saale-Orla-Kreis: 1050 Kacheln
+  25/1050 Kacheln, 294864 Flurstücke
+  50/1050 Kacheln, 301830 Flurstücke
+  75/1050 Kacheln, 308024 Flurstücke
+  100/1050 Kacheln, 316931 Flurstücke
+  125/1050 Kacheln, 327470 Flurstücke
+  150/1050 Kacheln, 335269 Flurstücke
+  175/1050 Kacheln, 343816 Flurstücke
+  200/1050 Kacheln, 354702 Flurstücke
+  225/1050 Kacheln, 362900 Flurstücke
+  250/1050 Kacheln, 372023 Flurstücke
+  275/1050 Kacheln, 381980 Flurstücke
+  300/1050 Kacheln, 392819 Flurstücke
+  325/1050 Kacheln, 401980 Flurstücke
+  350/1050 Kacheln, 410158 Flurstücke
+  375/1050 Kacheln, 422902 Flurstücke
+  400/1050 Kacheln, 433088 Flurstücke
+  425/1050 Kacheln, 441901 Flurstücke
+  450/1050 Kacheln, 454601 Flurstücke
+  475/1050 Kacheln, 464791 Flurstücke
+  500/1050 Kacheln, 474599 Flurstücke
+  525/1050 Kacheln, 483318 Flurstücke
+  550/1050 Kacheln, 491421 Flurstücke
+  575/1050 Kacheln, 498781 Flurstücke
+  600/1050 Kacheln, 505407 Flurstücke
+  625/1050 Kacheln, 517104 Flurstücke
+  650/1050 Kacheln, 525920 Flurstücke
+  675/1050 Kacheln, 533563 Flurstücke
+  700/1050 Kacheln, 542300 Flurstücke
+  725/1050 Kacheln, 552934 Flurstücke
+  750/1050 Kacheln, 563128 Flurstücke
+  775/1050 Kacheln, 571913 Flurstücke
+  800/1050 Kacheln, 584343 Flurstücke
+  825/1050 Kacheln, 593025 Flurstücke
+  850/1050 Kacheln, 600986 Flurstücke
+  875/1050 Kacheln, 607044 Flurstücke
+  900/1050 Kacheln, 616611 Flurstücke
+  925/1050 Kacheln, 623574 Flurstücke
+  950/1050 Kacheln, 626808 Flurstücke
+  975/1050 Kacheln, 632935 Flurstücke
+  1000/1050 Kacheln, 639841 Flurstücke
+  1025/1050 Kacheln, 643103 Flurstücke
+  1050/1050 Kacheln, 647260 Flurstücke
+Region Ilmenau und Umgebung: 90 Kacheln
+  25/90 Kacheln, 663132 Flurstücke
+  50/90 Kacheln, 678816 Flurstücke
+  75/90 Kacheln, 692360 Flurstücke
+Fertig: 1684 Kacheln, 701467 Flurstücke, 0 Fehler

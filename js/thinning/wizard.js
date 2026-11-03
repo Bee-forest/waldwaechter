@@ -187,12 +187,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     ctxLayer.clearLayers();
     if (st.mode === 'parcel') {
       const list = myIds.map((id) => byId[id]);
-      list.forEach((p) => ctxLayer.addLayer(L.polygon(p.ring, { color: '#23573A', weight: 2, fillOpacity: 0.15 }).on('click', (e) => { L.DomEvent.stop(e); pickParcel(p); })));
+      list.forEach((p) => ctxLayer.addLayer(L.polygon(polysOf(p), { color: '#23573A', weight: 2, fillOpacity: 0.15 }).on('click', (e) => { L.DomEvent.stop(e); pickParcel(p); })));
+      content.append(h('p', { class: 'hint tap-hint' }, 'Tippe in der Karte auf ein beliebiges Flurstück oder wähle eines deiner Flächen.'));
+      const fremd = st.sel?.parcelId && !st.sel?.stand && !istMeins(st.sel.parcelId);
+      if (fremd) content.append(h('button', { class: 'btn btn-small', onclick: addToMine }, h('span', { html: icon.plus || '' }), 'Zu meinen Flächen hinzufügen'));
       content.append(list.length
         ? h('ul', { class: 'pick-list' }, list.map((p) => h('li', {}, h('button', {
             class: 'pick', 'aria-pressed': String(st.sel?.parcelId === p.id && !st.sel?.stand), onclick: () => pickParcel(p),
           }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(amtlicheFlaecheHa(p))}${p.flaecheAmtlich ? ' (amtlich)' : ''}`)))))
-        : h('p', { class: 'muted' }, 'Du hast noch keine eigenen Flächen. Füge sie auf der Startseite hinzu oder zeichne den Bestand ein.'));
+        : h('p', { class: 'muted' }, 'Du hast noch keine eigenen Flächen gespeichert.'));
     } else if (st.mode === 'stand') {
       const stands = myStands.length ? myStands : [];
       stands.forEach((s) => ctxLayer.addLayer(L.polygon(s.ring, { color: '#2F7D3A', weight: 2, fillColor: '#2F7D3A', fillOpacity: 0.22 })
@@ -231,6 +234,28 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     refreshExact();
   }
 
+  // Flurstück direkt in der Karte antippen (auch Flurstücke, die noch nicht in „Meine Flächen“ sind)
+  let picking = 0;
+  async function pickParcelAt(ll) {
+    const nr = ++picking;
+    toast('Suche Flurstück …');
+    let p = null;
+    try { p = await source.parcelAt(ll); } catch { p = null; }
+    if (nr !== picking || st.step !== 0 || st.mode !== 'parcel') return;
+    if (!p) { toast(source.lastError ? 'Flurstücksdienst nicht erreichbar.' : 'Hier wurde kein Flurstück gefunden.'); return; }
+    byId[p.id] = byId[p.id] || p;
+    pickParcel(byId[p.id]);
+  }
+  const istMeins = (id) => store.get().parcels.some((x) => x.id === id);
+  function addToMine() {
+    const p = byId[st.sel?.parcelId];
+    if (!p || istMeins(p.id)) return;
+    store.update((s) => { s.parcels.push({ ...p, category: p.nutzung || 'Wald', addedAt: Date.now() }); });
+    if (!myIds.includes(p.id)) myIds.push(p.id);
+    toast('Zu deinen Flächen hinzugefügt');
+    renderSelect();
+  }
+
   function pickStand(s) {
     st.sel = { ring: s.ring, label: `${s.name}: ${s.label}`, parcelId: s.parcelId, stand: s };
     st.params = null;
@@ -240,6 +265,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   function onMapClick(e) {
     const ll = [e.latlng.lat, e.latlng.lng];
     if (st.step === 0 && st.mode === 'draw') { st.draft.push(ll); updateDraft(); return; }
+    if (st.step === 0 && st.mode === 'parcel') { pickParcelAt(ll); return; }
     if (st.step === 3 && gps?.simulated && !working) gps.setPosition(ll);
   }
 

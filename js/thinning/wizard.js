@@ -260,7 +260,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
     if (!st.auto || st.auto.ring !== st.sel.ring) {
       st.auto = { ring: st.sel.ring, loading: true };
-      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring).catch(() => null)]).then(([bestand, oberhoehe]) => {
+      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null)]).then(([bestand, oberhoehe]) => {
         st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe };
         if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = 'waldverzeichnis'; }
         if (st.step === 1) renderParams();

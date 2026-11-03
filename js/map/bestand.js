@@ -1,7 +1,7 @@
 // Bestandsdaten zum Flurstück: Baumart und Alter (ThüringenForst, Waldverzeichnis)
 // sowie Oberhöhe aus LiDAR-Höhenmodellen (DOM1 − DGM1, TLBG), beides als
 // vorbereitete Kacheln im Repository (data/baumarten, data/oberhoehe).
-import { pointInPolygon, generateGrid, toUTM32, bbox } from '../geo.js';
+import { pointInPolygon, inPolys, generateGrid, toUTM32, fromUTM32, bbox } from '../geo.js';
 
 const Z = 14;
 const tX = (lon) => Math.floor(((lon + 180) / 360) * 2 ** Z);
@@ -83,8 +83,9 @@ async function hTile(e, n) {
 }
 
 /** Oberhöhe der Fläche ≈ Mittel der höchsten Bäume je 10-m-Zelle (≈ 100 Bäume/ha); null, wenn keine Daten */
-export async function oberhoeheFlaeche(ring) {
-  const b = bbox(ring);
+export async function oberhoeheFlaeche(ring, polys = null) {
+  const shape = polys?.length ? polys : [[ring]];
+  const b = bbox(shape.flat(2));
   const [e0, n0] = toUTM32([b.s, b.w]), [e1, n1] = toUTM32([b.n, b.e]);
   const vals = [];
   let tilesFound = 0;
@@ -105,8 +106,7 @@ export async function oberhoeheFlaeche(ring) {
     }
   }
   if (!tilesFound) return null;
-  const { fromUTM32 } = await import('../geo.js');
-  const inRing = vals.filter((c) => pointInPolygon(fromUTM32([c.E, c.N]), ring)).map((c) => c.h).filter((h) => h >= 3);
+  const inRing = vals.filter((c) => inPolys(fromUTM32([c.E, c.N]), shape)).map((c) => c.h).filter((h) => h >= 3);
   if (inRing.length < 5) return null;
   const mean = inRing.reduce((s, h) => s + h, 0) / inRing.length;
   return { oberhoehe: mean, zellen: inRing.length };

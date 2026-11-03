@@ -1,0 +1,42 @@
+name: Oberhöhe aus LiDAR
+
+# Prüft regelmäßig, ob der Höhendaten-Download des TLBG wieder erreichbar ist,
+# und rechnet dann die Oberhöhe (DOM1 − DGM1) für die Waldkacheln der Regionen.
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  push:
+    paths: ['tools/oberhoehe_tiles.py', '.github/workflows/oberhoehe.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: oberhoehe
+  cancel-in-progress: false
+
+jobs:
+  rechnen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stand prüfen
+        id: stand
+        run: |
+          if [ -f data/oberhoehe/index.json ] && grep -q '"status": "fertig"' data/oberhoehe/index.json; then echo "fertig=1" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.stand.outputs.fertig != '1'
+        run: pip install --quiet rasterio numpy
+      - if: github.event_name == 'push'
+        run: python3 tools/oberhoehe_tiles.py --selbsttest
+      - if: steps.stand.outputs.fertig != '1'
+        run: python3 tools/oberhoehe_tiles.py --minuten 300
+        continue-on-error: true
+      - if: steps.stand.outputs.fertig != '1'
+        run: |
+          git config user.name "Waldwächter-Daten"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/oberhoehe
+          git commit -m "Oberhöhe aus LiDAR aktualisiert" || exit 0
+          for i in 1 2 3 4 5; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 15; done

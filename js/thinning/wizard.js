@@ -5,7 +5,8 @@ import { store, uid } from '../store.js';
 import { source } from '../data/source.js';
 import { createBaseMap, tileUrls } from '../map/basemap.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox } from '../geo.js';
-import { computePlan, SPECIES, THINNING_TYPES, pointRemaining, pointTotal } from './plan.js';
+import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
+import { BAUMARTEN, HOECHSTMENGE, DIMENSION, KRONENSCHLUSS, ZUWACHS_RICHTWERT, RASTER, rasterVorschlag, gruppeVon, fmt } from './methode.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
 import { say, WANZE_SVG } from '../mascot.js';
@@ -84,6 +85,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function go(step) {
     st.step = step;
+    page.classList.toggle('q-mode', step === 1); // bei den Fragen: Karte klein, Fragen groß
     renderStepper();
     ctxLayer.clearLayers(); gridLayer.clearLayers(); navLayer.clearLayers();
     if (step !== 3) stopNav();
@@ -168,96 +170,113 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     if (st.step === 3 && gps?.simulated && !working) gps.setPosition(ll);
   }
 
-  // ---------- Schritt 2: Angaben ----------
+  // ---------- Schritt 2: Angaben – eine Frage nach der anderen (neue Methode) ----------
   function defaultParams() {
     const s = st.sel?.stand;
-    return {
-      main: s?.species || 'Fichte', mainDg: s?.dg || 22,
-      mix: s?.mix || '', mixShare: s?.mixShare || 0, mixDg: s ? Math.round(s.dg * 0.85) : 18,
-      age: s?.age || 40, nIst: s?.n || 1000, nZiel: s ? Math.round(s.n * 0.72 / 10) * 10 : 720,
-      type: 'hoch', spacing: 20,
-    };
+    const art = s?.species || '';
+    const dim = s ? (s.dg < 25 ? 'duenn' : s.dg < 50 ? 'mittel' : 'dick') : null;
+    return { art, gruppe: art ? gruppeVon(art) : null, dim, b: null, wuchs: null, zuwachs: null, gIst: null, gSoll: null, spacing: null, q: 0 };
   }
 
-  function toPlanParams(f) {
-    const species = [{ name: f.main, share: 100 - (f.mix ? f.mixShare : 0), dg: f.mainDg }];
-    if (f.mix && f.mixShare > 0) species.push({ name: f.mix, share: f.mixShare, dg: f.mixDg });
-    return { species, nIst: f.nIst, nZiel: f.nZiel, type: f.type, spacing: f.spacing };
-  }
+  const QUESTIONS = ['art', 'dim', 'b', 'zuwachs', 'grundflaeche', 'raster', 'ergebnis'];
 
   function renderParams() {
     drawSelection();
-    const f = st.params || defaultParams();
-    const preview = h('div', { class: 'preview', 'aria-live': 'polite' });
-    const err = h('p', { class: 'error', role: 'alert' });
-    const num = (name, label, attrs = {}) => h('label', {}, label, h('input', { name, type: 'number', inputmode: 'numeric', value: f[name], ...attrs }));
-    const sel = (name, label, opts) => h('label', {}, label, h('select', { name }, opts.map(([v, l]) => h('option', { value: v, selected: String(f[name]) === String(v) }, l))));
+    if (!st.params || st.params.main) st.params = defaultParams(); // alte Angaben (vorherige Version) verwerfen
+    const f = st.params;
+    const qi = Math.min(f.q || 0, QUESTIONS.length - 1);
+    const q = QUESTIONS[qi];
+    const next = () => { f.q = qi + 1; renderParams(); panel.scrollTop = 0; };
+    const back = () => { if (qi === 0) go(0); else { f.q = qi - 1; renderParams(); } };
+    const choice = (active, onPick, inner, extra = {}) => h('button', { type: 'button', class: `q-option ${active ? 'on' : ''}`, 'aria-pressed': String(!!active), onclick: onPick, ...extra }, inner);
+    const progress = h('div', { class: 'q-progress', 'aria-label': `Frage ${qi + 1} von ${QUESTIONS.length}` },
+      QUESTIONS.map((_, i) => h('span', { class: i < qi ? 'done' : i === qi ? 'now' : '' })));
+    let title, help, content, canNext = true, nextLabel = 'Weiter';
 
-    const form = h('form', { class: 'form', oninput: update, onsubmit: (e) => { e.preventDefault(); if (read()) { st.plan = null; go(2); } } },
-      h('fieldset', {}, h('legend', {}, 'Bestand'),
+    if (q === 'art') {
+      title = 'Welche Baumart prägt den Bestand?';
+      help = 'Wähle die Baumart, die die meisten Bäume stellt. Daraus ergibt sich die Baumartengruppe und damit die Höchstmenge.';
+      content = Object.entries(BAUMARTEN).map(([g, grp]) => h('div', { class: 'q-group' },
+        h('p', { class: 'sheet-label' }, grp.label, ` – höchstens ${HOECHSTMENGE[g]} Fm/ha im Jahrzehnt`),
+        h('div', { class: 'q-chips' }, grp.arten.map((a) => choice(f.art === a, () => { f.art = a; f.gruppe = g; renderParams(); }, a))),
+      ));
+      canNext = !!f.art;
+    } else if (q === 'dim') {
+      title = 'Wie dick sind die meisten Bäume?';
+      help = 'Gemessen in 1,3 m Höhe (Brusthöhe). Ohne Kluppe: Umfang mit dem Maßband messen.';
+      content = h('div', { class: 'q-cards' }, Object.entries(DIMENSION).map(([k, d]) => choice(f.dim === k, () => { f.dim = k; f.spacing = null; renderParams(); },
+        [h('span', { class: `stem stem-${k}`, 'aria-hidden': 'true' }), h('span', { class: 'q-text' }, h('strong', {}, d.label[0].toUpperCase() + d.label.slice(1)), h('span', {}, `Durchmesser ${d.bhd}`), h('small', {}, d.umfang))])));
+      canNext = !!f.dim;
+    } else if (q === 'b') {
+      title = 'Wie dicht stehen die Kronen?';
+      help = 'Schau im Bestand nach oben: Wie viel Himmel siehst du zwischen den Kronen? Das entspricht dem Bestockungsgrad B°. Unter B° 0,8 sinkt die erlaubte Höchstmenge.';
+      content = h('div', { class: 'q-cards two' }, KRONENSCHLUSS.map((k) => choice(f.b === k.b, () => { f.b = k.b; renderParams(); },
+        [crownSvg(k.b), h('span', { class: 'q-text' }, h('strong', {}, `B° ${fmt(k.b, 1)} – ${k.label}`), h('small', {}, k.text))])));
+      canNext = f.b != null;
+    } else if (q === 'zuwachs') {
+      const rw = ZUWACHS_RICHTWERT[f.gruppe];
+      title = 'Wie wüchsig ist der Bestand?';
+      help = 'Der Zuwachs bestimmt, wie viel genutzt werden darf. Steht er in deiner Forsteinrichtung, trag den Wert ein – sonst schätze über die Wuchskraft.';
+      content = [
+        h('div', { class: 'q-cards' }, [['schwach', 'kurze Jahrestriebe, lückige Kronen, armer oder trockener Boden'], ['mittel', 'normaler Wuchs'], ['stark', 'lange Triebe, dichte grüne Kronen, guter Boden']].map(([k, t]) =>
+          choice(f.wuchs === k, () => { f.wuchs = k; f.zuwachs = rw[k]; renderParams(); },
+            h('span', { class: 'q-text' }, h('strong', {}, `${k[0].toUpperCase()}${k.slice(1)}wüchsig`), h('span', {}, `ca. ${rw[k]} Vfm/ha/Jahr (Richtwert)`), h('small', {}, t))))),
+        h('label', { class: 'q-own' }, 'Oder eigener Wert aus der Forsteinrichtung (Vfm/ha/Jahr)',
+          h('input', { type: 'number', inputmode: 'decimal', min: 1, max: 30, step: 0.5, value: f.wuchs === 'eigen' ? f.zuwachs : '',
+            oninput: (e) => { const v = Number(e.target.value); if (v > 0) { f.wuchs = 'eigen'; f.zuwachs = v; nextBtn.disabled = false; } } })),
+        h('p', { class: 'hint' }, 'Die Richtwerte sind vorläufig und werden durch die Werte der Methode ersetzt.'),
+      ];
+      canNext = f.zuwachs > 0;
+    } else if (q === 'grundflaeche') {
+      title = 'Hast du die Grundfläche gemessen?';
+      help = 'Optional. Mit einer Winkelzählprobe vergleichst du deinen Bestand mit der Grundflächenleitkurve. Liegt er darüber, wird etwas mehr entnommen, liegt er darunter, etwas weniger.';
+      content = h('div', { class: 'form' },
         h('div', { class: 'form-row' },
-          sel('main', 'Hauptbaumart', SPECIES.map((s) => [s, s])),
-          num('mainDg', 'Mittlerer BHD (cm)', { min: 5, max: 90 }),
+          h('label', {}, 'Gemessene Grundfläche (m²/ha)', h('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: f.gIst ?? '', oninput: (e) => { f.gIst = Number(e.target.value) || null; } })),
+          h('label', {}, 'Sollwert laut Leitkurve (m²/ha)', h('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: f.gSoll ?? '', oninput: (e) => { f.gSoll = Number(e.target.value) || null; } })),
         ),
-        h('div', { class: 'form-row' },
-          sel('mix', 'Mischbaumart', [['', 'keine'], ...SPECIES.map((s) => [s, s])]),
-          num('mixShare', 'Anteil (%)', { min: 0, max: 80 }),
-          num('mixDg', 'BHD (cm)', { min: 5, max: 90 }),
-        ),
-        h('div', { class: 'form-row' },
-          num('age', 'Alter (Jahre)', { min: 5, max: 250 }),
-          num('nIst', 'Stammzahl jetzt (je ha)', { min: 50, max: 10000 }),
-        ),
-      ),
-      h('fieldset', {}, h('legend', {}, 'Eingriff'),
-        h('div', { class: 'radio-cards', role: 'radiogroup' }, Object.entries(THINNING_TYPES).map(([k, t]) => h('label', { class: 'radio-card' },
-          h('input', { type: 'radio', name: 'type', value: k, checked: f.type === k }), h('strong', {}, t.label), h('span', {}, t.hint)))),
-        h('div', { class: 'form-row' },
-          num('nZiel', 'Stammzahl danach (je ha)', { min: 0, max: 10000 }),
-          sel('spacing', 'Rasterweite', [[15, '15 m'], [20, '20 m'], [25, '25 m'], [30, '30 m'], [40, '40 m']]),
-        ),
-      ),
-      err, preview,
-      h('div', { class: 'btn-row' },
-        h('button', { class: 'btn', type: 'button', onclick: () => go(0) }, 'Zurück'),
-        h('button', { class: 'btn btn-primary btn-large', type: 'submit' }, 'Raster erzeugen'),
-      ),
-    );
-
-    function read() {
-      const fd = new FormData(form);
-      const v = Object.fromEntries(fd.entries());
-      const p = {
-        main: v.main, mainDg: +v.mainDg, mix: v.mix, mixShare: v.mix ? +v.mixShare : 0, mixDg: +v.mixDg,
-        age: +v.age, nIst: +v.nIst, nZiel: +v.nZiel, type: v.type, spacing: +v.spacing,
-      };
-      let msg = '';
-      if (!(p.mainDg > 0)) msg = 'Gib den mittleren BHD der Hauptbaumart an.';
-      else if (!(p.nIst > 0)) msg = 'Gib die aktuelle Stammzahl je Hektar an.';
-      else if (!(p.nZiel >= 0) || p.nZiel >= p.nIst) msg = 'Die Stammzahl danach muss kleiner sein als die Stammzahl jetzt.';
-      else if (p.mix && p.mix === p.main) msg = 'Haupt- und Mischbaumart sind gleich. Wähle eine andere Mischbaumart oder „keine“.';
-      else if (p.mix && !(p.mixShare > 0 && p.mixShare < 100)) msg = 'Gib den Anteil der Mischbaumart zwischen 1 und 99 % an.';
-      err.textContent = msg;
-      if (msg) return null;
-      st.params = p;
-      return p;
-    }
-
-    function update() {
-      const p = read();
-      if (!p) { fill(preview, ); return; }
-      const plan = computePlan(st.sel.ring, toPlanParams(p));
-      const avg = plan.total / plan.points.length;
-      fill(preview, 
-        h('div', {}, h('span', { class: 'pv-n' }, formatHa(plan.areaHa)), h('span', {}, 'Fläche')),
-        h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
-        h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume Entnahme')),
-        h('div', {}, h('span', { class: 'pv-n' }, avg.toLocaleString('de-DE', { maximumFractionDigits: 1 })), h('span', {}, 'je Punkt im Mittel')),
       );
+      nextLabel = 'Weiter (oder ohne Messung)';
+    } else if (q === 'raster') {
+      f.spacing ??= rasterVorschlag(f.dim);
+      title = 'Wie weit sollen die Rasterpunkte auseinander liegen?';
+      help = 'An jedem Rasterpunkt entnimmst du die angezeigte Anzahl Bäume im Umkreis. Engere Raster bedeuten mehr Punkte mit weniger Bäumen.';
+      content = h('div', { class: 'q-cards' }, RASTER.map((r) => choice(f.spacing === r.m, () => { f.spacing = r.m; renderParams(); },
+        h('span', { class: 'q-text' }, h('strong', {}, `${r.m} × ${r.m} m${r.m === rasterVorschlag(f.dim) ? ' (empfohlen)' : ''}`), h('small', {}, r.text)))));
+    } else {
+      const plan = computePlanMethode(st.sel.ring, f);
+      st.plan = plan;
+      const perPoint = plan.total / plan.points.length;
+      title = 'Dein Eingriff';
+      help = `${BAUMARTEN[f.gruppe].label} (${f.art}), ${DIMENSION[f.dim].label}, B° ${fmt(f.b, 1)}, Raster ${f.spacing} m`;
+      content = [
+        h('div', { class: 'preview' },
+          h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.entnahmeFmHa)), h('span', {}, 'Fm/ha')),
+          h('div', {}, h('span', { class: 'pv-n' }, plan.perHa), h('span', {}, 'Bäume/ha')),
+          h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
+          h('div', {}, h('span', { class: 'pv-n' }, fmt(perPoint, 1)), h('span', {}, 'Bäume je Punkt')),
+        ),
+        h('p', {}, `Auf ${formatHa(plan.areaHa)} entnimmst du insgesamt etwa ${plan.total} Bäume (${fmt(plan.entnahmeFm)} Fm) mit einem Durchmesser von ${DIMENSION[f.dim].bhd}. Das entspricht der Nutzung für ein Jahrzehnt.`),
+        h('details', { class: 'calc' }, h('summary', {}, 'So wurde gerechnet'), h('ol', {}, plan.schritte.map((t) => h('li', {}, t)))),
+      ];
+      nextLabel = 'Raster auf die Karte legen';
     }
 
-    fill(panel, h('h2', { class: 'step-title' }, 'Waldbauliche Angaben'), h('p', { class: 'muted' }, st.sel.label), form);
-    update();
+    const nextBtn = h('button', { class: 'btn btn-primary btn-large', disabled: !canNext, onclick: () => (q === 'ergebnis' ? go(2) : next()) }, nextLabel);
+    fill(panel,
+      progress,
+      h('h2', { class: 'step-title' }, title),
+      help ? h('p', { class: 'muted' }, help) : null,
+      content,
+      h('div', { class: 'btn-row q-nav' }, h('button', { class: 'btn', onclick: back }, 'Zurück'), nextBtn),
+    );
+  }
+
+  /** Draufsicht auf Kronen: Bedeckungsgrad ~ B° */
+  function crownSvg(b) {
+    const r = 4 + b * 9.5; // Kronenradius wächst mit B°
+    const pts = [[14, 14], [36, 12], [58, 15], [12, 36], [35, 35], [58, 37], [15, 58], [37, 58], [59, 57]];
+    return h('span', { class: 'crown', 'aria-hidden': 'true', html: `<svg viewBox="0 0 72 72"><rect width="72" height="72" rx="10" fill="#DCEBF5"/>${pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#2F6B3A" opacity=".9"/>`).join('')}</svg>` });
   }
 
   // ---------- Schritt 3: Raster ----------
@@ -276,7 +295,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function renderGrid() {
     drawSelection();
-    st.plan ??= computePlan(st.sel.ring, toPlanParams(st.params));
+    st.plan ??= computePlanMethode(st.sel.ring, st.params);
     const plan = st.plan;
     drawGrid(plan.points, { numbers: true });
     const radius = Math.round(st.params.spacing / Math.sqrt(Math.PI));

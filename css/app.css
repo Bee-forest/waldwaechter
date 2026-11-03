@@ -527,3 +527,71 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .rescue-access { margin-top: 6px; }
 .rescue-access .label { font-weight: 700; }
 .rp-tip { background: #fff; color: #C62828; font-weight: 700; border: 1px solid #C62828; }
+
+.layer-row { display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 6px; }
+.layer-row.disabled { opacity: .55; }
+.legend-i, .legend-i-space { width: 30px; height: 30px; }
+.legend-i { display: grid; place-items: center; border-radius: 50%; border: 0; background: #8B4A1C; color: #fff; font: 700 17px/1 Georgia, serif; cursor: pointer; }
+.legend-box { display: grid; gap: 10px; }
+.legend-img { max-width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px; justify-self: start; }
+
+/* ---------- Fachinfos verständlich ---------- */
+.geo-grid { display: grid; gap: 12px; }
+.geo-card { background: var(--surface-2); border-radius: 18px; padding: 14px; display: grid; gap: 10px; }
+.geo-card h4 { font-size: 19px; line-height: 1.25; }
+.geo-kicker { font-size: 13px; font-weight: 700; color: var(--signal); letter-spacing: .02em; }
+.muted-card p:not(.geo-kicker) { color: var(--ink-2); }
+.meter { display: grid; gap: 5px; }
+.meter-head { display: flex; justify-content: space-between; font-size: 15px; }
+.meter-head span { color: var(--ink-2); }
+.meter-bar { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.meter-bar span { height: 12px; border-radius: 6px; background: var(--m); opacity: .28; }
+.meter-bar span.on { opacity: 1; outline: 2px solid var(--ink); outline-offset: 1px; }
+.meter-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
+.geo-tips { background: var(--surface); border-radius: 12px; padding: 10px 12px; font-size: 15px; }
+.geo-tips ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.geo-facts { font-size: 13px; color: var(--ink-2); }
+.geo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.geo-list p { font-size: 15px; margin-top: 2px; }
+.prot { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: start; }
+.prot-badge { display: grid; place-items: center; height: 34px; border-radius: 10px; font-weight: 700; font-size: 14px; color: #fff; background: #7B7E86; }
+.prot-3 .prot-badge { background: #B42318; }
+.prot-2 .prot-badge { background: #C46A12; }
+.prot-1 .prot-badge { background: #B8961E; }
+.prot-type { display: block; font-size: 13px; color: var(--ink-2); }
+.func { display: grid; grid-template-columns: 34px 1fr; gap: 10px; }
+.func-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--surface); font-size: 18px; }
+.ok-line { display: flex; align-items: center; gap: 8px; color: var(--ok); font-weight: 700; }
+.ok-line svg { width: 20px; height: 20px; }
+
+/* ---------- Durchforstung: Fragenfolge ---------- */
+.q-progress { display: flex; gap: 6px; }
+.q-progress span { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.q-progress span.done { background: var(--primary); }
+.q-progress span.now { background: var(--signal); }
+.q-group { display: grid; gap: 8px; }
+.q-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.q-cards { display: grid; gap: 10px; }
+.q-cards.two { grid-template-columns: 1fr 1fr; }
+.q-option {
+  display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 12px 14px; text-align: left;
+  border: 2px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: 16px;
+}
+.q-chips .q-option { min-height: 48px; padding: 8px 16px; font-weight: 700; }
+.q-option.on { border-color: var(--primary); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.q-text { display: grid; gap: 2px; }
+.q-text strong { font-size: 17px; }
+.q-text small { color: var(--ink-2); font-size: 14px; }
+.q-cards.two .q-option { flex-direction: column; align-items: flex-start; }
+.crown svg { width: 64px; height: 64px; display: block; }
+.stem { flex: none; display: block; border-radius: 50%; background: radial-gradient(circle, #E9C99A 0 35%, #C99A62 36% 70%, #7A5230 71%); }
+.stem-duenn { width: 22px; height: 22px; margin: 0 21px; }
+.stem-mittel { width: 42px; height: 42px; margin: 0 11px; }
+.stem-dick { width: 64px; height: 64px; }
+.q-own { display: grid; gap: 6px; font-weight: 700; font-size: 15px; }
+.q-nav { position: sticky; bottom: 0; background: var(--surface); padding-top: 8px; }
+.calc summary { cursor: pointer; font-weight: 700; min-height: 40px; display: flex; align-items: center; }
+.calc ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; font-size: 15px; }
+
+.thin.q-mode { grid-template-rows: auto 120px 1fr; }
+.thin.q-mode .thin-panel { max-height: none; }

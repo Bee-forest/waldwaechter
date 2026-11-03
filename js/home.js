@@ -6,8 +6,9 @@ import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, formatDist, centroid, compassLabel } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
-import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue } from './map/thueringen.js';
+import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls } from './map/thueringen.js';
 import { openProfile } from './profile.js';
+import { queryPoint, explainStandort, NAEHRKRAFT, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
   nsg: 'Naturschutz',
@@ -21,6 +22,9 @@ const catGroups = {};
 let allParcelsLayer, infoLayer, rescueLayer, selectionLayer, posMarker;
 const overlays = {};
 let selected = null; // { parcel, latlng }
+let rescueMarkers = null;
+/** Entfernt alles, was zur vorherigen Auswahl gehört (Umriss, „i“, Rettungspunkt-Linie) */
+function clearMarks() { selectionLayer?.clearLayers(); rescueMarkers?.remove(); rescueMarkers = null; }
 let ALL = [];
 
 const mine = (id) => store.get().parcels.find((p) => p.id === id);
@@ -199,7 +203,7 @@ async function drawRescue() {
 
 async function select(parcel, latlng) {
   selected = { parcel, latlng };
-  selectionLayer.clearLayers();
+  clearMarks();
   selectionLayer.addLayer(L.polygon(parcel.ring, { color: '#FFFFFF', weight: 3.5, fillColor: '#1F4A2C', fillOpacity: 0.35, interactive: false }));
   selectionLayer.addLayer(infoPin(latlng));
   drawParcels();
@@ -208,7 +212,7 @@ async function select(parcel, latlng) {
 
 function clearSelection() {
   selected = null;
-  selectionLayer.clearLayers();
+  clearMarks();
   const box = document.getElementById('infobox');
   box.hidden = true;
   drawParcels();
@@ -248,9 +252,8 @@ function rescueBlock(latlng) {
   );
 }
 
-let rescueMarkers;
 function showRescueOnMap(rp, from) {
-  rescueMarkers?.remove();
+  rescueMarkers?.remove(); // immer nur ein Rettungspunkt gleichzeitig
   rescueMarkers = L.layerGroup([
     L.polyline([from, rp.at], { color: '#C62828', weight: 3, dashArray: '6 8', interactive: false }),
     L.marker(rp.at, { icon: L.divIcon({ className: 'rpoint', html: '<span>+</span>', iconSize: [28, 28], iconAnchor: [14, 14] }), title: rp.id })
@@ -260,12 +263,91 @@ function showRescueOnMap(rp, from) {
   document.querySelector('.map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function meter(steps, active, label, colors) {
+  return h('div', { class: 'meter', role: 'img', 'aria-label': `${label}: ${active >= 0 ? steps[active] : 'unbekannt'}` },
+    h('div', { class: 'meter-head' }, h('span', {}, label), h('strong', {}, active >= 0 ? steps[active] : 'k. A.')),
+    h('div', { class: 'meter-bar' }, steps.map((st, i) => h('span', { class: i === active ? 'on' : '', style: `--m:${colors[i]}`, title: st }))),
+    h('div', { class: 'meter-ends' }, h('span', {}, steps[0]), h('span', {}, steps[steps.length - 1])),
+  );
+}
+
+function renderGeoInfo(info) {
+  const blocks = [];
+  // Standort
+  if (info.standort) {
+    const st = explainStandort(info.standort);
+    const fIdx = st.fe ? ['trocken', 'mäßig trocken', 'mäßig frisch', 'frisch', 'feucht', 'nass'].indexOf(st.fe.label === 'ziemlich frisch' ? 'frisch' : st.fe.label) : -1;
+    blocks.push(h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, 'Standort'),
+      h('h4', {}, st.desc ? st.desc[0].toUpperCase() + st.desc.slice(1) : `Standortsgruppe ${st.gruppe}`),
+      meter(NAEHRKRAFT.map((n) => n.label), st.nk, 'Nährstoffe', ['#C9B98A', '#B9C27A', '#8FAF4E', '#5E9A3A', '#2F7D3A']),
+      meter(['trocken', 'mäßig trocken', 'mäßig frisch', 'frisch', 'feucht', 'nass'], fIdx, 'Wasserversorgung', ['#D9B36A', '#CFC07C', '#A9C48A', '#7FB59A', '#5A9EB5', '#3F7FB0']),
+      st.tips.length ? h('div', { class: 'geo-tips' }, h('strong', {}, 'Was heißt das für dich?'), h('ul', {}, st.tips.map((t) => h('li', {}, t)))) : null,
+      h('p', { class: 'geo-facts' }, [st.gruppe && `Standortsgruppe ${st.gruppe}`, st.einheit && `Einheit ${st.einheit}`, st.bodenform && `Bodenform ${st.bodenform}`, st.wasser && `Wasserhaushaltsstufe ${st.wasser}`].filter(Boolean).join(' · ')),
+    ));
+  } else {
+    blocks.push(h('div', { class: 'geo-card muted-card' }, h('p', { class: 'geo-kicker' }, 'Standort'), h('p', {}, 'Für diesen Punkt ist keine forstliche Standortskartierung hinterlegt (meist außerhalb des Waldes).')));
+  }
+  // Schutzstatus
+  const LEVEL = ['Hinweis', 'geschützt', 'europäisch geschützt', 'streng geschützt'];
+  blocks.push(h('div', { class: 'geo-card' },
+    h('p', { class: 'geo-kicker' }, 'Schutzstatus'),
+    info.schutz.length
+      ? h('ul', { class: 'geo-list' }, info.schutz.map((x) => h('li', { class: `prot prot-${x.level}` },
+          h('span', { class: 'prot-badge' }, x.short),
+          h('div', {},
+            h('strong', {}, x.props.siteName ? umlaut(x.props.siteName) : x.label),
+            h('span', { class: 'prot-type' }, `${x.label} – ${LEVEL[x.level]}`),
+            h('p', {}, x.text),
+          ),
+        )))
+      : h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Kein Schutzgebiet am angetippten Punkt.'),
+  ));
+  // Waldfunktionen
+  blocks.push(h('div', { class: 'geo-card' },
+    h('p', { class: 'geo-kicker' }, 'Waldfunktionen'),
+    info.funktion.length
+      ? h('ul', { class: 'geo-list' }, info.funktion.map((x) => h('li', { class: 'func' },
+          h('span', { class: 'func-icon', 'aria-hidden': 'true' }, x.icon),
+          h('div', {}, h('strong', {}, x.label), h('p', {}, x.text), x.props.Bemerkung ? h('span', { class: 'prot-type' }, `Rechtsgrundlage: ${x.props.Bemerkung}`) : null),
+        )))
+      : h('p', { class: 'muted' }, 'Keine besonderen Waldfunktionen ausgewiesen – normale Bewirtschaftung.'),
+  ));
+  // Biotope, LRT, Schäden
+  if (info.wald.length) {
+    blocks.push(h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, 'Biotope und Besonderheiten'),
+      h('ul', { class: 'geo-list' }, info.wald.map((x) => {
+        const details = Object.entries(x.props).filter(([k]) => !/datum|flaeche|urheber|stand/i.test(k)).map(([k, v]) => `${umlaut(k)}: ${umlaut(v)}`).slice(0, 4);
+        return h('li', { class: 'func' }, h('span', { class: 'func-icon', 'aria-hidden': 'true' }, '◆'),
+          h('div', {}, h('strong', {}, x.label), h('p', {}, x.text), details.length ? h('span', { class: 'prot-type' }, details.join(' · ')) : null));
+      })),
+    ));
+  }
+  // Zuständigkeit
+  if (info.zustaendig) {
+    blocks.push(h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, 'Zuständig'),
+      h('p', {}, h('strong', {}, `Forstamt ${info.zustaendig.Forstamt || '–'}`), info.zustaendig.Revier ? `, Revier ${info.zustaendig.Revier}` : ''),
+      h('p', { class: 'hint' }, 'Ansprechpartner für Beratung, Förderung und Holzverkauf: ThüringenForst.'),
+    ));
+  }
+  return blocks;
+}
+
 function geoInfoBlock(latlng) {
-  return h('div', { class: 'info-block' },
-    h('h3', {}, 'Standort, Waldfunktionen und Schutzstatus'),
-    h('p', { class: 'hint' }, 'Auskunft des Geoportals Thüringen für den angetippten Punkt.'),
+  const body = h('div', { class: 'geo-grid', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Lade Standort, Schutzstatus und Waldfunktionen …'));
+  queryPoint(latlng).then((info) => {
+    if (info.failed) throw new Error('offline');
+    fill(body, ...renderGeoInfo(info));
+  }).catch(() => fill(body,
+    h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'),
     geoFrame('Forstliche Angaben am Punkt', INFO_SOURCES.forst(latlng), 220),
-    geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160),
+    geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160)));
+  return h('div', { class: 'info-block' },
+    h('h3', {}, 'Standort, Schutzstatus und Waldfunktionen'),
+    body,
+    h('p', { class: 'hint' }, 'Am angetippten Punkt laut Geoportal Thüringen (© GDI-Th / ThüringenForst / TLUBN). Ohne Gewähr – vor Maßnahmen im Zweifel beim Forstamt nachfragen.'),
   );
 }
 
@@ -280,7 +362,7 @@ function infoPin(latlng) {
 /** Rückfall ohne Vektordaten: amtliche Auskunft des WMS im iframe (braucht kein CORS) */
 function renderWmsInfo(latlng) {
   selected = null;
-  selectionLayer.clearLayers();
+  clearMarks();
   selectionLayer.addLayer(infoPin(latlng));
   const box = document.getElementById('infobox');
   fill(box,
@@ -443,14 +525,32 @@ function openSearch() {
   });
 }
 
+function openLegend(key) {
+  const info = LAYER_INFO[key];
+  const legends = legendUrls(key);
+  dialog({
+    title: info.title,
+    body: h('div', { class: 'legend-box' },
+      h('p', {}, info.text),
+      legends.length ? h('p', { class: 'sheet-label' }, 'Legende') : null,
+      legends.map((l) => h('img', { class: 'legend-img', src: l.src, alt: `Legende ${l.layer}`, loading: 'lazy',
+        onerror: (e) => { e.target.replaceWith(h('p', { class: 'hint' }, 'Legende gerade nicht abrufbar.')); } })),
+    ),
+    actions: [{ label: 'Schließen', value: true, primary: true }],
+  });
+}
+
 function openLayerSheet() {
   const s = store.get().settings;
-  const sw = (key, label, { color, disabled, note, onchange } = {}) => h('label', { class: `switch-row ${disabled ? 'disabled' : ''}` },
-    color ? h('span', { class: 'swatch', style: `background:${color}` }) : null,
-    h('span', { class: 'switch-label' }, label, note ? h('small', {}, note) : null),
-    h('input', { type: 'checkbox', role: 'switch', disabled, checked: !disabled && !!s.layers[key], onchange: onchange || ((e) => {
-      store.update((st) => { st.settings.layers[key] = e.target.checked; });
-    }) }),
+  const sw = (key, label, { color, disabled, note, onchange } = {}) => h('div', { class: `layer-row ${disabled ? 'disabled' : ''}` },
+    LAYER_INFO[key] ? h('button', { class: 'legend-i', type: 'button', 'aria-label': `Legende und Erklärung: ${label}`, onclick: () => openLegend(key) }, 'i') : h('span', { class: 'legend-i-space' }),
+    h('label', { class: 'switch-row' },
+      color ? h('span', { class: 'swatch', style: `background:${color}` }) : null,
+      h('span', { class: 'switch-label' }, label, note ? h('small', {}, note) : null),
+      h('input', { type: 'checkbox', role: 'switch', disabled, checked: !disabled && !!s.layers[key], onchange: onchange || ((e) => {
+        store.update((st) => { st.settings.layers[key] = e.target.checked; });
+      }) }),
+    ),
   );
   const groups = [...new Set(OVERLAYS.map((o) => o.group))];
   dialog({

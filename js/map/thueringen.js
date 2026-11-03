@@ -319,6 +319,26 @@ export const INFO_SOURCES = {
   rettung: (ll) => infoUrl(FORST, 'rettungspunkte', ll, { spanM: 4000, pixels: 1, count: 3 }),
 };
 
+/** Erklärungen für die Legenden-„i“ in „Weitere Layer“ */
+export const LAYER_INFO = {
+  alkis: { title: 'Flurstücksgrenzen (ALKIS)', text: 'Amtliche Flurstücksgrenzen mit Flurstücksnummern aus dem Liegenschaftskataster Thüringen. Gut zur Orientierung, aber keine rechtsverbindliche Grenzfeststellung – die macht nur ein Vermesser.', legend: [[`${GP}/adv_alkis_wms_th`, 'adv_alkis_flurstuecke']] },
+  rettung: { title: 'Rettungspunkte', text: 'Forstliche Rettungspunkte von ThüringenForst und Bundesforst. Hier treffen sich Rettungsdienst und Hilfesuchende. Im Notfall 112 anrufen und die Nummer des Rettungspunkts nennen (z. B. SOK-6456). Die Schilder hängen meist an Wegkreuzungen.' },
+  standort: { title: 'Standortkarte (Forst)', text: 'Ergebnis der forstlichen Standortskartierung: Wie gut ist der Boden mit Nährstoffen (Nährkraft) und Wasser versorgt, in welcher Klimastufe liegt die Fläche? Das ist die wichtigste Grundlage dafür, welche Baumarten hier dauerhaft gut wachsen.' },
+  waldfunktionen: { title: 'Waldfunktionen', text: 'Besondere Aufgaben des Waldes neben der Holzerzeugung: Bodenschutz an steilen Hängen, Erholung, Klima-, Immissions-, Lärm- und Sichtschutz. Bei Maßnahmen sollen diese Funktionen erhalten bleiben – z. B. keine Kahlschläge im Bodenschutzwald.' },
+  schaden: { title: 'Waldschadflächen', text: 'Flächen, auf denen der Wald nach Dürre, Sturm oder Borkenkäferbefall abgestorben oder bereits geräumt ist. Sie müssen wieder bewaldet werden; dafür gibt es Fördermittel.' },
+  schutz: { title: 'Schutzgebiete (NSG, LSG)', text: 'Naturschutzgebiete (NSG) haben strenge Regeln, oft mit Einschränkungen für Holzernte und Wegebau. Landschaftsschutzgebiete (LSG) schützen das Landschaftsbild, ordnungsgemäße Forstwirtschaft ist meist erlaubt. Vor größeren Maßnahmen die Schutzgebietsverordnung prüfen oder die Untere Naturschutzbehörde fragen.' },
+  natura: { title: 'Natura 2000', text: 'Europäisches Schutzgebietsnetz aus FFH-Gebieten (seltene Lebensräume und Arten) und Vogelschutzgebieten. Es gilt ein Verschlechterungsverbot: Der Zustand von Lebensräumen und Arten darf sich durch Maßnahmen nicht verschlechtern. Für viele Gebiete gibt es Managementpläne.' },
+  lrt: { title: 'Waldlebensraumtypen (LRT)', text: 'Nach der FFH-Richtlinie geschützte Waldgesellschaften innerhalb von FFH-Gebieten, z. B. Hainsimsen-Buchenwald (9110) oder Schlucht- und Hangmischwald (9180). Die typischen Baumarten sollen erhalten bleiben – also z. B. keine Umwandlung in Nadelholz.' },
+  waldbiotope: { title: 'Waldbiotope', text: 'Besonders wertvolle Bereiche im Wald aus der Waldbiotopkartierung, z. B. Quellbereiche, Blockschutthalden, naturnahe Bachläufe oder alte Eichenwälder. Viele sind gesetzlich geschützt (§ 30 BNatSchG) und dürfen nicht beeinträchtigt werden.' },
+  biotope: { title: 'Offenlandbiotope', text: 'Kartierte wertvolle Flächen außerhalb des Waldes, z. B. Magerrasen, Feuchtwiesen, Hecken und Streuobstwiesen. Gesetzlich geschützte Biotope dürfen nicht zerstört oder erheblich beeinträchtigt werden.' },
+};
+
+export function legendUrls(key) {
+  const info = LAYER_INFO[key];
+  const pairs = info?.legend || (() => { const o = OVERLAYS.find((x) => x.key === key); return o ? o.layers.split(',').map((l) => [o.url, l]) : []; })();
+  return pairs.map(([url, layer]) => ({ layer, src: `${url}?${new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetLegendGraphic', FORMAT: 'image/png', LAYER: layer, SLD_VERSION: '1.1.0' })}` }));
+}
+
 export function overlayLayer(o) {
   return wms(o.url, o.layers, { opacity: o.opacity ?? 0.85, minZoom: o.minZoom ?? 10 });
 }

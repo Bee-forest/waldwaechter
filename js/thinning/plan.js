@@ -1,5 +1,6 @@
 // Rechenkern der Durchforstungsmethode (ohne UI, gut testbar).
 import { areaHa, generateGrid } from '../geo.js';
+import { berechne, DIMENSION } from './methode.js';
 
 export const SPECIES = ['Fichte', 'Kiefer', 'Lärche', 'Douglasie', 'Tanne', 'Buche', 'Eiche', 'Bergahorn', 'Esche', 'Birke', 'Erle'];
 
@@ -59,3 +60,39 @@ export function computePlan(ring, p) {
 
 export const pointRemaining = (pt) => pt.removals.reduce((s, r) => s + Math.max(0, r.count - r.marked), 0);
 export const pointTotal = (pt) => pt.removals.reduce((s, r) => s + r.count, 0);
+
+// ---------- Neue Methode (Raster-Verfahren, siehe methode.js) ----------
+
+export function computePlanMethode(ring, p) {
+  const ha = areaHa(ring);
+  const grid = generateGrid(ring, p.spacing);
+  const n = grid.length;
+  const r = berechne(p);
+  const total = Math.round(r.baeumeHa * ha);
+  const d = DIMENSION[p.dim];
+  const points = grid.map((at, i) => ({
+    id: i + 1,
+    at,
+    status: 'open',
+    removals: [{
+      species: p.art || (p.gruppe === 'nadel' ? 'Nadelholz' : 'Laubholz'),
+      // gleichmäßig verteilt, Summe bleibt exakt
+      count: Math.floor(((i + 1) * total) / n) - Math.floor((i * total) / n),
+      dmin: d.dmin,
+      dmax: d.dmax ?? 99,
+      marked: 0,
+    }].filter((x) => x.count > 0),
+  }));
+  return {
+    methode: 'raster-2026',
+    areaHa: ha,
+    perHa: Math.round(r.baeumeHa),
+    total,
+    entnahmeFmHa: r.entnahme,
+    entnahmeFm: r.entnahme * ha,
+    schritte: r.schritte,
+    cellM2: p.spacing * p.spacing,
+    points,
+    hint: d.hint,
+  };
+}

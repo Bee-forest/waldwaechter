@@ -8,6 +8,8 @@ import { areaHa, formatHa, formatDist, centroid, compassLabel, polysOf } from '.
 import { WANZE_SVG, say } from './mascot.js';
 import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa } from './map/thueringen.js';
 import { openProfile } from './profile.js';
+import { besonderheiten } from './map/besonderheiten.js';
+import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt } from './map/bestand.js';
 import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
@@ -16,6 +18,7 @@ export const FEATURE_TYPES = {
   biotop: 'Geschütztes Biotop',
   waldfunktion: 'Waldfunktion',
   vsp: 'Verkehrssicherungspflicht',
+  punktbiotop: 'Punktbiotop',
 };
 
 let base, map, osmLayer;
@@ -27,6 +30,8 @@ let rescueMarkers = null;
 /** Entfernt alles, was zur vorherigen Auswahl gehört (Umriss, „i“, Rettungspunkt-Linie) */
 function clearMarks() { selectionLayer?.clearLayers(); rescueMarkers?.remove(); rescueMarkers = null; }
 let ALL = [];
+const FEAT = new Map(); // Besonderheiten je Flurstück (Sitzung)
+const featuresOf = (p) => FEAT.get(p.id) || p.features || [];
 
 const mine = (id) => store.get().parcels.find((p) => p.id === id);
 export const parcelTitle = (p) => `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}`;
@@ -168,18 +173,30 @@ function drawParcels() {
 }
 
 function addInfoPoints(p) {
-  for (const f of p.features || []) {
+  for (const f of featuresOf(p)) {
     if (f.line) infoLayer.addLayer(L.polyline(f.line, { color: '#F26B1D', weight: 6, opacity: 0.9, dashArray: '10 8', interactive: false }));
     const marker = L.marker(f.at, {
-      icon: L.divIcon({ className: 'fpoint', html: '<span aria-hidden="true">!</span>', iconSize: [26, 26], iconAnchor: [13, 13] }),
-      keyboard: true, title: f.title, alt: f.title,
+      icon: L.divIcon({ className: `fpoint fpoint-i fpoint-${f.type}`, html: '<span aria-hidden="true">i</span>', iconSize: [30, 30], iconAnchor: [15, 15] }),
+      keyboard: true, title: f.title, alt: f.title, zIndexOffset: 500,
     });
-    marker.bindPopup(() => h('div', { class: 'ipop' },
-      h('div', { class: 'ipop-bug', html: WANZE_SVG }),
-      h('div', {}, h('strong', {}, f.title), h('p', {}, f.text)),
-    ), { maxWidth: 290, className: 'ipop-wrap' });
+    marker.on('click', (e) => { L.DomEvent.stop(e); zeigeBesonderheit(f, p); });
     infoLayer.addLayer(marker);
   }
+}
+
+/** Der WaldWächter erklärt in der Sprechblase, was das „i“ bedeutet */
+function zeigeBesonderheit(f, p) {
+  const actions = [];
+  if (f.type === 'vsp') {
+    const schon = hatVerkehrssicherung(p.id);
+    actions.push(h('button', { class: 'btn btn-small btn-primary', disabled: schon, onclick: (e) => {
+      erinnereVerkehrssicherung(p);
+      e.currentTarget.disabled = true; e.currentTarget.textContent = 'Im Maßnahmenplan';
+      toast('Verkehrssicherung im Maßnahmenplan – zweimal im Jahr');
+    } }, schon ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern'));
+  }
+  const extra = f.type === 'vsp' && f.laenge ? ` (an ${f.art || 'Straße'} entlang, ca. ${Math.round(f.laenge / 10) * 10} m Waldrand)` : '';
+  say(`${f.title}${extra}: ${f.text}`, { duration: 0, actions: actions.length ? actions : undefined });
 }
 
 export function applyLayerVisibility() {
@@ -208,7 +225,32 @@ async function select(parcel, latlng) {
   selectionLayer.addLayer(L.polygon(polysOf(parcel), { color: '#FFFFFF', weight: 3.5, fillColor: '#1F4A2C', fillOpacity: 0.35, interactive: false }));
   selectionLayer.addLayer(infoPin(latlng));
   drawParcels();
+  ladeBesonderheiten(parcel);
   await renderInfo();
+}
+
+function ladeBesonderheiten(parcel) {
+  if (parcel.source !== 'alkis') return;
+  besonderheiten(parcel).then((f) => {
+    FEAT.set(parcel.id, f);
+    drawParcels();
+    const host = document.getElementById('besonderheiten');
+    if (host && selected?.parcel.id === parcel.id) fill(host, ...besonderheitenListe(parcel));
+  });
+}
+
+function besonderheitenListe(p) {
+  const f = featuresOf(p);
+  if (!f.length) return [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht und keine kartierten Biotope auf diesem Flurstück gefunden.')];
+  const gruppen = {};
+  for (const x of f) (gruppen[x.type] ||= []).push(x);
+  return [h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
+    h('span', { class: 'feature-type' }, FEATURE_TYPES[t] || list[0].title),
+    h('strong', {}, list.length > 1 ? `${list.length} Stellen auf der Karte` : list[0].title),
+    h('p', {}, list[0].text),
+    t === 'vsp' ? h('button', { class: 'btn btn-small', disabled: hatVerkehrssicherung(p.id), onclick: (e) => { erinnereVerkehrssicherung(p); e.currentTarget.disabled = true; e.currentTarget.textContent = 'Im Maßnahmenplan'; toast('Verkehrssicherung im Maßnahmenplan'); } },
+      hatVerkehrssicherung(p.id) ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern') : null,
+  ))), h('p', { class: 'hint' }, 'Tippe auf ein „i“ in der Karte, dann erklärt dir der WaldWächter die Besonderheit. Biotope: © GDI-Th / TLUBN / ThüringenForst, live abgefragt.')];
 }
 
 function clearSelection() {
@@ -473,6 +515,8 @@ async function renderInfo() {
       ))),
       rescue.length ? h('p', { class: 'hint' }, 'Demo-Rettungspunkte. Im Notfall immer 112 wählen und die Rettungspunkt-Nummer nennen.') : null,
     ),
+    isAlkis ? h('div', { class: 'info-block' }, h('h3', {}, 'Besonderheiten'),
+      h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …'))) : null,
     isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Besonderheiten'),
       p.features?.length

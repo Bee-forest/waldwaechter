@@ -639,3 +639,38 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 
 .calc-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
 .calc-box small { font-size: 14px; color: var(--ink-2); }
+
+/* Infopunkte für Besonderheiten */
+.fpoint-i span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--signal); color: #fff; font: 700 17px/1 Georgia, serif; font-style: italic; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.fpoint-vsp span { background: #C2410C; }
+.fpoint-punktbiotop span, .fpoint-biotop span { background: #6B4E16; }
+/* Maßnahmenplan */
+.calendar { display: grid; gap: 10px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-head h2 { font-size: 18px; margin: 0; text-align: center; flex: 1; }
+.cal-head .icon-btn { font-size: 24px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-wd { font-size: 12px; text-align: center; color: var(--ink-2); }
+.cal-cell { aspect-ratio: 1; border: 0; border-radius: 10px; background: var(--surface-2); display: grid; place-items: center; align-content: center; gap: 2px; font: inherit; color: var(--ink); padding: 0; }
+.cal-cell.empty { background: transparent; }
+.cal-cell.today { outline: 2px solid var(--primary); }
+.cal-cell.sel { background: var(--primary); color: #fff; }
+.cal-cell.has .cal-d { font-weight: 700; }
+.cal-d { font-size: 14px; }
+.cal-dots { display: flex; gap: 2px; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
+.dot-verkehrssicherung { background: #C2410C; }
+.dot-durchforstung { background: #2C5A3B; }
+.dot-pflanzung { background: #5E8C31; }
+.dot-zaunbau { background: #8B4A1C; }
+.dot.done { opacity: .35; }
+.cal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cal-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); }
+.cal-item.done { opacity: .6; }
+.cal-date { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 44px; }
+.cal-text { flex: 1; display: grid; }
+.cal-text small { color: var(--ink-2); }
+.section-title { font-size: 18px; margin: 18px 0 8px; }
+.date-field { display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); margin: 6px 0; }
+.date-field input { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line, #cfd8cc); background: var(--surface); color: var(--ink); }
+.vsp-termine { display: grid; gap: 2px; }

@@ -3,7 +3,7 @@
 /* global L */
 import { pointInPolygon, inPolys, polysOf, areaHa, areaM2Polys, toUTM32, fromUTM32, generateGrid } from '../geo.js';
 
-const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
+export const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
 export const TH_ATTR = '© <a href="https://www.geoportal-th.de" target="_blank" rel="noopener">GDI-Th</a>, dl-de/by-2-0';
 
 export const TH = {
@@ -277,6 +277,16 @@ async function loadTile(x, y) {
   return tileCache.get(key);
 }
 
+/** Alle mitgelieferten Flurstücke im Umkreis eines Rahmens {s, w, n, e} (Grad), inkl. Nachbarkacheln */
+export async function parcelsNear({ s: so, w, n, e }) {
+  const x0 = tileX(w) - 1, x1 = tileX(e) + 1, y0 = tileY(n) - 1, y1 = tileY(so) + 1;
+  const jobs = [];
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push(loadTile(x, y));
+  const seen = new Map();
+  for (const list of await Promise.all(jobs)) for (const p of list) seen.set(p.id, p);
+  return [...seen.values()];
+}
+
 export async function localIndexInfo() {
   localIndex ??= fetch('data/alkis/index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
   return localIndex;
@@ -329,7 +339,7 @@ export function featureInfoUrl([lat, lng]) {
 // ---------- Fachebenen (WMS) für „Weitere Layer“ ----------
 // minZoom grob nach den Maßstabsgrenzen der Dienste. Ebenen ohne bestätigte
 // Adresse sind mit pending markiert und erscheinen noch nicht in der Auswahl.
-const FORST = `${GP}/forst/FORST`; // ThüringenForst (Maßstab bis 1:150.000 → ab Zoom 12)
+export const FORST = `${GP}/forst/FORST`; // ThüringenForst (Maßstab bis 1:150.000 → ab Zoom 12)
 export const OVERLAYS = [
   { key: 'rettung', label: 'Rettungspunkte', group: 'Sicherheit', url: FORST, layers: 'rettungspunkte', minZoom: 11 },
   { key: 'standort', label: 'Standortkarte (Forst)', group: 'Wald', url: FORST, layers: 'standort_fl', opacity: 0.6, minZoom: 12 },
@@ -406,7 +416,7 @@ function mercBBox([lat, lng], spanM) {
   return [x - half, y - half, x + half, y + half];
 }
 
-function findBlobs(alpha, w, h) {
+function findBlobs(alpha, w, h, minN = 20) {
   const seen = new Uint8Array(w * h);
   const out = [];
   for (let i = 0; i < alpha.length; i++) {
@@ -422,7 +432,7 @@ function findBlobs(alpha, w, h) {
         seen[k] = 1; stack.push(k);
       }
     }
-    if (n >= 20) out.push({ x: sx / n, y: sy / n, n });
+    if (n >= minN) out.push({ x: sx / n, y: sy / n, n });
   }
   return out;
 }
@@ -459,6 +469,49 @@ async function scanRescue(latlng, spanM, px) {
     } catch { /* einzelner Punkt nicht abfragbar */ }
   }));
   return [...points.values()];
+}
+
+/**
+ * Sucht in einem WMS-Layer alle dargestellten Objekte innerhalb eines Rahmens (Kartenbild → Flecken)
+ * und fragt zu jedem Fleck die Sachdaten ab (GetFeatureInfo). Gibt [{ at, props }] zurück.
+ */
+export async function scanWmsLayer(url, layer, { s: so, w, n, e }, { maxPx = 1024, max = 12 } = {}) {
+  const R = 6378137;
+  const mx = (lng) => (lng * Math.PI / 180) * R;
+  const my = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R;
+  const pad = 30 / Math.cos(((so + n) / 2) * Math.PI / 180);
+  const bb = [mx(w) - pad, my(so) - pad, mx(e) + pad, my(n) + pad];
+  const mpp = Math.max((bb[2] - bb[0]) / maxPx, (bb[3] - bb[1]) / maxPx, 1);
+  const W = Math.max(64, Math.round((bb[2] - bb[0]) / mpp)), H = Math.max(64, Math.round((bb[3] - bb[1]) / mpp));
+  const common = { SERVICE: 'WMS', VERSION: '1.3.0', LAYERS: layer, STYLES: '', CRS: 'EPSG:3857', BBOX: bb.join(','), WIDTH: String(W), HEIGHT: String(H) };
+  const res = await fetch(`${url}?${new URLSearchParams({ ...common, REQUEST: 'GetMap', FORMAT: 'image/png', TRANSPARENT: 'true' })}`, { mode: 'cors' });
+  if (!res.ok || !/png/.test(res.headers.get('content-type') || '')) throw new Error(`Kartenbild ${layer} nicht verfügbar`);
+  const bmp = await createImageBitmap(await res.blob());
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+  const data = ctx.getImageData(0, 0, W, H).data;
+  const alpha = new Uint8Array(W * H);
+  for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+  const toLL = (px, py) => {
+    const x = bb[0] + (px + 0.5) * (bb[2] - bb[0]) / W, y = bb[3] - (py + 0.5) * (bb[3] - bb[1]) / H;
+    return [(2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * 180 / Math.PI, x / R * 180 / Math.PI];
+  };
+  const blobs = findBlobs(alpha, W, H, 6).sort((a, b) => b.n - a.n).slice(0, max);
+  return Promise.all(blobs.map(async (b) => {
+    const at = toLL(b.x, b.y);
+    let props = {};
+    try {
+      const q = new URLSearchParams({ ...common, REQUEST: 'GetFeatureInfo', QUERY_LAYERS: layer, INFO_FORMAT: 'application/vnd.ogc.gml', I: String(Math.round(b.x)), J: String(Math.round(b.y)), FEATURE_COUNT: '1' });
+      const xml = await (await fetch(`${url}?${q}`, { mode: 'cors' })).text();
+      const doc = new DOMParser().parseFromString(xml, 'application/xml');
+      for (const el of doc.getElementsByTagName('*')) {
+        if (el.children.length) continue;
+        const k = el.localName, v = el.textContent.trim();
+        if (v && v !== 'missing' && !/^(coordinates|pos|posList|null|boundedBy|Box|gml_id|OBJECTID|FID|Shape_.*)$/.test(k) && !(k in props)) props[k] = v;
+      }
+    } catch { /* Sachdaten nicht abrufbar */ }
+    return { at, px: b.n * mpp * mpp, props };
+  }));
 }
 
 /** Nächste Rettungspunkte zum Punkt [lat, lng], sortiert nach Luftlinie */

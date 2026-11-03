@@ -1,0 +1,30 @@
+name: Geodienste und Rettungspunkte laden
+
+on:
+  push:
+    paths: ['tools/geodienste.py', '.github/workflows/geodienste.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: geodienste
+  cancel-in-progress: false
+
+jobs:
+  laden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dienste auslesen, Rettungspunkte laden
+        continue-on-error: true
+        run: python3 tools/geodienste.py
+      - name: Ergebnis speichern
+        run: |
+          git config user.name "Waldwächter-Daten"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/geodienste data/rettungspunkte.json 2>/dev/null || git add data/geodienste
+          git commit -m "Geodienste und Rettungspunkte aktualisiert" || exit 0
+          for i in 1 2 3 4 5; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 10; done

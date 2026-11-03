@@ -1,0 +1,21 @@
+# https://www.geoproxy.geoportal-th.de/geoproxy/services/kommunal/komm_wms
+-	Darstellungsdienst kommunaler Geofachdaten	q=0	1.0-1000001.0
+-	Geofachdaten in Zuständigkeit der Gemeinden, VGs, EGs und kreisfreien Städte	q=0	1.0-1000001.0
+komm_fnp	Flächennutzungspläne Thüringen	q=1	1.0-1000001.0
+komm_bp	Bebauungspläne und Satzungen Thüringen	q=1	1.0-1000001.0
+komm_kita	Kinderbetreuungsstätten Thüringen	q=1	1.0-1000001.0
+komm_fried	Friedhöfe Thüringen	q=1	1.0-1000001.0
+komm_not	Notunterkünfte Thüringen	q=1	1.0-1000001.0
+komm_spiel	Spielplätze Thüringen	q=1	1.0-1000001.0
+komm_feuer	Feuerwehren Thüringen	q=1	1.0-1000001.0
+komm_sport	Sportanlagen Thüringen	q=1	1.0-1000001.0
+komm_bad	Bäder Thüringen	q=1	1.0-1000001.0
+komm_ort	Ortsteile Thüringen	q=1	1.0-1000001.0
+komm_stat	Statistische Bezirke Thüringen	q=1	1.0-1000001.0
+-	Geofachdaten in Zuständigkeit der Landkreise und kreisfreien Städte	q=0	1.0-1000001.0
+komm_schul	Schulstandorte Thüringen	q=1	1.0-1000001.0
+-	Schulbezirke Thüringen	q=0	1.0-1000001.0
+komm_schulbz_gs	Grundschulbezirke	q=1	1.0-1000001.0
+komm_schulbz_rs	Regelschulbezirke	q=1	1.0-1000001.0
+komm_schulbz_fs	Förderschulbezirke	q=1	1.0-1000001.0
+komm_schulbz_gms	Gemeinschaftsschulbezirke	q=1	1.0-1000001.0

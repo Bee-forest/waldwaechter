@@ -1,0 +1,9 @@
+# https://www.geoproxy.geoportal-th.de/geoproxy/services/giz/bildung
+-	Bildung	q=0	1.0-5000001.0
+Schulamt	Schulamtsbezirke	q=1	1.0-5000001.0
+Erwachsenenbildung	Einrichtungen der Erwachsenenbildung	q=1	1.0-5000001.0
+Hochschulen	Standorte der Hochschulen	q=1	1.0-5000001.0
+Bibliotheken	Bibliotheken	q=1	1.0-5000001.0
+Schullandheime	Schullandheime	q=1	1.0-5000001.0
+InternateWohnheime	Internate und Wohnheime	q=1	1.0-5000001.0
+ausserschulische_Lernorte	außerschulische Lernorte	q=1	1.0-5000001.0

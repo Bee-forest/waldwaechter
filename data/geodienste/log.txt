@@ -1,6 +1,20 @@
+GeoMIS Standortskartierung: []
+GeoMIS Waldbiotope: ['https://www.geoproxy.geoportal-th.de/geoproxy/services/forst/FORST']
+GeoMIS Waldlebensraumtypen: ['https://www.geoproxy.geoportal-th.de/geoproxy/services/forst/FORST']
+GeoMIS Waldflaechen: ['https://www.geoproxy.geoportal-th.de/geoproxy/services/forst/FORST']
+GeoMIS WMS-FORST: ['https://www.geoproxy.geoportal-th.de/geoproxy/services/forst/FORST']
+GeoMIS Offenlandbiotope: []
+GeoMIS-Suche Rettungspunkt: ['Rettungspunkte']
+GeoMIS-Suche Rettungspunkt URLs: ['https://www.geoproxy.geoportal-th.de/geoproxy/services/forst/FORST']
+GeoMIS-Suche Standort: ['Kindertagesstätten der Verwaltungsgemeinschaft Geratal/Plaue', 'WMS Bildung Thüringen', 'Kindertagesstätten der Landgemeinde Geratal', 'INSPIRE US WMS Thüringen', 'Schullandheime in Thüringen', 'Kindertagesstätten der Verwaltungsgemeinschaft Feldstein', 'Kindertagesstätten der Gemeinde Bad Klosterlausnitz und der beauftragenden Gemeinden', 'Kindertagesstätten der Gemeinde Werther', 'Kindertagesstätten der Stadt Zeulenroda-Triebes und der beauftragenden Gemeinden', 'Kindertagesstätten der Stadt Waltershausen', 'Kindertagesstätten der Verwaltungsgemeinschaft Wasungen-Amt Sand', 'Kindertagesstätten der Gemeinde Amt Wachsenburg', 'Spielplätze der Stadt Bad Frankenhausen/Kyffhäuser', 'Spielplätze der Verwaltungsgemeinschaft Triptis', 'Spielplätze der Verwaltungsgemeinschaft Hermsdorf', 'Kindertagesstätten der Verwaltungsgemeinschaft Fahner Höhe', 'Kindertagesstätten der Stadt Lucka', 'Spielplätze der Landgemeinde Uder und der beauftragenden Gemeinden', 'Spielplätze der Stadt Heilbad Heiligenstadt', 'Spielplätze der Gemeinde Sonnenstein', 'Spielplätze der Gemeinde Vogtei und der beauftragenden Gemeinden', 'Feuerwehren der Gemeinde Rosenthal am Rennsteig', 'Kindertagesstätten der Gemeinde Auengrund und der beauftragenden Gemeinden', 'Spielplätze der Stadt Bad Köstritz und der beauftragenden Gemeinden', 'Feuerwehren der Verwaltungsgemeinschaft Ershausen/Geismar']
+GeoMIS-Suche Standort URLs: ['https://www.geoproxy.geoportal-th.de/geoproxy/services/giz/INSPIREus', 'https://www.geoproxy.geoportal-th.de/geoproxy/services/giz/bildung', 'https://www.geoproxy.geoportal-th.de/geoproxy/services/kommunal/komm_wfs', 'https://www.geoproxy.geoportal-th.de/geoproxy/services/kommunal/komm_wms']
+forst_FORST: 31 Ebenen
+giz_INSPIREus: 7 Ebenen
+giz_bildung: 8 Ebenen
+kommunal_komm_wfs: 0 Ebenen
+kommunal_komm_wms: 20 Ebenen
 FORST: 1 Ebenen
 SCHUTZGEB: 12 Ebenen
-services: 600 Ebenen
 services WFS: 0 Typen, Treffer: []
 FORST WFS: 4 Typen, Treffer: []
 Rettungspunkte https://www.geoproxy.geoportal-th.de/geoproxy/services tmlnu:rettungspunkte: Fehler b'<ExceptionReport version="2.0.0" xmlns="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ows/1.1 http://schemas.opengi

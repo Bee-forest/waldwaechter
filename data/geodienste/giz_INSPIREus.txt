@@ -1,0 +1,8 @@
+# https://www.geoproxy.geoportal-th.de/geoproxy/services/giz/INSPIREus
+-	Utility and Governmental Services Thuringia	q=0	1.0-5000001.0
+US.AdministrationForHealth	Administration for Health	q=1	1.0-5000001.0
+US.HospitalService	Hospital Service	q=1	1.0-5000001.0
+US.AdministrationForSocialProtection	Administration for Social Protection	q=1	1.0-5000001.0
+US.AdministrationForEducation	Administration for Education	q=1	1.0-5000001.0
+US.Education	Education	q=1	1.0-5000001.0
+US.UtilityNetwork	Utility Network	q=1	1.0-5000001.0

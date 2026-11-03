@@ -40,7 +40,7 @@ export const KRONENSCHLUSS = [
   { b: 0.5, label: 'sehr räumig', text: 'Bäume stehen weitgehend frei' },
 ];
 
-// VORLÄUFIGE Richtwerte: laufender Zuwachs in Vfm/ha/Jahr nach Wuchskraft
+// Rückfall, wenn kein Alter bekannt ist (sonst Ertragstafel, siehe wuechsigkeit): laufender Zuwachs in Vfm/ha/Jahr
 export const ZUWACHS_RICHTWERT = {
   nadel: { schwach: 8, mittel: 11, stark: 15 },
   laub: { schwach: 5, mittel: 7, stark: 9 },
@@ -80,7 +80,7 @@ export function berechne(p) {
     bFaktor, hoechst, zuwachs10, ausZuwachs, kG, roh, entnahme, vol, baeumeHa,
     begrenzt: roh > hoechst,
     schritte: [
-      `Zehnjahreszuwachs: ${fmt(p.zuwachs)} Vfm/ha/Jahr × 10 = ${fmt(zuwachs10)} Vfm/ha`,
+      `Zehnjahreszuwachs: ${fmt(p.zuwachs, 1)} Vfm/ha/Jahr${p.bonitaet ? ` (Ertragstafel, ${p.bonitaet})` : ''} × 10 = ${fmt(zuwachs10)} Vfm/ha`,
       `Nutzungsanteil „${DIMENSION[p.dim].label}“: ${Math.round(NUTZUNGSANTEIL[p.dim] * 100)} % → ${fmt(ausZuwachs)} Fm/ha`,
       kG !== 1 ? `Korrektur Grundflächenleitkurve: × ${fmt(kG, 2)} → ${fmt(roh)} Fm/ha` : null,
       `Höchstmenge ${BAUMARTEN[p.gruppe].label}: ${HOECHSTMENGE[p.gruppe]} Fm/ha${bFaktor < 1 ? ` × ${fmt(bFaktor, 2)} (B° ${fmt(p.b, 1)} < 0,8) = ${fmt(hoechst)} Fm/ha` : ''}`,
@@ -92,25 +92,72 @@ export function berechne(p) {
 
 export const fmt = (v, d = 0) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });
 
-// ---------- Wüchsigkeit aus Oberhöhe und Alter ----------
-// VORLÄUFIG: Oberhöhe einer mittleren Bonität in Abhängigkeit vom Alter
-// (Chapman-Richards h = A · (1 − e^(−k·t))^p). Bitte durch die Oberhöhenfächer der
-// Nicke-Ertragstafeln (ET.xlsx) ersetzen.
-export const HOEHENKURVE = {
-  Fichte: [38, 0.022, 1.6], Tanne: [38, 0.018, 1.6], Douglasie: [48, 0.022, 1.5], Lärche: [36, 0.025, 1.4],
-  Kiefer: [30, 0.025, 1.4], Buche: [36, 0.018, 1.5], Eiche: [32, 0.017, 1.4], Ahorn: [32, 0.024, 1.4],
-  Esche: [32, 0.024, 1.4], Birke: [26, 0.035, 1.3], Erle: [28, 0.03, 1.3], Hainbuche: [24, 0.022, 1.4],
-};
-export function referenzHoehe(art, alter) {
-  const [A, k, p] = HOEHENKURVE[art] || (BAUMARTEN.nadel.arten.includes(art) ? HOEHENKURVE.Fichte : HOEHENKURVE.Buche);
-  return A * (1 - Math.exp(-k * alter)) ** p;
+// ---------- Wüchsigkeit und Zuwachs aus der Ertragstafel ----------
+// Oberhöhe (LiDAR) und Alter → Lage im Bonitätsfächer der Thüringer Ertragstafel → laufender Zuwachs.
+import { ERTRAGSTAFELN } from './ertragstafeln.js';
+
+// Baumarten ohne eigene Tafel in der Auswahl: Thüringer Zuordnung (FE-Vorgabe)
+const TAFEL_FUER = { Tanne: 'Fichte', Hainbuche: 'Buche', Ahorn: 'Esche' };
+// Tafeln ohne Oberhöhe: Mittelhöhe ≈ Oberhöhe − 1,5 m (Näherung, vgl. ho/hg in Kiefern- und Buchentafel)
+const HO_MINUS_HM = 1.5;
+
+export function tafelFuer(art) {
+  const key = ERTRAGSTAFELN[art] ? art : TAFEL_FUER[art];
+  return key ? { art: key, ...ERTRAGSTAFELN[key] } : null;
 }
 
-/** Wüchsigkeit: Verhältnis gemessene Oberhöhe zu Referenzhöhe gleichen Alters */
+/** Höhe und Zuwachs einer Tafel im Alter t (linear interpoliert, außerhalb der Tafel fortgeschrieben bzw. gehalten) */
+function zeile(rows, t) {
+  if (t <= rows[0][0]) {
+    const [a0, h0, z0] = rows[0], [a1, h1] = rows[1];
+    return { h: Math.max(0.5, h0 - ((h1 - h0) / (a1 - a0)) * (a0 - t)), z: z0 };
+  }
+  const n = rows.length - 1;
+  if (t >= rows[n][0]) {
+    const [a0, h0] = rows[n - 1], [a1, h1, z1] = rows[n];
+    return { h: h1 + ((h1 - h0) / (a1 - a0)) * Math.min(t - a1, 20), z: z1 };
+  }
+  for (let i = 0; i < n; i++) {
+    const [a0, h0, z0] = rows[i], [a1, h1, z1] = rows[i + 1];
+    if (t >= a0 && t <= a1) { const f = (t - a0) / (a1 - a0); return { h: h0 + f * (h1 - h0), z: z0 + f * (z1 - z0) }; }
+  }
+}
+
+/**
+ * Wüchsigkeit eines Bestands aus Alter und gemessener Oberhöhe.
+ * → { klasse, zuwachs (Vfm/ha/a), bonitaet (Text), lage (0 = beste Tafel … n−1 = schwächste), hTafel, quelle, … }
+ */
 export function wuechsigkeit(art, alter, oberhoehe) {
-  if (!(alter > 0) || !(oberhoehe > 0)) return null;
-  const ref = referenzHoehe(art, alter);
-  const v = oberhoehe / ref;
-  const klasse = v >= 1.12 ? 'stark' : v <= 0.88 ? 'schwach' : 'mittel';
-  return { ref, verhaeltnis: v, klasse };
+  const tafel = tafelFuer(art);
+  if (!tafel || !(alter > 0)) return null;
+  const werte = tafel.t.map((x) => ({ n: x.n, ...zeile(x.r, alter) })).sort((a, b) => b.h - a.h);
+  const mitte = werte[Math.floor((werte.length - 1) / 2)];
+  const mitteH = werte.length % 2 ? mitte.h : (mitte.h + werte[werte.length / 2].h) / 2;
+  const basis = { tafel, werte, quelle: tafel.quelle, zuwachsArt: tafel.zuwachs, bonName: tafel.bon };
+  if (!(oberhoehe > 0)) {
+    // ohne Höhenmessung: mittlere Bonität der Tafel
+    const z = werte.length % 2 ? mitte.z : (mitte.z + werte[werte.length / 2].z) / 2;
+    return { ...basis, klasse: 'mittel', zuwachs: z, bonitaet: `mittlere ${tafel.bon} (angenommen)`, gemessen: false };
+  }
+  const H = tafel.hoehe === 'hm' ? oberhoehe - HO_MINUS_HM : oberhoehe;
+  let lage, z, bonitaet;
+  if (H >= werte[0].h) {
+    lage = 0; z = werte[0].z; bonitaet = `besser als ${werte[0].n}`;
+  } else if (H <= werte[werte.length - 1].h) {
+    const w = werte[werte.length - 1];
+    lage = werte.length - 1; z = w.z * Math.max(0.3, H / w.h); bonitaet = `schwächer als ${w.n}`;
+  } else {
+    const i = werte.findIndex((w, k) => w.h >= H && werte[k + 1].h <= H);
+    const a = werte[i], b = werte[i + 1], f = (a.h - H) / (a.h - b.h);
+    lage = i + f; z = a.z + f * (b.z - a.z);
+    const na = Number(a.n.replace(/\D/g, '')), nb = Number(b.n.replace(/\D/g, ''));
+    bonitaet = /^\D?\d+$/.test(a.n) && /^\D?\d+$/.test(b.n)
+      ? `${a.n.replace(/\d+/, '')}${Math.round(na + f * (nb - na))}`
+      : f < 0.25 ? a.n : f > 0.75 ? b.n : `zwischen ${a.n} und ${b.n}`;
+  }
+  // Klasse nach Lage im Bonitätsfächer: oberes, mittleres, unteres Drittel
+  const verhaeltnis = H / mitteH;
+  const pos = H > werte[0].h ? -1 : H < werte[werte.length - 1].h ? 2 : lage / (werte.length - 1);
+  const klasse = pos < 1 / 3 ? 'stark' : pos > 2 / 3 ? 'schwach' : 'mittel';
+  return { ...basis, klasse, zuwachs: z, bonitaet, lage, hTafel: H, hMitte: mitteH, verhaeltnis, gemessen: true, mittelhoehe: tafel.hoehe === 'hm' };
 }

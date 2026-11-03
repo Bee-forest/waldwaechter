@@ -264,15 +264,19 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       const oh = a.oberhoehe?.oberhoehe ?? null;
       const w = wuechsigkeit(f.art, alter, oh);
       const klasse = w?.klasse || 'mittel';
-      f.wuchs = klasse; f.zuwachs = ZUWACHS_RICHTWERT[f.gruppe][klasse]; f.wuchsQuelle = w ? 'lidar' : 'annahme';
+      f.wuchs = klasse;
+      f.zuwachs = w ? Math.round(w.zuwachs * 10) / 10 : ZUWACHS_RICHTWERT[f.gruppe][klasse];
+      f.wuchsQuelle = w?.gemessen ? 'lidar' : w ? 'tafel-mittel' : 'richtwert';
+      f.bonitaet = w?.bonitaet || null;
       title = 'Wie wüchsig ist der Bestand?';
-      help = 'Das berechnet die App für dich: aus der Oberhöhe (Laserscanning-Höhenmodell des Landes) und dem Alter (Waldverzeichnis von ThüringenForst).';
+      help = 'Das berechnet die App für dich: Oberhöhe (Laserscanning-Höhenmodell des Landes) und Alter (Waldverzeichnis von ThüringenForst) werden in der Ertragstafel eingeordnet.';
       const loading = a.loading;
+      const KL = { stark: 'Starkwüchsig', mittel: 'Mittelwüchsig', schwach: 'Schwachwüchsig' };
       content = [
         h('div', { class: 'auto-grid' },
           h('div', { class: 'auto-card' }, h('span', {}, 'Alter'),
-            alter != null ? h('strong', {}, `${alter} Jahre`) : h('strong', {}, loading ? '…' : 'unbekannt'),
-            a.bestand?.alter != null && f.alter == null ? h('small', {}, `Waldverzeichnis, Stand ${a.bestand.stichtag}: ${a.bestand.alterStichtag} J., hochgerechnet`) : h('small', {}, f.alter != null ? 'von dir geschätzt' : loading ? 'wird geladen' : 'nicht im Waldverzeichnis')),
+            h('strong', {}, alter != null ? `${alter} Jahre` : loading ? '…' : 'unbekannt'),
+            h('small', {}, f.alter != null ? 'von dir angegeben' : a.bestand?.alter != null ? `Waldverzeichnis, Stand ${a.bestand.stichtag}: ${a.bestand.alterStichtag} J., hochgerechnet` : loading ? 'wird geladen' : 'nicht im Waldverzeichnis')),
           h('div', { class: 'auto-card' }, h('span', {}, 'Oberhöhe'),
             h('strong', {}, oh != null ? `${fmt(oh, 1)} m` : loading ? '…' : 'folgt'),
             h('small', {}, oh != null ? `aus ${a.oberhoehe.zellen} Höhenzellen (LiDAR)` : 'Höhenmodell für diese Fläche noch nicht aufbereitet')),
@@ -281,13 +285,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: f.alter ?? '', onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; renderParams(); } })) : null,
         alter != null && !loading ? h('label', { class: 'q-own' }, 'Alter weicht ab? Hier anpassen (Jahre)',
           h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: alter, onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; renderParams(); } })) : null,
-        h('div', { class: `wuchs-result wuchs-${klasse}` },
+        loading ? null : h('div', { class: `wuchs-result wuchs-${klasse}` },
           h('span', {}, 'Wüchsigkeit'),
-          h('strong', {}, `${klasse[0].toUpperCase()}${klasse.slice(1)}wüchsig`),
-          h('small', {}, w ? `Oberhöhe ${fmt(oh, 1)} m statt ${fmt(w.ref, 1)} m bei mittlerem Wuchs im Alter ${alter} → ${fmt(w.verhaeltnis * 100)} %` : 'Vorläufig mittlerer Wuchs angenommen, bis die Oberhöhe aus dem Höhenmodell vorliegt.'),
-          h('small', {}, `Zuwachs ca. ${f.zuwachs} Vfm/ha/Jahr (Richtwert)`),
+          h('strong', {}, w?.gemessen ? `${KL[klasse]} · ${w.bonitaet}` : 'Mittelwüchsig (angenommen)'),
+          h('small', {}, w?.gemessen
+            ? `${w.mittelhoehe ? `Mittelhöhe ca. ${fmt(w.hTafel, 1)} m (aus Oberhöhe)` : `Oberhöhe ${fmt(oh, 1)} m`} im Alter ${alter} → ${w.bonName} ${w.bonitaet}`
+            : w ? 'Ohne Höhenmessung rechnet die App mit der mittleren Bonität der Ertragstafel.' : 'Ohne Alter lässt sich die Ertragstafel nicht nutzen – vorläufiger Richtwert.'),
+          h('small', {}, `Laufender Zuwachs laut Ertragstafel: ${fmt(f.zuwachs, 1)} Vfm/ha/Jahr${w ? ` (${w.zuwachsArt})` : ''}`),
         ),
-        h('p', { class: 'hint' }, 'Höhenkurven und Zuwachswerte sind vorläufig und werden durch die Ertragstafeln (Nicke) der Methode ersetzt.'),
+        w ? h('p', { class: 'hint' }, `Ertragstafel: ${w.quelle}${w.tafel.art !== f.art ? ` – für ${f.art} verwendet` : ''}. Quelle: Ertragstafelauszüge, Prof. Dr. A. Nicke, FH Schwarzburg.`) : null,
       ];
       canNext = !loading && f.zuwachs > 0;
     } else if (q === 'grundflaeche') {

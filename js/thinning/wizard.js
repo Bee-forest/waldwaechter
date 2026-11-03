@@ -6,7 +6,7 @@ import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox } from '../geo.js';
 import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
-import { BAUMARTEN, HOECHSTMENGE, DIMENSION, KRONENSCHLUSS, ZUWACHS_RICHTWERT, RASTER, rasterVorschlag, gruppeVon, fmt, wuechsigkeit } from './methode.js';
+import { BAUMARTEN, HOECHSTMENGE, DIMENSION, KRONENSCHLUSS, ZUWACHS_RICHTWERT, gruppeVon, fmt, wuechsigkeit } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
@@ -211,7 +211,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     return { art, gruppe: art ? gruppeVon(art) : null, dim, b: null, wuchs: null, zuwachs: null, gIst: null, gSoll: null, spacing: null, q: 0 };
   }
 
-  const QUESTIONS = ['art', 'dim', 'b', 'zuwachs', 'grundflaeche', 'raster', 'ergebnis'];
+  const QUESTIONS = ['art', 'dim', 'b', 'zuwachs', 'grundflaeche', 'ergebnis'];
 
   function renderParams() {
     drawSelection();
@@ -249,7 +249,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     } else if (q === 'dim') {
       title = 'Wie dick sind die meisten Bäume?';
       help = 'Gemessen in 1,3 m Höhe (Brusthöhe). Ohne Kluppe: Umfang mit dem Maßband messen.';
-      content = h('div', { class: 'q-cards' }, Object.entries(DIMENSION).map(([k, d]) => choice(f.dim === k, () => { f.dim = k; f.spacing = null; renderParams(); },
+      content = h('div', { class: 'q-cards' }, Object.entries(DIMENSION).map(([k, d]) => choice(f.dim === k, () => { f.dim = k; renderParams(); },
         [h('span', { class: `stem stem-${k}`, 'aria-hidden': 'true' }), h('span', { class: 'q-text' }, h('strong', {}, d.label[0].toUpperCase() + d.label.slice(1)), h('span', {}, `Durchmesser ${d.bhd}`), h('small', {}, d.umfang))])));
       canNext = !!f.dim;
     } else if (q === 'b') {
@@ -306,26 +306,23 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         ),
       );
       nextLabel = 'Weiter (oder ohne Messung)';
-    } else if (q === 'raster') {
-      f.spacing ??= rasterVorschlag(f.dim);
-      title = 'Wie weit sollen die Rasterpunkte auseinander liegen?';
-      help = 'An jedem Rasterpunkt entnimmst du die angezeigte Anzahl Bäume im Umkreis. Engere Raster bedeuten mehr Punkte mit weniger Bäumen.';
-      content = h('div', { class: 'q-cards' }, RASTER.map((r) => choice(f.spacing === r.m, () => { f.spacing = r.m; renderParams(); },
-        h('span', { class: 'q-text' }, h('strong', {}, `${r.m} × ${r.m} m${r.m === rasterVorschlag(f.dim) ? ' (empfohlen)' : ''}`), h('small', {}, r.text)))));
     } else {
       const plan = computePlanMethode(st.sel.ring, f);
       st.plan = plan;
-      const perPoint = plan.total / plan.points.length;
       title = 'Dein Eingriff';
-      help = `${BAUMARTEN[f.gruppe].label} (${f.art}), ${DIMENSION[f.dim].label}, B° ${fmt(f.b, 1)}, Raster ${f.spacing} m`;
+      help = `${BAUMARTEN[f.gruppe].label} (${f.art}), ${DIMENSION[f.dim].label}, B° ${fmt(f.b, 1)}`;
+      const bm = plan.jePunkt === 1 ? '1 Baum' : `${plan.jePunkt} Bäume`;
       content = [
         h('div', { class: 'preview' },
           h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.entnahmeFmHa)), h('span', {}, 'Fm/ha')),
           h('div', {}, h('span', { class: 'pv-n' }, plan.perHa), h('span', {}, 'Bäume/ha')),
-          h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
-          h('div', {}, h('span', { class: 'pv-n' }, fmt(perPoint, 1)), h('span', {}, 'Bäume je Punkt')),
+          h('div', {}, h('span', { class: 'pv-n' }, `${plan.abstand} m`), h('span', {}, 'Rasterabstand')),
+          h('div', {}, h('span', { class: 'pv-n' }, plan.jePunkt), h('span', {}, 'Bäume je Punkt')),
         ),
-        h('p', {}, `Auf ${formatHa(plan.areaHa)} entnimmst du insgesamt etwa ${plan.total} Bäume (${fmt(plan.entnahmeFm)} Fm) mit einem Durchmesser von ${DIMENSION[f.dim].bhd}. Das entspricht der Nutzung für ein Jahrzehnt.`),
+        h('div', { class: 'raster-rule' },
+          h('strong', {}, `Alle ${plan.abstand} m: ${bm} mit ${DIMENSION[f.dim].bhd} Durchmesser`),
+          h('small', {}, `Das Raster ergibt sich aus der Methode: Bei ${plan.perHa} Bäumen je Hektar steht jeder Rasterpunkt für eine Fläche von ${plan.abstand} × ${plan.abstand} m, in der ${bm} entnommen ${plan.jePunkt === 1 ? 'wird' : 'werden'}. Auch ohne App abschreitbar.`)),
+        h('p', {}, `Auf ${formatHa(plan.areaHa)} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume (ca. ${fmt(plan.entnahmeFm)} Fm) mit einem Durchmesser von ${DIMENSION[f.dim].bhd}. Das entspricht der Nutzung für ein Jahrzehnt.`),
         h('details', { class: 'calc' }, h('summary', {}, 'So wurde gerechnet'), h('ol', {}, plan.schritte.map((t) => h('li', {}, t)))),
       ];
       nextLabel = 'Raster auf die Karte legen';
@@ -390,9 +387,9 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
         h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume gesamt')),
         h('div', {}, h('span', { class: 'pv-n' }, plan.perHa), h('span', {}, 'Bäume je ha')),
-        h('div', {}, h('span', { class: 'pv-n' }, `${radius} m`), h('span', {}, 'Arbeitsradius je Punkt')),
+        h('div', {}, h('span', { class: 'pv-n' }, plan.jePunkt), h('span', {}, 'Bäume je Punkt')),
       ),
-      h('p', {}, `Jeder rote Punkt steht für eine Rasterzelle von ${st.params.spacing} × ${st.params.spacing} m. Die gestrichelte Linie zeigt die Laufreihenfolge.`),
+      h('p', {}, `Die Punkte liegen im Abstand von ${st.params.spacing} m, wie es die Methode vorgibt. An jedem Punkt entnimmst du ${plan.jePunkt === 1 ? '1 Baum' : `${plan.jePunkt} Bäume`} im Umkreis von etwa ${radius} m. Die gestrichelte Linie zeigt die Laufreihenfolge.`),
       h('p', { class: 'hint' }, 'Im Wald ist oft kein Netz. Speichere die Karte vorher, solange du noch Empfang hast.'),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn', onclick: () => { st.plan = null; go(1); } }, 'Angaben ändern'),

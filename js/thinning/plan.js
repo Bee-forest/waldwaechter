@@ -65,10 +65,10 @@ export const pointTotal = (pt) => pt.removals.reduce((s, r) => s + r.count, 0);
 
 export function computePlanMethode(ring, p) {
   const ha = areaHa(ring);
-  const grid = generateGrid(ring, p.spacing);
-  const n = grid.length;
   const r = berechne(p);
-  const total = Math.round(r.baeumeHa * ha);
+  const ra = r.raster;
+  p.spacing = ra ? ra.abstand : 20;           // Lage der Punkte folgt aus der Methode
+  const grid = ra ? generateGrid(ring, ra.abstand) : [];
   const d = DIMENSION[p.dim];
   const points = grid.map((at, i) => ({
     id: i + 1,
@@ -76,22 +76,24 @@ export function computePlanMethode(ring, p) {
     status: 'open',
     removals: [{
       species: p.art || (p.gruppe === 'nadel' ? 'Nadelholz' : 'Laubholz'),
-      // gleichmäßig verteilt, Summe bleibt exakt
-      count: Math.floor(((i + 1) * total) / n) - Math.floor((i * total) / n),
+      count: ra.jePunkt,
       dmin: d.dmin,
       dmax: d.dmax ?? 99,
       marked: 0,
-    }].filter((x) => x.count > 0),
+    }],
   }));
+  const total = points.length * (ra?.jePunkt || 0);
   return {
     methode: 'raster-2026',
     areaHa: ha,
     perHa: Math.round(r.baeumeHa),
+    jePunkt: ra?.jePunkt || 0,
+    abstand: ra?.abstand || null,
     total,
     entnahmeFmHa: r.entnahme,
-    entnahmeFm: r.entnahme * ha,
+    entnahmeFm: total * r.vol,
     schritte: r.schritte,
-    cellM2: p.spacing * p.spacing,
+    cellM2: ra ? ra.zelleM2 : 0,
     points,
     hint: d.hint,
   };

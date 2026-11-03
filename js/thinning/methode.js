@@ -51,13 +51,20 @@ export const BAUMVOLUMEN = {
   laub: { duenn: 0.2, mittel: 1.0, dick: 2.8 },
 };
 
-export const RASTER = [
-  { m: 15, text: 'enges Raster – für dünne, stammzahlreiche Bestände' },
-  { m: 20, text: 'Standard – für die meisten Bestände' },
-  { m: 25, text: 'weites Raster – für mittelstarke Bestände' },
-  { m: 30, text: 'sehr weit – für starke, stammzahlarme Bestände' },
-];
-export const rasterVorschlag = (dim) => ({ duenn: 15, mittel: 20, dick: 30 }[dim] || 20);
+// Raster: Die Lage der Punkte folgt aus der Methode. Jeder Rasterpunkt steht für eine
+// quadratische Zelle; in ihr wird eine feste Zahl Bäume entnommen. Damit gilt
+//   Abstand = √(10 000 m² × Bäume je Punkt ÷ Bäume je ha).
+// Grundregel ist 1 Baum je Punkt. Würde der Abstand dadurch kürzer als MIN_ABSTAND
+// (GPS-Genauigkeit, im Bestand abschreitbar), werden je Punkt mehr Bäume entnommen.
+export const MIN_ABSTAND = 10;   // m
+export function raster(baeumeHa) {
+  if (!(baeumeHa > 0)) return null;
+  let jePunkt = 1;
+  while (Math.sqrt((10000 * jePunkt) / baeumeHa) < MIN_ABSTAND) jePunkt++;
+  const exakt = Math.sqrt((10000 * jePunkt) / baeumeHa);
+  const abstand = Math.max(MIN_ABSTAND, Math.round(exakt));   // auf ganze Meter (Schrittmaß)
+  return { jePunkt, abstand, exakt, zelleM2: abstand * abstand };
+}
 
 export const gruppeVon = (art) => (BAUMARTEN.nadel.arten.includes(art) ? 'nadel' : 'laub');
 
@@ -76,8 +83,9 @@ export function berechne(p) {
   const entnahme = Math.min(hoechst, roh);                            // Fm/ha/Jahrzehnt
   const vol = BAUMVOLUMEN[p.gruppe][p.dim];
   const baeumeHa = entnahme / vol;
+  const ra = raster(baeumeHa);
   return {
-    bFaktor, hoechst, zuwachs10, ausZuwachs, kG, roh, entnahme, vol, baeumeHa,
+    bFaktor, hoechst, zuwachs10, ausZuwachs, kG, roh, entnahme, vol, baeumeHa, raster: ra,
     begrenzt: roh > hoechst,
     schritte: [
       `Zehnjahreszuwachs: ${fmt(p.zuwachs, 1)} Vfm/ha/Jahr${p.bonitaet ? ` (Ertragstafel, ${p.bonitaet})` : ''} × 10 = ${fmt(zuwachs10)} Vfm/ha`,
@@ -86,6 +94,7 @@ export function berechne(p) {
       `Höchstmenge ${BAUMARTEN[p.gruppe].label}: ${HOECHSTMENGE[p.gruppe]} Fm/ha${bFaktor < 1 ? ` × ${fmt(bFaktor, 2)} (B° ${fmt(p.b, 1)} < 0,8) = ${fmt(hoechst)} Fm/ha` : ''}`,
       `Eingriff: ${fmt(entnahme)} Fm/ha${roh > hoechst ? ' (durch Höchstmenge begrenzt)' : ''}`,
       `÷ ${fmt(vol, 2)} Fm je Baum (Richtwert ${DIMENSION[p.dim].label}) ≈ ${Math.round(baeumeHa)} Bäume/ha`,
+      ra ? `Raster: √(10 000 m² × ${ra.jePunkt} ${ra.jePunkt > 1 ? 'Bäume' : 'Baum'} je Punkt ÷ ${Math.round(baeumeHa)} Bäume/ha) = ${fmt(ra.exakt, 1)} m → ${ra.abstand} × ${ra.abstand} m${ra.jePunkt > 1 ? ` (mindestens ${MIN_ABSTAND} m Abstand, daher ${ra.jePunkt} Bäume je Punkt)` : ''}` : null,
     ].filter(Boolean),
   };
 }

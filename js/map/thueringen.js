@@ -153,7 +153,7 @@ function parseOne(el) {
     gemeinde: gemeinde || '–',
     ortsteil: gemarkung || '',
     lage: val(el, 'lagebeztxt'),
-    nutzungText: nutzung,
+    nutzungText: umlaute(nutzung),
     nutzung: categorize(nutzung),
     flaecheAmtlich: flaeche,
     ring,
@@ -175,6 +175,11 @@ export function nutzungText(raw = '') {
     .map(([a, n]) => (a ? `${n} ${a >= 10000 ? `${(a / 10000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} ha` : `${Math.round(a).toLocaleString('de-DE')} m²`}` : n))
     .join(', ');
 }
+
+/** ALKIS schreibt ohne Umlaute (z. B. „Wohnbauflaeche“) – für die Anzeige korrigieren */
+export const umlaute = (t = '') => t.replace(/flaeche/gi, 'fläche').replace(/Gewaesser/g, 'Gewässer').replace(/Gehoelz/g, 'Gehölz')
+  .replace(/Gruen/g, 'Grün').replace(/gruen/g, 'grün').replace(/Strasse/g, 'Straße').replace(/strasse/g, 'straße').replace(/Fliess/g, 'Fließ')
+  .replace(/Sumpf/g, 'Sumpf').replace(/Oedland/g, 'Ödland').replace(/Unlandflaeche/g, 'Unlandfläche');
 
 export function categorize(t = '') {
   t = String(t).split(',')[0]; // größte Nutzung zuerst
@@ -200,7 +205,7 @@ function fromCompact(c) {
   for (let i = 0; i + 1 < c.r.length; i += 2) ring.push([c.r[i], c.r[i + 1]]);
   return {
     id: c.i, source: 'alkis', gemarkung: c.g || '–', flur: c.f || '–', nr: c.n, gemeinde: c.m || '–', ortsteil: c.g || '',
-    lage: c.l, nutzungText: c.t, nutzung: categorize(c.t), flaecheAmtlich: c.a || null, ring, standort: null, features: [],
+    lage: c.l, nutzungText: umlaute(c.t), nutzung: categorize(c.t), flaecheAmtlich: c.a || null, ring, standort: null, features: [],
   };
 }
 

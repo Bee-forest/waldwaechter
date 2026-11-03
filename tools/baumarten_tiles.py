@@ -70,7 +70,20 @@ def main():
             alter = round(float(rec.get('ALTER'))) if rec.get('ALTER') not in (None, '') else None
         except (TypeError, ValueError):
             alter = None
-        item = {'b': rec.get('BA_KURZ'), 't': rec.get('KLARTEXT'), 'a': alter, 'j': jahr, 'r': rings}
+        def txt(v):
+            if v is None:
+                return ''
+            if isinstance(v, float) and v.is_integer():
+                return str(int(v))
+            return str(v).strip()
+        # Beschriftung wie im QGIS-Stil von ThüringenForst: ABT || ' ' || UABT || TFL, z. B. „1234 a1“
+        kennung = f"{txt(rec.get('ABT'))} {txt(rec.get('UABT'))}{txt(rec.get('TFL'))}".strip()
+        try:
+            flaeche = round(float(rec.get('AREA'))) if rec.get('AREA') not in (None, '') else None
+        except (TypeError, ValueError):
+            flaeche = None
+        item = {'b': rec.get('BA_KURZ'), 't': rec.get('KLARTEXT'), 'a': alter, 'j': jahr, 'k': kennung,
+                'f': txt(rec.get('FOA')), 'v': txt(rec.get('REV')), 'q': flaeche, 'r': rings}
         lat1, lon1 = from_utm(bb[0], bb[1]); lat2, lon2 = from_utm(bb[2], bb[3])
         for x in range(lon2x(min(lon1, lon2)), lon2x(max(lon1, lon2)) + 1):
             for y in range(lat2y(max(lat1, lat2)), lat2y(min(lat1, lat2)) + 1):

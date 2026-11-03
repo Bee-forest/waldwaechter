@@ -9,6 +9,7 @@
 
 import { parcels as demoParcels, stands, rescuePoints, gemarkungen, DEMO_CENTER } from './demo-data.js';
 import { pointInPolygon, inPolys, polysOf, distance } from '../geo.js';
+import { bestaendeImFlurstueck } from '../map/bestand.js';
 import { wfsParcelAt, wfsSearch, localParcelAt, localSearch } from '../map/thueringen.js';
 import { store } from '../store.js';
 
@@ -77,7 +78,15 @@ export const source = {
     return out;
   },
 
-  async standsForParcels(ids) { return demoOn() ? stands.filter((s) => ids.includes(s.parcelId)) : []; },
+  async standsForParcels(ids) {
+    const demo = demoOn() ? stands.filter((s) => ids.includes(s.parcelId)) : [];
+    const real = [];
+    for (const id of ids) {
+      const p = cache.get(id) || stored().find((x) => x.id === id);
+      if (p?.source === 'alkis') real.push(...(await bestaendeImFlurstueck(p).catch(() => [])));
+    }
+    return [...demo, ...real];
+  },
 
   /** Rettungspunkte nur aus den Demo-Daten – für echte Flächen bewusst keine erfundenen Punkte */
   async nearestRescuePoints(latlng, n = 2, parcel) {

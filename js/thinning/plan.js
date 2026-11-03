@@ -1,5 +1,5 @@
 // Rechenkern der Durchforstungsmethode (ohne UI, gut testbar).
-import { areaHa, generateGrid, polysOf, areaM2Polys } from '../geo.js';
+import { areaHa, generateGrid, inPolys, polysOf, areaM2Polys } from '../geo.js';
 import { bestimme, DIMENSION, RASTER_M, amPunkt, QUALITAET_TEXT, AUSWAHL_TEXT } from './methode.js';
 
 export const SPECIES = ['Fichte', 'Kiefer', 'Lärche', 'Douglasie', 'Tanne', 'Buche', 'Eiche', 'Bergahorn', 'Esche', 'Birke', 'Erle'];
@@ -71,8 +71,12 @@ export function computePlanMethode(sel, p) {
   // sel: { ring, polys?, flaecheHa? } – bei Flurstücken amtliche Fläche und vollständige Geometrie
   const sh = Array.isArray(sel) ? { ring: sel } : sel;
   const polys = polysOf(sh);
-  const geoHa = areaM2Polys(polys) / 10000;
-  const ha = sh.flaecheHa ?? geoHa;
+  // Bestand aus dem Waldverzeichnis: nur der Teil innerhalb des Flurstücks (Fläche per 5-m-Stichprobe)
+  const clip = sh.clip?.length ? sh.clip : null;
+  const geoHa = clip
+    ? generateGrid(sh.ring, 5, { polys }).filter((pt) => inPolys(pt, clip)).length * 25 / 10000
+    : areaM2Polys(polys) / 10000;
+  const ha = clip ? geoHa : sh.flaecheHa ?? geoHa;
   const r = bestimme(p);
   p.spacing = RASTER_M;
   // Rasterlage bei jedem Eingriff zufällig neu (Versatz 0–25 m, Startecke zufällig), damit der Bestand
@@ -80,6 +84,7 @@ export function computePlanMethode(sel, p) {
   p.eingriffNr ??= 1;
   p.lage ??= zufallsLage();
   let grid = generateGrid(sh.ring, RASTER_M, { offset: p.lage.offset, polys });
+  if (clip) grid = grid.filter((pt) => inPolys(pt, clip));
   if (p.lage.umkehren) grid = grid.reverse();
   // „in jedem n-ten Punkt“: fortlaufend über alle Punkte mitzählen
   const points = grid.map((at, i) => ({
@@ -95,7 +100,7 @@ export function computePlanMethode(sel, p) {
   return {
     methode: 'raster-2026-11',
     areaHa: ha,
-    areaAmtlich: sh.flaecheHa != null,
+    areaAmtlich: !clip && sh.flaecheHa != null,
     areaGeoHa: geoHa,
     stufe: r.stufe,
     eingriffe: { ...r.eingriffe, nr: p.eingriffNr },

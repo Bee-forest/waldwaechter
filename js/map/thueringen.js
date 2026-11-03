@@ -1,6 +1,7 @@
 // Amtliche Geodienste des Freistaats Thüringen (Geoproxy, GDI-Th).
 // Lizenz: Datenlizenz Deutschland – Namensnennung 2.0 bzw. CC BY 4.0, Quelle „© GDI-Th“.
 /* global L */
+import { createBaumartenLayer } from './baumartenkarte.js';
 import { pointInPolygon, inPolys, polysOf, areaHa, areaM2Polys, toUTM32, fromUTM32, generateGrid } from '../geo.js';
 
 export const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
@@ -342,6 +343,7 @@ export function featureInfoUrl([lat, lng]) {
 export const FORST = `${GP}/forst/FORST`; // ThüringenForst (Maßstab bis 1:150.000 → ab Zoom 12)
 export const OVERLAYS = [
   { key: 'rettung', label: 'Rettungspunkte', group: 'Sicherheit', url: FORST, layers: 'rettungspunkte', minZoom: 11 },
+  { key: 'baumarten', label: 'Baumarten und Alter (Waldverzeichnis)', group: 'Wald', vector: true, minZoom: 13 },
   { key: 'standort', label: 'Standortkarte (Forst)', group: 'Wald', url: FORST, layers: 'standort_fl', opacity: 0.6, minZoom: 12 },
   { key: 'waldfunktionen', label: 'Waldfunktionen', group: 'Wald', url: FORST, layers: 'bodenschutzfunktion,erholungswald,erholungsfunktion,klimaschutzfunktion,immissionsschutzfunktion,laermschutzfunktion,sichtschutzfunktion', opacity: 0.55, minZoom: 12 },
   { key: 'schaden', label: 'Waldschadflächen', group: 'Wald', url: FORST, layers: 'waldschaeden', opacity: 0.65, minZoom: 12 },
@@ -388,17 +390,20 @@ export const LAYER_INFO = {
   schutz: { title: 'Schutzgebiete (NSG, LSG)', text: 'Naturschutzgebiete (NSG) haben strenge Regeln, oft mit Einschränkungen für Holzernte und Wegebau. Landschaftsschutzgebiete (LSG) schützen das Landschaftsbild, ordnungsgemäße Forstwirtschaft ist meist erlaubt. Vor größeren Maßnahmen die Schutzgebietsverordnung prüfen oder die Untere Naturschutzbehörde fragen.' },
   natura: { title: 'Natura 2000', text: 'Europäisches Schutzgebietsnetz aus FFH-Gebieten (seltene Lebensräume und Arten) und Vogelschutzgebieten. Es gilt ein Verschlechterungsverbot: Der Zustand von Lebensräumen und Arten darf sich durch Maßnahmen nicht verschlechtern. Für viele Gebiete gibt es Managementpläne.' },
   lrt: { title: 'Waldlebensraumtypen (LRT)', text: 'Nach der FFH-Richtlinie geschützte Waldgesellschaften innerhalb von FFH-Gebieten, z. B. Hainsimsen-Buchenwald (9110) oder Schlucht- und Hangmischwald (9180). Die typischen Baumarten sollen erhalten bleiben – also z. B. keine Umwandlung in Nadelholz.' },
+  baumarten: { title: 'Baumarten und Alter', text: 'Baumarten- und Altersklassenkarte aus dem Thüringer Waldverzeichnis von ThüringenForst. Jede Fläche zeigt die führende Baumart und ihr Alter zum Stichtag, beschriftet mit Abteilung, Unterabteilung und Teilfläche. Die App rechnet das Alter auf heute hoch. Erscheint ab Zoomstufe 13.', farben: true },
   waldbiotope: { title: 'Waldbiotope', text: 'Besonders wertvolle Bereiche im Wald aus der Waldbiotopkartierung, z. B. Quellbereiche, Blockschutthalden, naturnahe Bachläufe oder alte Eichenwälder. Viele sind gesetzlich geschützt (§ 30 BNatSchG) und dürfen nicht beeinträchtigt werden.' },
   biotope: { title: 'Offenlandbiotope', text: 'Kartierte wertvolle Flächen außerhalb des Waldes, z. B. Magerrasen, Feuchtwiesen, Hecken und Streuobstwiesen. Gesetzlich geschützte Biotope dürfen nicht zerstört oder erheblich beeinträchtigt werden.' },
 };
 
 export function legendUrls(key) {
   const info = LAYER_INFO[key];
+  if (info?.farben) return [];
   const pairs = info?.legend || (() => { const o = OVERLAYS.find((x) => x.key === key); return o ? o.layers.split(',').map((l) => [o.url, l]) : []; })();
   return pairs.map(([url, layer]) => ({ layer, src: `${url}?${new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetLegendGraphic', FORMAT: 'image/png', LAYER: layer, SLD_VERSION: '1.1.0' })}` }));
 }
 
 export function overlayLayer(o) {
+  if (o.vector && o.key === 'baumarten') return createBaumartenLayer({ minZoom: o.minZoom });
   return wms(o.url, o.layers, { opacity: o.opacity ?? 0.85, minZoom: o.minZoom ?? 10 });
 }
 

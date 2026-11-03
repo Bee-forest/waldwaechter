@@ -35,7 +35,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   const existing = measureId ? store.get().measures.find((m) => m.id === measureId) : null;
   if (existing?.thinning) {
     const t = existing.thinning;
-    st.sel = { ring: t.ring, polys: t.polys, flaecheHa: t.flaecheHa, parcel: t.parcel, label: t.label, parcelId: existing.parcelId };
+    st.sel = { ring: t.ring, polys: t.polys, clip: t.clip, flaecheHa: t.flaecheHa, parcel: t.parcel, label: t.label, parcelId: existing.parcelId };
     st.mode = t.mode || 'parcel';
     st.params = t.params || null;
     st.plan = t.plan || null;
@@ -80,7 +80,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     );
   }
   const selPolys = () => polysOf(st.sel);
-  const selHa = () => st.sel?.flaecheHa ?? areaM2Polys(selPolys()) / 10000;
+  const selHa = () => st.sel?.stand?.anteilHa ?? st.sel?.flaecheHa ?? areaM2Polys(selPolys()) / 10000;
 
   // ---------- Grundgerüst ----------
   const stepper = h('ol', { class: 'stepper', 'aria-label': 'Fortschritt' });
@@ -198,14 +198,14 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         : h('p', { class: 'muted' }, 'Du hast noch keine eigenen Flächen gespeichert.'));
     } else if (st.mode === 'stand') {
       const stands = myStands.length ? myStands : [];
-      stands.forEach((s) => ctxLayer.addLayer(L.polygon(s.ring, { color: '#2F7D3A', weight: 2, fillColor: '#2F7D3A', fillOpacity: 0.22 })
+      stands.forEach((s) => ctxLayer.addLayer(L.polygon(s.polys || s.ring, { color: '#2F7D3A', weight: 2, fillColor: '#2F7D3A', fillOpacity: 0.22 })
         .bindTooltip(`${s.name}: ${s.species}`, { direction: 'center', className: 'stand-tip' })
         .on('click', (e) => { L.DomEvent.stop(e); pickStand(s); })));
       content.append(stands.length
         ? h('ul', { class: 'pick-list' }, stands.map((s) => h('li', {}, h('button', {
             class: 'pick', 'aria-pressed': String(st.sel?.stand?.id === s.id), onclick: () => pickStand(s),
-          }, h('strong', {}, `${s.name}: ${s.label}`), h('span', {}, `${s.species}${s.mix ? ` mit ${s.mix}` : ''}, ${s.age} Jahre, ${formatHa(areaHa(s.ring))}`)))))
-        : h('p', { class: 'muted' }, 'Für deine Flächen ist keine Baumartenkarte hinterlegt. Wähle das ganze Flurstück oder zeichne den Bestand ein.'));
+          }, h('strong', {}, `${s.name}: ${s.label}`), h('span', {}, `${s.species}${s.mix ? ` mit ${s.mix}` : ''}${s.age != null ? `, heute ca. ${s.age} Jahre` : ''}, ${s.anteilHa != null ? `ca. ${formatHa(s.anteilHa)} im Flurstück` : formatHa(areaHa(s.ring))}`)))))
+        : h('p', { class: 'muted' }, 'Für deine Flächen ist im Waldverzeichnis kein Bestand hinterlegt. Wähle das ganze Flurstück oder zeichne den Bestand ein.'));
     } else {
       content.append(
         h('p', {}, 'Tippe in der Karte nacheinander auf die Eckpunkte des Bestands.'),
@@ -257,7 +257,9 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   function pickStand(s) {
-    st.sel = { ring: s.ring, label: `${s.name}: ${s.label}`, parcelId: s.parcelId, stand: s };
+    const pc = byId[s.parcelId];
+    st.sel = { ring: s.ring, polys: s.polys, clip: s.clip, label: `${s.name}: ${s.label}${pc ? ` (Flurstück ${pc.nr}, ${pc.gemarkung})` : ''}`, parcelId: s.parcelId, stand: s,
+      parcel: pc ? { gemarkung: pc.gemarkung, flur: pc.flur, nr: pc.nr, gemeinde: pc.gemeinde, lage: pc.lage, nutzungText: pc.nutzungText, id: pc.id } : null };
     st.params = null;
     renderSelect();
   }
@@ -272,7 +274,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   // ---------- Schritt 2: Angaben – eine Frage nach der anderen (neue Methode) ----------
   function defaultParams() {
     const s = st.sel?.stand;
-    const art = s?.species || '';
+    const art = s?.info?.art || s?.species || '';
     const dim = s ? (s.dg < 25 ? 'duenn' : s.dg < 50 ? 'mittel' : 'dick') : null;
     return { v: 3, art, gruppe: art ? gruppeVon(art) : null, dim, b: null, hoKlasse: null, alter: null, spacing: null, q: 0 };
   }
@@ -471,7 +473,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         m = { id: st.measureId, type: 'durchforstung', parcelId: st.sel.parcelId, date: Date.now(), note: '', details: {}, status: 'arbeit', createdAt: Date.now() };
         s.measures.push(m);
       }
-      m.thinning = { ...(m.thinning || {}), mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
+      m.thinning = { ...(m.thinning || {}), mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
       Object.assign(m, patch);
     });
   }
@@ -528,7 +530,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const abstand = Math.max(1, ei.abstandJahre || Math.round(10 / (ei.anzahl || 1)));
     const when = new Date(); when.setFullYear(when.getFullYear() + abstand); when.setHours(9, 0, 0, 0);
     const serie = cur.thinning?.serie || cur.id;
-    const base = { mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, vorgaenger: cur.id, serie };
+    const base = { mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, vorgaenger: cur.id, serie };
     let thinning, note;
     if (ei.nr < ei.anzahl) {
       const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0 };

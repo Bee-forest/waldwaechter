@@ -674,3 +674,7 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .date-field { display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); margin: 6px 0; }
 .date-field input { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line, #cfd8cc); background: var(--surface); color: var(--ink); }
 .vsp-termine { display: grid; gap: 2px; }
+
+.legend-swatches { list-style: none; padding: 0; margin: 0 0 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 13px; }
+.legend-swatches li { display: flex; align-items: center; gap: 6px; }
+.legend-swatches .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.25); flex: none; }

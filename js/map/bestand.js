@@ -23,6 +23,7 @@ function decodeRing(q) {
   return ring;
 }
 
+export const bestandsKachel = (x, y) => tile(x, y);
 async function tile(x, y) {
   const k = `${x}/${y}`;
   if (!cache.has(k)) {
@@ -37,7 +38,7 @@ function inside(pt, rings) { let c = false; for (const r of rings) if (pointInPo
 const heute = () => new Date().getFullYear();
 function info(it) {
   const alterHeute = it.a != null && it.j ? it.a + (heute() - it.j) : null;
-  return { kurz: it.b, text: it.t, art: artVonKurz(it.b, it.t), alterStichtag: it.a, stichtag: it.j, alter: alterHeute };
+  return { kurz: it.b, text: it.t, art: artVonKurz(it.b, it.t), alterStichtag: it.a, stichtag: it.j, alter: alterHeute, kennung: it.k || null, forstamt: it.f || null, revier: it.v || null, flaecheM2: it.q || null };
 }
 
 /** Bestand am Punkt */
@@ -110,4 +111,26 @@ export async function oberhoeheFlaeche(ring, polys = null) {
   if (inRing.length < 5) return null;
   const mean = inRing.reduce((s, h) => s + h, 0) / inRing.length;
   return { oberhoehe: mean, zellen: inRing.length };
+}
+
+/** Alle Bestände (Waldverzeichnis), die ein Flurstück berühren – für die Auswahl „Bestand“ */
+export async function bestaendeImFlurstueck(p) {
+  const polys = p.polys?.length ? p.polys : [[p.ring]];
+  const pts = generateGrid(p.ring, 10, { polys }).slice(0, 1500);
+  const groups = new Map();
+  for (const pt of pts) {
+    const list = await tile(tX(pt[1]), tY(pt[0]));
+    const it = list.find((x) => inside(pt, x.rings));
+    if (!it) continue;
+    const key = `${it.k || ''}|${it.r[0].slice(0, 4).join(',')}`;
+    const g = groups.get(key) || { it, n: 0 };
+    g.n++; groups.set(key, g);
+  }
+  return [...groups.values()].filter((g) => g.n >= 3).sort((a, b) => b.n - a.n).map(({ it, n }, i) => {
+    const inf = info(it);
+    return {
+      id: `${p.id}|${it.k || i}|${i}`, parcelId: p.id, name: it.k ? `Abt. ${it.k}` : `Bestand ${i + 1}`, label: it.t || inf.art || 'Bestand',
+      species: inf.art || it.t, age: inf.alter, ring: it.rings[0], polys: [it.rings], clip: polys, anteilHa: (n * 100) / 10000, info: inf,
+    };
+  });
 }

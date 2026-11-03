@@ -9,6 +9,7 @@ import { WANZE_SVG, say } from './mascot.js';
 import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 import { besonderheiten } from './map/besonderheiten.js';
+import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt } from './map/bestand.js';
 import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
@@ -593,6 +594,8 @@ function openLegend(key) {
     body: h('div', { class: 'legend-box' },
       h('p', {}, info.text),
       legends.length ? h('p', { class: 'sheet-label' }, 'Legende') : null,
+      info.farben ? h('ul', { class: 'legend-swatches' }, Object.entries(BAUMARTEN_FARBEN).map(([t, c]) => h('li', {}, h('span', { class: 'swatch', style: `background:${c}` }), t))) : null,
+      info.farben ? h('p', { class: 'hint' }, 'Farben nach dem QGIS-Stil von ThüringenForst. Quelle: Thüringer Waldverzeichnis, © GDI-Th, dl-de/by-2-0.') : null,
       legends.map((l) => h('img', { class: 'legend-img', src: l.src, alt: `Legende ${l.layer}`, loading: 'lazy',
         onerror: (e) => { e.target.replaceWith(h('p', { class: 'hint' }, 'Legende gerade nicht abrufbar.')); } })),
     ),

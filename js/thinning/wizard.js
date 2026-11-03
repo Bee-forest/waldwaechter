@@ -4,7 +4,6 @@ import { h, fill, icon, dialog, confirmDialog, toast } from '../ui.js';
 import { store, uid } from '../store.js';
 import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
-import { OVERLAYS, overlayLayer } from '../map/thueringen.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox } from '../geo.js';
 import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
 import { BAUMARTEN, HOECHSTMENGE, DIMENSION, KRONENSCHLUSS, ZUWACHS_RICHTWERT, RASTER, rasterVorschlag, gruppeVon, fmt } from './methode.js';
@@ -49,8 +48,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   const mapEl = h('div', { class: 'thin-map' });
   // Kartenleiste wie auf der Startseite: OSM/Luftbild und Standortkarte (ohne weitere Layer)
   const baseSwitch = h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Basiskarte' });
-  const standortBtn = h('button', { class: 'map-chip', 'aria-pressed': 'false', onclick: () => toggleStandort() }, h('span', { class: 'dot' }), 'Standort');
-  const mapTools = h('div', { class: 'thin-map-tools' }, baseSwitch, standortBtn);
+  const locateBtn = h('button', { class: 'fab small', 'aria-label': 'Mein Standort', title: 'Mein Standort', html: icon.locate, onclick: () => locateMe() });
+  const mapTools = h('div', { class: 'thin-map-tools' }, baseSwitch, locateBtn);
   const panel = h('div', { class: 'thin-panel' });
   const page = h('section', { class: 'page thin', role: 'dialog', 'aria-label': 'Durchforstung' },
     h('header', { class: 'page-head' },
@@ -72,13 +71,24 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     onclick: () => { base.setBasemap(k); store.update((x) => { x.settings.basemap = k; }); renderBaseSwitch(); },
   }, l)));
   renderBaseSwitch();
-  const standortLayer = overlayLayer(OVERLAYS.find((o) => o.key === 'standort'));
-  function toggleStandort(on = !map.hasLayer(standortLayer)) {
-    if (on) standortLayer.addTo(map); else map.removeLayer(standortLayer);
-    standortBtn.setAttribute('aria-pressed', String(on));
-    store.update((x) => { x.settings.thinStandort = on; });
+  // Ortung: eigenen Standort anzeigen (im Bestand folgt die Karte dann wieder dem GPS)
+  let meMarker = null, meAcc = null;
+  function locateMe() {
+    if (st.step === 3 && lastPos) { follow = true; map.panTo(lastPos.latlng); renderHud(); return; }
+    if (!('geolocation' in navigator)) { toast('Dein Gerät kann keinen Standort bestimmen.'); return; }
+    locateBtn.classList.add('busy');
+    navigator.geolocation.getCurrentPosition((pos) => {
+      locateBtn.classList.remove('busy');
+      const ll = [pos.coords.latitude, pos.coords.longitude];
+      meMarker?.remove(); meAcc?.remove();
+      meAcc = L.circle(ll, { radius: pos.coords.accuracy, color: '#1F74B8', weight: 1, fillOpacity: 0.1, interactive: false }).addTo(map);
+      meMarker = L.marker(ll, { interactive: false, zIndexOffset: 1000, icon: L.divIcon({ className: 'me', html: '<span class="me-dot"></span>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+      map.flyTo(ll, Math.max(map.getZoom(), 17));
+    }, (err) => {
+      locateBtn.classList.remove('busy');
+      toast(err.code === 1 ? 'Standort freigeben: in den Browser-Einstellungen für diese Seite erlauben.' : 'Standort gerade nicht verfügbar. Versuch es unter freiem Himmel erneut.');
+    }, { enableHighAccuracy: true, timeout: 15000 });
   }
-  if (settings.thinStandort) toggleStandort(true);
   const ctxLayer = L.layerGroup().addTo(map);
   const selLayer = L.layerGroup().addTo(map);
   const gridLayer = L.layerGroup().addTo(map);

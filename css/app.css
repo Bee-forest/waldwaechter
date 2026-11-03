@@ -612,3 +612,6 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 
 .hide-numbers .pt-tip { display: none; }
 .leaflet-tooltip-pane.hide-numbers .pt-tip { display: none; }
+
+.fab.busy { animation: pulse-btn 1s ease-in-out infinite; }
+@keyframes pulse-btn { 50% { opacity: .5; } }

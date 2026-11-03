@@ -69,6 +69,13 @@ export const RASTER_M = 25;          // m, 16 Punkte/ha
 export const RAND_M = 12.5;          // Start 10–15 m vom Rand
 export const KREIS_M = 10;           // Entnahmekreis
 export const AUSWEICHEN_M = 15;      // höchstens so weit ausweichen
+// Viele Bäume an einem Punkt reißen kleine Lücken. Ab ENG_AB Bäumen je Punkt (je Eingriff) wird das
+// Raster auf die halbe Weite verdichtet: 12,5 m (64 Punkte/ha), je Punkt ein Viertel der Bäume –
+// gleiche Menge je Hektar, aber gleichmäßiger über die Fläche verteilt.
+export const ENG_AB = 4;
+export const RASTER_ENG_M = 12.5;
+export const KREIS_ENG_M = 6;
+export const AUSWEICHEN_ENG_M = 8;
 export const RANG = ['Fichte', 'Lärche', 'Buche', 'Kiefer', 'Eiche'];
 export const AUSWAHL_TEXT = 'Im Kreis zuerst Fichte nehmen, dann Lärche, Buche, Kiefer, zuletzt Eiche (andere Arten wie Buche). Einen Baum über wertvollem Unterstand bevorzugen, sonst den nächststehenden. Steht kein passender Baum im Kreis, bis 15 m ausweichen. Gibt es auch dort keinen Baum der verlangten Stärkeklasse, den Baum entnehmen, der ihr am ähnlichsten ist (Durchmesser am nächsten an der Klasse).';
 export const AUSWEICH_TEXT = 'Kein Baum der verlangten Stärke bis 15 m? Dann den Baum nehmen, der ihr am ähnlichsten ist – also den mit dem Durchmesser, der am nächsten an der Klasse liegt.';
@@ -142,14 +149,19 @@ export function bestimme({ art, dim, b, hoKlasse, ho }) {
   const ev = entnahmeV(g, hoKlasse, bs, sz);
   const ep = eingriffsplan(ev ? ev.v : 0, stufe);
   // Tabelle 2 gilt für das Jahrzehnt; bei mehreren Eingriffen wird sie aufgeteilt
-  const dick = dick10 / ep.anzahl, mittel = mittel10 / ep.anzahl, duenn = duenn10 / ep.anzahl;
+  const proEingriff = (dick10 + mittel10 + duenn10) / ep.anzahl;
+  const eng = proEingriff >= ENG_AB;
+  const teiler = ep.anzahl * (eng ? 4 : 1);
+  const raster = eng ? RASTER_ENG_M : RASTER_M;
+  const dick = dick10 / teiler, mittel = mittel10 / teiler, duenn = duenn10 / teiler;
   const jePunkt = { dick, mittel, duenn };
   const jePunktJahrzehnt = { dick: dick10, mittel: mittel10, duenn: duenn10 };
   const sum = dick + mittel + duenn;
+  const punkteHa = 10000 / (raster * raster);
   const hl = HOEHENKLASSEN.find((x) => x.key === hoKlasse)?.label;
   return {
     gruppe: g, gruppeLabel: GRUPPEN[g].label, szenario: sz, stufe, jePunkt, jePunktJahrzehnt, eingriffe: { ...ep, quelle: ev?.quelle, bestaende: ev?.n }, baeumeJePunkt: sum,
-    baeumeHa: sum * 10000 / (RASTER_M * RASTER_M),
+    baeumeHa: sum * punkteHa, raster, eng, kreis: eng ? KREIS_ENG_M : KREIS_M, ausweichen: eng ? AUSWEICHEN_ENG_M : AUSWEICHEN_M, punkteHa,
     regel: ['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 1e-9).map((k) => `${anteilText(jePunkt[k])} ${DIMENSION[k].label}`).join(' + '),
     schritte: [
       `Baumartengruppe: ${GRUPPEN[g].label} (Hauptbaumart ${art})`,
@@ -162,7 +174,8 @@ export function bestimme({ art, dim, b, hoKlasse, ho }) {
         ? `Unter ${EIN_EINGRIFF_BIS} Fm/ha Entnahme im Jahrzehnt → 1 Eingriff`
         : `${fmt(ep.vZehn)} Fm/ha im Jahrzehnt → ${ep.anzahl} Eingriffe à ca. ${fmt(ep.vEingriff)} Fm/ha (höchstens ${MAX_FM_EINGRIFF} Fm/ha je Eingriff), etwa alle ${ep.abstandJahre} Jahre`,
       ep.anzahl > 1 ? `Je Eingriff ein Teil der Bäume aus Tabelle 2: ${['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunktJahrzehnt[k])} ÷ ${ep.anzahl} = ${anteilText(jePunkt[k])}`).join(', ')}` : null,
-      `Raster ${RASTER_M} m (16 Punkte/ha), jedes Mal zufällig neu über den Bestand gelegt → ca. ${Math.round(sum * 16)} Bäume/ha je Eingriff`,
+      eng ? `Je Eingriff ${anteilText(proEingriff)} Bäume je 25-m-Punkt – ab ${ENG_AB} Bäumen entstünden Lücken. Deshalb engeres Raster: 12,5 m (64 Punkte/ha), je Punkt ein Viertel: ${['dick', 'mittel', 'duenn'].filter((k) => jePunkt[k] > 0).map((k) => `${DIMENSION[k].label} ${anteilText(jePunkt[k])}`).join(', ')}` : null,
+      `Raster ${fmt(raster, 1)} m (${Math.round(punkteHa)} Punkte/ha), jedes Mal zufällig neu über den Bestand gelegt → ca. ${Math.round(sum * punkteHa)} Bäume/ha je Eingriff`,
     ].filter(Boolean),
   };
 }

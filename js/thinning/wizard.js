@@ -377,14 +377,14 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', { class: 'raster-rule' },
           h('strong', {}, `Je Rasterpunkt: ${plan.regel}`),
           zeilen.map((k) => h('small', {}, `${DIMENSION[k].label[0].toUpperCase()}${DIMENSION[k].label.slice(1)} (${DIMENSION[k].bhd}): ${anteilSatz(plan.jePunkt[k])}`)),
-          h('small', {}, `Raster ${RASTER_M} m in Schlangenlinien, Lage zufällig, Entnahmekreis ca. ${KREIS_M} m. „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
+          h('small', {}, `Raster ${fmt(plan.raster || RASTER_M, 1)} m in Schlangenlinien, Lage zufällig, Entnahmekreis ca. ${plan.kreis || KREIS_M} m.${plan.eng ? ' Weil je 25-m-Punkt viele Bäume anfielen, ist das Raster auf 12,5 m verdichtet – so entstehen keine Lücken.' : ''} „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
         parcelCard(),
         h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst bei diesem Eingriff ${plan.total} Bäume (ca. ${fmt(ei.vEingriff * plan.areaHa)} Fm bzw. ${fmt(ei.gEingriff * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
         h('div', { class: 'calc-box' },
           h('strong', {}, 'So kommt die Baumzahl zustande'),
           zeilen.map((k) => { const n = plan.points.reduce((a, pt) => a + (pt.removals.find((x) => x.klasse === k)?.count || 0), 0);
             return h('small', {}, `${DIMENSION[k].baeume}: ${plan.points.length} Punkte × ${anteilText(plan.jePunkt[k])} je Punkt = ${n}`); }),
-          h('small', {}, `Bei 25 m Raster sind das 16 Punkte je Hektar, also ${fmt(plan.points.length / plan.areaHa, 1)} Punkte je ha auf dieser Fläche. Die Gesamtzahl ergibt sich aus den Punkten, die tatsächlich auf der Fläche liegen – nicht aus einem Hektarwert.`)),
+          h('small', {}, `Bei ${fmt(plan.raster || 25, 1)} m Raster sind das ${Math.round(10000 / ((plan.raster || 25) ** 2))} Punkte je Hektar, also ${fmt(plan.points.length / plan.areaHa, 1)} Punkte je ha auf dieser Fläche. Die Gesamtzahl ergibt sich aus den Punkten, die tatsächlich auf der Fläche liegen – nicht aus einem Hektarwert.`)),
         h('details', { class: 'calc' }, h('summary', {}, 'Was bedeutet die Ziel-Entnahme Grundfläche?'),
           h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
           h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),
@@ -448,7 +448,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     st.plan ??= computePlanMethode(st.sel, st.params);
     const plan = st.plan;
     drawGrid(plan.points, { numbers: true });
-    const radius = KREIS_M;
+    const radius = st.plan?.kreis || KREIS_M;
     const offline = h('button', { class: 'btn', onclick: (e) => prefetchTiles(st.sel.ring, base.basemap, e.currentTarget) }, h('span', { html: icon.download }), 'Karte für offline speichern');
 
     fill(panel, 
@@ -459,7 +459,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', {}, h('span', { class: 'pv-n' }, plan.perHa), h('span', {}, 'Bäume je ha')),
         h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.stufe, 1)), h('span', {}, 'Ziel-Entnahme Grundfläche (m²/ha)')),
       ),
-      h('p', {}, `Die Punkte liegen im festen Abstand von ${RASTER_M} m; die Lage ist für diesen Eingriff zufällig gewählt. Je Punkt: ${plan.regel}, im Umkreis von etwa ${KREIS_M} m. Die gestrichelte Linie zeigt die Laufreihenfolge (Schlangenlinien).`),
+      h('p', {}, `Die Punkte liegen im Abstand von ${fmt(plan.raster || RASTER_M, 1)} m${plan.eng ? ' (verdichtet, damit an einem Punkt nicht zu viele Bäume fallen)' : ''}; die Lage ist für diesen Eingriff zufällig gewählt. Je Punkt: ${plan.regel}, im Umkreis von etwa ${plan.kreis || KREIS_M} m. Die gestrichelte Linie zeigt die Laufreihenfolge (Schlangenlinien).`),
       h('p', { class: 'hint' }, 'Im Wald ist oft kein Netz. Speichere die Karte vorher, solange du noch Empfang hast.'),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn', onclick: () => { st.plan = null; go(1); } }, 'Angaben ändern'),
@@ -598,8 +598,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     if (targetIdx < 0) return;
     const pt = st.plan.points[targetIdx];
     navLayer.addLayer(L.marker(pt.at, { interactive: false, icon: L.divIcon({ className: 'target-pulse', html: '<span></span>', iconSize: [44, 44], iconAnchor: [22, 22] }) }));
-    navLayer.addLayer(L.circle(pt.at, { radius: AUSWEICHEN_M, color: '#D7263D', weight: 1, dashArray: '2 6', fillOpacity: 0, interactive: false }));
-    navLayer.addLayer(L.circle(pt.at, { radius: KREIS_M, color: '#D7263D', weight: 1.5, dashArray: '4 4', fillOpacity: 0.05, interactive: false }));
+    navLayer.addLayer(L.circle(pt.at, { radius: st.plan?.ausweichen || AUSWEICHEN_M, color: '#D7263D', weight: 1, dashArray: '2 6', fillOpacity: 0, interactive: false }));
+    navLayer.addLayer(L.circle(pt.at, { radius: st.plan?.kreis || KREIS_M, color: '#D7263D', weight: 1.5, dashArray: '4 4', fillOpacity: 0.05, interactive: false }));
   }
 
   function chooseTarget(i) {
@@ -627,7 +627,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
     const pt = st.plan.points[targetIdx];
     const d = distance(pos.latlng, pt.at);
-    const r = store.get().settings.arrivalRadius;
+    const r = Math.min(store.get().settings.arrivalRadius, Math.max(4, (st.plan?.raster || 25) * 0.4)); // im engen Raster kleiner
     if (d <= r && !prompted.has(pt.id)) { prompted.add(pt.id); arrive(targetIdx); }
     else if (d > r * 2) prompted.delete(pt.id);
     renderHud();
@@ -715,15 +715,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function renderWork() {
     const pt = working;
-    const radius = KREIS_M;
+    const radius = st.plan?.kreis || KREIS_M;
     const remaining = pointRemaining(pt);
     const persist = () => saveMeasure();
 
     fill(hud, 
       h('div', { class: 'work-head' },
         h('p', { class: 'hud-label' }, `Rasterpunkt ${pt.id}: Entnahme`),
-        h('p', { class: 'muted' }, `Arbeite im Umkreis von etwa ${radius} m um den Punkt; steht dort kein passender Baum, bis ${AUSWEICHEN_M} m ausweichen.`),
-        h('p', { class: 'ausweich-hint' }, h('strong', {}, 'Ausweichen: '), AUSWEICH_TEXT),
+        h('p', { class: 'muted' }, `Arbeite im Umkreis von etwa ${radius} m um den Punkt; steht dort kein passender Baum, bis ${st.plan?.ausweichen || AUSWEICHEN_M} m ausweichen.`),
+        h('p', { class: 'ausweich-hint' }, h('strong', {}, 'Ausweichen: '), AUSWEICH_TEXT.replace('bis 15 m', `bis ${st.plan?.ausweichen || AUSWEICHEN_M} m`)),
       ),
       pt.removals.length
         ? h('ul', { class: 'removals' }, pt.removals.map((r) => h('li', { class: `removal ${r.marked >= r.count ? 'complete' : ''}` },

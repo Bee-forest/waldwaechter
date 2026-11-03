@@ -64,7 +64,7 @@ export const pointTotal = (pt) => pt.removals.reduce((s, r) => s + r.count, 0);
 // ---------- Neue Methode (Raster-Verfahren, siehe methode.js) ----------
 
 export function zufallsLage() {
-  return { offset: [Math.random() * RASTER_M, Math.random() * RASTER_M], umkehren: Math.random() < 0.5, erzeugt: Date.now() };
+  return { offset: [Math.random(), Math.random()], relativ: true, umkehren: Math.random() < 0.5, erzeugt: Date.now() };
 }
 
 export function computePlanMethode(sel, p) {
@@ -78,12 +78,14 @@ export function computePlanMethode(sel, p) {
     : areaM2Polys(polys) / 10000;
   const ha = clip ? geoHa : sh.flaecheHa ?? geoHa;
   const r = bestimme(p);
-  p.spacing = RASTER_M;
+  const raster = r.raster || RASTER_M;
+  p.spacing = raster;
   // Rasterlage bei jedem Eingriff zufällig neu (Versatz 0–25 m, Startecke zufällig), damit der Bestand
   // nicht immer an denselben Stellen bearbeitet wird. Einmal gewählt, bleibt sie für diesen Eingriff fest.
   p.eingriffNr ??= 1;
   p.lage ??= zufallsLage();
-  let grid = generateGrid(sh.ring, RASTER_M, { offset: p.lage.offset, polys });
+  const off = p.lage.relativ ? p.lage.offset.map((v) => v * raster) : p.lage.offset.map((v) => v % raster);
+  let grid = generateGrid(sh.ring, raster, { offset: off, polys });
   if (clip) grid = grid.filter((pt) => inPolys(pt, clip));
   if (p.lage.umkehren) grid = grid.reverse();
   // „in jedem n-ten Punkt“: fortlaufend über alle Punkte mitzählen
@@ -114,9 +116,9 @@ export function computePlanMethode(sel, p) {
     total,
     gZielHa: r.stufe,
     schritte: r.schritte,
-    cellM2: RASTER_M * RASTER_M,
+    cellM2: raster * raster, raster, eng: !!r.eng, kreis: r.kreis, ausweichen: r.ausweichen,
     points,
     hint: QUALITAET_TEXT,
-    auswahl: AUSWAHL_TEXT,
+    auswahl: AUSWAHL_TEXT.replace('bis 15 m', `bis ${r.ausweichen || 15} m`),
   };
 }

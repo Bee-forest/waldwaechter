@@ -629,3 +629,5 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .raster-rule { display: grid; gap: 4px; padding: 14px; border-radius: 16px; border: 2px solid #D7263D; background: #FDF0F1; }
 .raster-rule strong { font-size: 19px; }
 .raster-rule small { font-size: 14px; color: var(--ink-2); }
+
+.ausweich-hint { margin: 6px 0 0; padding: 10px 12px; border-radius: 12px; background: #FFF6E5; border-left: 4px solid var(--signal); font-size: 15px; }

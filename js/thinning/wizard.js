@@ -6,7 +6,7 @@ import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox } from '../geo.js';
 import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
-import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, anteilSatz, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
+import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, anteilSatz, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
@@ -572,6 +572,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       h('div', { class: 'work-head' },
         h('p', { class: 'hud-label' }, `Rasterpunkt ${pt.id}: Entnahme`),
         h('p', { class: 'muted' }, `Arbeite im Umkreis von etwa ${radius} m um den Punkt; steht dort kein passender Baum, bis ${AUSWEICHEN_M} m ausweichen.`),
+        h('p', { class: 'ausweich-hint' }, h('strong', {}, 'Ausweichen: '), AUSWEICH_TEXT),
       ),
       pt.removals.length
         ? h('ul', { class: 'removals' }, pt.removals.map((r) => h('li', { class: `removal ${r.marked >= r.count ? 'complete' : ''}` },

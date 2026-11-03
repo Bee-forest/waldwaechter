@@ -70,7 +70,8 @@ export const RAND_M = 12.5;          // Start 10–15 m vom Rand
 export const KREIS_M = 10;           // Entnahmekreis
 export const AUSWEICHEN_M = 15;      // höchstens so weit ausweichen
 export const RANG = ['Fichte', 'Lärche', 'Buche', 'Kiefer', 'Eiche'];
-export const AUSWAHL_TEXT = 'Im Kreis zuerst Fichte nehmen, dann Lärche, Buche, Kiefer, zuletzt Eiche (andere Arten wie Buche). Einen Baum über wertvollem Unterstand bevorzugen, sonst den nächststehenden. Steht kein passender Baum im Kreis, bis 15 m ausweichen.';
+export const AUSWAHL_TEXT = 'Im Kreis zuerst Fichte nehmen, dann Lärche, Buche, Kiefer, zuletzt Eiche (andere Arten wie Buche). Einen Baum über wertvollem Unterstand bevorzugen, sonst den nächststehenden. Steht kein passender Baum im Kreis, bis 15 m ausweichen. Gibt es auch dort keinen Baum der verlangten Stärkeklasse, den Baum entnehmen, der ihr am ähnlichsten ist (Durchmesser am nächsten an der Klasse).';
+export const AUSWEICH_TEXT = 'Kein Baum der verlangten Stärke bis 15 m? Dann den Baum nehmen, der ihr am ähnlichsten ist – also den mit dem Durchmesser, der am nächsten an der Klasse liegt.';
 export const QUALITAET_TEXT = 'Vitale, gut geformte Zukunftsbäume stehen lassen; kranke, beschädigte und schlecht geformte Bäume bevorzugt entnehmen. Biotop- und Höhlenbäume erhalten.';
 
 /** Bruchteil als Geländeregel: 0,125 → „⅛“, 1,5 → „1½“ */

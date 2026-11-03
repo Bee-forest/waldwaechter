@@ -6,7 +6,7 @@ import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, formatDist, centroid } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
-import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, TH_ATTR } from './map/thueringen.js';
+import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 
 export const FEATURE_TYPES = {
@@ -215,6 +215,30 @@ function clearSelection() {
   requestAnimationFrame(invalidateMap);
 }
 
+/** Amtliche Auskunft des Geoportals als iframe (zeigt Daten an, ohne dass die App sie speichert) */
+const geoFrame = (title, src, height = 200) => h('iframe', { class: 'wms-info', src, title, loading: 'lazy', referrerpolicy: 'no-referrer', style: `height:${height}px` });
+
+function rescueBlock(latlng) {
+  return h('div', { class: 'info-block' },
+    h('h3', {}, 'Rettungspunkte in der Nähe'),
+    h('p', { class: 'hint' }, 'Rettungspunkte von ThüringenForst im Umkreis von etwa 2 km. Blende die Ebene „Rettungspunkte“ ein, um sie auf der Karte zu sehen.'),
+    geoFrame('Rettungspunkte in der Nähe', INFO_SOURCES.rettung(latlng), 170),
+    h('div', { class: 'rescue-actions' },
+      h('a', { class: 'btn btn-small', href: 'https://www.thueringenforst.de/aktuelles-service/info-karten/rettungspunkte', target: '_blank', rel: 'noopener' }, 'Rettungspunkte-Info (ThüringenForst)'),
+    ),
+    h('p', { class: 'hint' }, 'Im Notfall: 112 wählen und die Rettungspunkt-Nummer nennen.'),
+  );
+}
+
+function geoInfoBlock(latlng) {
+  return h('div', { class: 'info-block' },
+    h('h3', {}, 'Standort, Waldfunktionen und Schutzstatus'),
+    h('p', { class: 'hint' }, 'Auskunft des Geoportals Thüringen für den angetippten Punkt.'),
+    geoFrame('Forstliche Angaben am Punkt', INFO_SOURCES.forst(latlng), 220),
+    geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160),
+  );
+}
+
 /** Das braune „i“: markiert die angetippte Stelle; Antippen springt zur Infobox */
 function infoPin(latlng) {
   return L.marker(latlng, {
@@ -236,11 +260,8 @@ function renderWmsInfo(latlng) {
     ),
     h('iframe', { class: 'wms-info', src: featureInfoUrl(latlng), title: 'Flurstücksauskunft ALKIS', loading: 'lazy', referrerpolicy: 'no-referrer' }),
     h('p', { class: 'hint' }, 'Für diese Stelle liegen in der App noch keine Flurstücksdaten vor. Deshalb kann die Fläche noch nicht zu deinen Flächen hinzugefügt werden. Die Auskunft oben kommt direkt vom Geoportal.'),
-    h('div', { class: 'info-block' },
-      h('h3', {}, 'Nächste Rettungspunkte'),
-      h('div', { class: 'rescue-actions' }, h('a', { class: 'btn btn-small', href: 'https://www.rettungspunkte-forst.de', target: '_blank', rel: 'noopener' }, 'Rettungspunkte-Karte (KWF)')),
-      h('p', { class: 'hint' }, 'Im Notfall immer 112 wählen.'),
-    ),
+    rescueBlock(latlng),
+    geoInfoBlock(latlng),
     h('details', { class: 'diag-wrap' }, h('summary', {}, 'Technische Details'), h('pre', { class: 'diag' }, wfsDiagnose.last || String(source.lastError || ''))),
   );
   const wasHidden = box.hidden;
@@ -309,15 +330,11 @@ async function renderInfo() {
       h('div', { class: 'wide' }, h('dt', {}, 'Angetippter Punkt'), h('dd', { class: 'mono' }, `${latlng[0].toFixed(5)} N, ${latlng[1].toFixed(5)} O`)),
     ),
     catSection,
-    h('div', { class: 'info-block' },
+    isAlkis ? rescueBlock(latlng) : null,
+    isAlkis ? geoInfoBlock(latlng) : null,
+    isAlkis ? h('p', { class: 'hint' }, 'Flurstücksdaten: ALKIS, © GDI-Th. Standort, Waldfunktionen, Rettungspunkte: © GDI-Th / ThüringenForst. Keine amtliche Auskunft.') : null,
+    isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Nächste Rettungspunkte'),
-      !rescue.length ? h('div', { class: 'rescue' },
-        h('p', {}, 'Die Rettungspunkte sind für echte Flurstücke noch nicht angebunden. Schau vor dem Waldgang auf der offiziellen Karte nach dem nächsten Rettungspunkt.'),
-        h('div', { class: 'rescue-actions' },
-          h('a', { class: 'btn btn-small', href: 'https://www.rettungspunkte-forst.de', target: '_blank', rel: 'noopener' }, 'Rettungspunkte-Karte (KWF)'),
-        ),
-        h('p', { class: 'hint' }, 'Im Notfall immer 112 wählen.'),
-      ) : null,
       h('ul', { class: 'rescue-list' }, rescue.map((rp) => h('li', { class: 'rescue' },
         h('div', { class: 'rescue-head' }, h('span', { class: 'rescue-badge', 'aria-hidden': 'true' }, '+'), h('strong', {}, rp.id), h('span', { class: 'rescue-dist' }, formatDist(rp.dist))),
         h('p', {}, rp.access),
@@ -328,7 +345,7 @@ async function renderInfo() {
       ))),
       rescue.length ? h('p', { class: 'hint' }, 'Demo-Rettungspunkte. Im Notfall immer 112 wählen und die Rettungspunkt-Nummer nennen.') : null,
     ),
-    h('div', { class: 'info-block' },
+    isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Besonderheiten'),
       p.features?.length
         ? h('ul', { class: 'feature-list' }, p.features.map((f) => h('li', { class: `feature feature-${f.type}` },

@@ -277,15 +277,45 @@ export function featureInfoUrl([lat, lng]) {
 // ---------- Fachebenen (WMS) für „Weitere Layer“ ----------
 // minZoom grob nach den Maßstabsgrenzen der Dienste. Ebenen ohne bestätigte
 // Adresse sind mit pending markiert und erscheinen noch nicht in der Auswahl.
+const FORST = `${GP}/forst/FORST`; // ThüringenForst (Maßstab bis 1:150.000 → ab Zoom 12)
 export const OVERLAYS = [
-  { key: 'standort', label: 'Standortkarte (Forst)', group: 'Wald', url: null, layers: null, pending: true, opacity: 0.6 },
-  { key: 'rettung', label: 'Rettungspunkte', group: 'Sicherheit', url: null, layers: null, pending: true },
+  { key: 'rettung', label: 'Rettungspunkte', group: 'Sicherheit', url: FORST, layers: 'rettungspunkte', minZoom: 11 },
   { key: 'rettungswege', label: 'Rettungswege', group: 'Sicherheit', url: GP, layers: 'rettungswege', minZoom: 12 },
+  { key: 'standort', label: 'Standortkarte (Forst)', group: 'Wald', url: FORST, layers: 'standort_fl', opacity: 0.6, minZoom: 12 },
+  { key: 'waldfunktionen', label: 'Waldfunktionen', group: 'Wald', url: FORST, layers: 'bodenschutzfunktion,erholungswald,erholungsfunktion,klimaschutzfunktion,immissionsschutzfunktion,laermschutzfunktion,sichtschutzfunktion', opacity: 0.55, minZoom: 12 },
+  { key: 'schaden', label: 'Waldschadflächen', group: 'Wald', url: FORST, layers: 'waldschaeden', opacity: 0.65, minZoom: 12 },
   { key: 'schutz', label: 'Schutzgebiete (NSG, LSG)', group: 'Naturschutz', url: `${GP}/SCHUTZGEB`, layers: 'lsg,nsg', opacity: 0.55, minZoom: 8 },
   { key: 'natura', label: 'Natura 2000 (FFH, Vogelschutz)', group: 'Naturschutz', url: `${GP}/SCHUTZGEB`, layers: 'spa,ffh_geb', opacity: 0.55, minZoom: 8 },
+  { key: 'lrt', label: 'Waldlebensraumtypen (LRT)', group: 'Naturschutz', url: FORST, layers: 'waldlebensraumtypen', opacity: 0.65, minZoom: 12 },
+  { key: 'waldbiotope', label: 'Waldbiotope', group: 'Naturschutz', url: FORST, layers: 'waldbiotope', opacity: 0.65, minZoom: 12 },
   { key: 'biotope', label: 'Offenlandbiotope', group: 'Naturschutz', url: GP, layers: 'obk1_flaechen,obk1_linien,obk1_punkte', opacity: 0.7, minZoom: 13 },
-  { key: 'schaden', label: 'Waldschadflächen', group: 'Wald', url: `${GP}/FORST`, layers: 'waldschaeden', opacity: 0.65, minZoom: 9 },
 ];
+
+/**
+ * GetFeatureInfo-URL für eine Anzeige im iframe (kein CORS nötig).
+ * spanM: Kantenlänge des Abfragefensters in Metern. Mit pixels = 1 gilt das
+ * ganze Fenster als ein Pixel → liefert alle Objekte im Umkreis (z. B. Rettungspunkte).
+ */
+export function infoUrl(url, layers, [lat, lng], { spanM = 60, pixels = 101, count = 5 } = {}) {
+  const R = 6378137;
+  const x = (lng * Math.PI / 180) * R;
+  const y = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R;
+  const k = 1 / Math.cos(lat * Math.PI / 180); // Web-Mercator-Streckung
+  const half = (spanM / 2) * k;
+  const c = Math.floor(pixels / 2);
+  const q = new URLSearchParams({
+    SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo', LAYERS: layers, QUERY_LAYERS: layers, STYLES: '',
+    CRS: 'EPSG:3857', BBOX: [x - half, y - half, x + half, y + half].join(','), WIDTH: String(pixels), HEIGHT: String(pixels),
+    I: String(c), J: String(c), INFO_FORMAT: 'text/html', FEATURE_COUNT: String(count),
+  });
+  return `${url}?${q}`;
+}
+
+export const INFO_SOURCES = {
+  forst: (ll) => infoUrl(FORST, 'standort_fl,bodenschutzfunktion,erholungswald,erholungsfunktion,klimaschutzfunktion,waldbiotope,waldlebensraumtypen', ll, { count: 10 }),
+  schutz: (ll) => infoUrl(`${GP}/SCHUTZGEB`, 'nsg,lsg,ffh_geb,spa,naturpark', ll, { count: 10 }),
+  rettung: (ll) => infoUrl(FORST, 'rettungspunkte', ll, { spanM: 4000, pixels: 1, count: 3 }),
+};
 
 export function overlayLayer(o) {
   return wms(o.url, o.layers, { opacity: o.opacity ?? 0.85, minZoom: o.minZoom ?? 10 });

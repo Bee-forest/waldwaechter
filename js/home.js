@@ -6,6 +6,7 @@ import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, formatDist, centroid } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
+import { wfsDiagnose, ALKIS_MIN_ZOOM } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 
 export const FEATURE_TYPES = {
@@ -47,9 +48,15 @@ export async function initHome(root) {
     info,
   );
 
+  const zoomHint = h('div', { class: 'zoom-hint', role: 'status' }, 'Für Flurstücke näher heranzoomen');
+  mapEl.parentElement.append(zoomHint);
   base = createBaseMap(mapEl, { center: source.center, zoom: 16, basemap: s.basemap, alkis: s.layers.alkis !== false });
   map = base.map;
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+  const updateZoomHint = () => { zoomHint.hidden = map.getZoom() >= ALKIS_MIN_ZOOM || store.get().settings.layers.alkis === false; };
+  map.on('zoomend', updateZoomHint);
+  store.subscribe(updateZoomHint);
+  updateZoomHint();
 
   osmLayer = createOsmFeatureLayer(map, () => store.get().settings.layers);
   allParcelsLayer = L.layerGroup().addTo(map);
@@ -68,8 +75,18 @@ export async function initHome(root) {
     if (ticket !== busy) return; // inzwischen erneut getippt
     if (p) { ALL = await source.allParcels(); select(p, latlng); return; }
     clearSelection();
-    if (source.lastError) toast('Flurstücksabfrage beim Geoportal Thüringen gerade nicht möglich. Prüfe die Verbindung.');
-    else if (map.getZoom() < 14) toast('Zoom näher heran, um ein Flurstück anzutippen.');
+    if (source.lastError) {
+      dialog({
+        mascot: true,
+        title: 'Flurstück konnte nicht abgefragt werden',
+        body: h('div', {},
+          h('p', { class: 'dialog-body' }, 'Das Geoportal Thüringen hat die Abfrage nicht beantwortet. Die Flurstücksgrenzen auf der Karte sind trotzdem korrekt.'),
+          h('p', { class: 'hint' }, 'Technische Details:'),
+          h('pre', { class: 'diag' }, wfsDiagnose.last || String(source.lastError)),
+        ),
+        actions: [{ label: 'OK', value: true, primary: true }],
+      });
+    } else if (map.getZoom() < ALKIS_MIN_ZOOM) toast('Zoom näher heran, um ein Flurstück anzutippen.');
   });
 
   ALL = await source.allParcels();
@@ -333,7 +350,7 @@ function openLayerSheet() {
       h('label', { class: 'switch-row' },
         h('span', { class: 'switch-label' }, 'Demo-Flächen (Raum Ilmenau) zeigen'),
         h('input', { type: 'checkbox', role: 'switch', checked: !!s.demo, onchange: (e) => store.update((st) => { st.settings.demo = e.target.checked; }) })),
-      h('p', { class: 'hint' }, 'Luftbild und Flurstücksgrenzen: Geoportal Thüringen (GDI-Th). Grenzen erscheinen ab Zoomstufe 15. Gebäude, Wasser, Wald und Landwirtschaft aus OpenStreetMap ab Zoomstufe 15.'),
+      h('p', { class: 'hint' }, 'Luftbild und Flurstücksgrenzen: Geoportal Thüringen (GDI-Th). Grenzen erscheinen ab Zoomstufe 16 (Vorgabe des Dienstes: Maßstab 1:10.000). Gebäude, Wasser, Wald und Landwirtschaft aus OpenStreetMap ab Zoomstufe 15.'),
     ),
     actions: [{ label: 'Fertig', value: true, primary: true }],
   });

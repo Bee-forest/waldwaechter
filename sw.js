@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -66,6 +66,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.pathname.includes('/geoproxy/')) return; // Umleitung zum Geoproxy nie cachen
 
   // Seitenaufrufe: Netz zuerst, offline die App-Shell
   if (e.request.mode === 'navigate') {

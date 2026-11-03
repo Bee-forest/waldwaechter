@@ -1,0 +1,12 @@
+# Netlify: leitet /geoproxy/* serverseitig zum Geoproxy Thüringen um.
+# Damit umgeht die App die CORS-Sperre des Browsers für die Flurstücksabfrage (ALKIS-WFS).
+[[redirects]]
+  from = "/geoproxy/*"
+  to = "https://www.geoproxy.geoportal-th.de/geoproxy/:splat"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

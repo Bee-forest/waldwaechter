@@ -465,3 +465,10 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 }
 
 [data-theme="dark"] .placeholder-bug svg, [data-theme="dark"] .empty-bug svg, [data-theme="dark"] .finished-bug svg, [data-theme="dark"] .callout-bug svg, [data-theme="dark"] .dialog-mascot svg { filter: drop-shadow(0 0 1.5px rgba(234, 242, 231, .55)); }
+
+.zoom-hint {
+  position: absolute; left: 50%; top: calc(80px + var(--safe-t)); transform: translateX(-50%); z-index: 440;
+  padding: 8px 14px; border-radius: 18px; background: var(--ink); color: var(--bg); font-weight: 700; font-size: 15px;
+  box-shadow: var(--shadow); pointer-events: none; white-space: nowrap;
+}
+.diag { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--surface-2); padding: 10px; border-radius: 10px; max-height: 30vh; overflow: auto; margin: 6px 0 0; }

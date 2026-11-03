@@ -28,20 +28,33 @@ export function dopLayer() {
   ]);
 }
 
+// Der Dienst zeichnet Flurstücke nur bis Maßstab 1:10.000. In Web-Mercator
+// entspricht das in Thüringen erst Zoomstufe 16 (Zoom 15 ≈ 1:17.000).
+export const ALKIS_MIN_ZOOM = 16;
+
 /** ALKIS-Flurstücksgrenzen mit Nummern; auf dem Luftbild in Gelb. */
 export function alkisLayer(onAerial) {
   return onAerial
-    ? wms(TH.alkisGelb, 'adv_alkis_flurstuecke', { minZoom: 15, opacity: 0.95 })
-    : wms(TH.alkis, 'adv_alkis_flurstuecke', { minZoom: 15, opacity: 0.85 });
+    ? wms(TH.alkisGelb, 'adv_alkis_flurstuecke', { minZoom: ALKIS_MIN_ZOOM, opacity: 0.95 })
+    : wms(TH.alkis, 'adv_alkis_flurstuecke', { minZoom: ALKIS_MIN_ZOOM, opacity: 0.85 });
 }
 
 // ---------- WFS: Flurstücke abfragen ----------
 
-let workingWfs = null; // zuletzt erfolgreicher Endpunkt
+// Der Geoproxy erlaubt Browser-Abfragen von fremden Seiten evtl. nicht (CORS).
+// Dann wird über denselben Server umgeleitet: <App>/geoproxy/… → Geoproxy
+// (siehe netlify.toml). Auf GitHub Pages gibt es diese Umleitung nicht.
+const PROXY_BASE = new URL('geoproxy/services', location.href).href;
+const viaProxy = (url) => url.replace(GP, PROXY_BASE);
+
+let workingWfs = null; // zuletzt erfolgreicher Weg { url, ns }
+export const wfsDiagnose = { last: '' };
 
 async function wfsGet(params) {
-  const candidates = workingWfs ? [workingWfs, ...TH.wfs.filter((w) => w !== workingWfs)] : TH.wfs;
+  const routes = TH.wfs.flatMap((w) => [w, { ...w, url: viaProxy(w.url), proxy: true }]);
+  const candidates = workingWfs ? [workingWfs, ...routes.filter((w) => w.url !== workingWfs.url)] : routes;
   let lastErr;
+  const notes = [];
   for (const w of candidates) {
     const q = new URLSearchParams({
       SERVICE: 'WFS', VERSION: '2.0.0', REQUEST: 'GetFeature', TYPENAMES: 'ave:Flurstueck',
@@ -51,11 +64,21 @@ async function wfsGet(params) {
     try {
       const res = await fetch(`${w.url}?${q}`, { mode: 'cors' });
       const text = await res.text();
-      if (!res.ok || /ExceptionReport/.test(text.slice(0, 600))) { lastErr = new Error(text.slice(0, 300)); continue; }
+      if (!res.ok || /ExceptionReport/.test(text.slice(0, 600))) {
+        notes.push(`${w.proxy ? 'Proxy' : 'direkt'} ${w.url.split('/').pop()}: HTTP ${res.status} ${text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140)}`);
+        lastErr = new Error(text.slice(0, 300));
+        continue;
+      }
       workingWfs = w;
+      wfsDiagnose.last = `OK über ${w.proxy ? 'Proxy' : 'direkte Verbindung'} (${w.url.split('/').pop()})`;
       return parseFlurstuecke(text);
-    } catch (e) { lastErr = e; }
+    } catch (e) {
+      notes.push(`${w.proxy ? 'Proxy' : 'direkt'} ${w.url.split('/').pop()}: ${e.name === 'TypeError' ? 'blockiert (CORS) oder offline' : e.message}`);
+      lastErr = e;
+    }
   }
+  wfsDiagnose.last = notes.join(' | ');
+  console.warn('ALKIS-WFS fehlgeschlagen:', notes);
   const err = new Error('ALKIS-Abfrage nicht erreichbar');
   err.cause = lastErr;
   throw err;

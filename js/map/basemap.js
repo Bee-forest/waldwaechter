@@ -31,7 +31,7 @@ export function tileUrls(key, z, x, y, { alkis = true } = {}) {
   if (key === 'osm') out.push(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
   if (key === 'topo') out.push(`https://sgx.geodatenzentrum.de/wmts_topplus_open/tile/1.0.0/web/default/WEBMERCATOR/${z}/${y}/${x}.png`);
   if (key === 'dop') out.push(wmsTileUrl(TH.dop, z >= 14 ? 'th_dop' : 'th_dop200rgb', 'image/jpeg', false, z, x, y));
-  if (alkis && z >= 15) out.push(wmsTileUrl(key === 'dop' ? TH.alkisGelb : TH.alkis, 'adv_alkis_flurstuecke', 'image/png', true, z, x, y));
+  if (alkis && z >= 16) out.push(wmsTileUrl(key === 'dop' ? TH.alkisGelb : TH.alkis, 'adv_alkis_flurstuecke', 'image/png', true, z, x, y));
   return out;
 }
 

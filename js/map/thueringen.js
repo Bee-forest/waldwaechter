@@ -202,7 +202,12 @@ let localIndex;
 
 function fromCompact(c) {
   const ring = [];
-  for (let i = 0; i + 1 < c.r.length; i += 2) ring.push([c.r[i], c.r[i + 1]]);
+  if (c.q) { // Mikrograd, ab dem 2. Punkt als Differenz
+    let la = 0, lo = 0;
+    for (let i = 0; i + 1 < c.q.length; i += 2) { la += c.q[i]; lo += c.q[i + 1]; ring.push([la / 1e6, lo / 1e6]); }
+  } else {
+    for (let i = 0; i + 1 < c.r.length; i += 2) ring.push([c.r[i], c.r[i + 1]]);
+  }
   return {
     id: c.i, source: 'alkis', gemarkung: c.g || '–', flur: c.f || '–', nr: c.n, gemeinde: c.m || '–', ortsteil: c.g || '',
     lage: c.l, nutzungText: umlaute(c.t), nutzung: categorize(c.t), flaecheAmtlich: c.a || null, ring, standort: null, features: [],

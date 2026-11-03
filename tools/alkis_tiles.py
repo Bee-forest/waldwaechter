@@ -130,9 +130,29 @@ def parse(xml_bytes):
             'i': vals.get('flstkennz') or el.get('{http://www.opengis.net/gml/3.2}id') or f'{zae}-{nen}',
             'g': vals.get('gemarkung', ''), 'f': flur, 'n': f'{zae}/{nen}' if nen else zae,
             'm': vals.get('gemeinde', ''), 'l': vals.get('lagebeztxt', ''), 't': nutzung_text(vals.get('tntxt', '')), 'a': area,
-            'r': [round(c, 6) for p in pts for c in p],
+            'q': encode(pts),
         })
     return out
+
+
+def encode(pts):
+    """Koordinaten als Ganzzahlen in Mikrograd, ab dem 2. Punkt als Differenz → kleine Dateien"""
+    out, pl, pn = [], 0, 0
+    for la, lo in pts:
+        a, b = round(la * 1e6), round(lo * 1e6)
+        out += [a - pl, b - pn]
+        pl, pn = a, b
+    return out
+
+
+def centroid(q):
+    la = lo = 0
+    cl = cn = 0
+    for i in range(0, len(q), 2):
+        cl += q[i]; cn += q[i + 1]
+        la += cl; lo += cn
+    k = len(q) / 2
+    return la / k / 1e6, lo / k / 1e6
 
 
 def nutzung_text(raw):
@@ -258,8 +278,7 @@ def run_region(name, bbox, gem_index, stats):
                 stats['tiles'] += 1
                 stats['parcels'] += len(feats)
                 for p in feats:
-                    lat = sum(p['r'][0::2]) / (len(p['r']) / 2)
-                    lon = sum(p['r'][1::2]) / (len(p['r']) / 2)
+                    lat, lon = centroid(p['q'])
                     if lon2x(lon) == x and lat2y(lat) == y:   # Suchindex: Kachel des Schwerpunkts
                         gem_index.setdefault(p['g'], {})[f"{p['f']}/{p['n']}"] = [x, y]
             if done % 25 == 0:

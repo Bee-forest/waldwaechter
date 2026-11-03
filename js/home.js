@@ -50,9 +50,15 @@ export async function initHome(root) {
 
   const zoomHint = h('div', { class: 'zoom-hint', role: 'status' }, 'Für Flurstücke näher heranzoomen');
   mapEl.parentElement.append(zoomHint);
-  base = createBaseMap(mapEl, { center: source.center, zoom: 16, basemap: s.basemap, alkis: s.layers.alkis !== false });
+  // Letzten Kartenausschnitt merken; Start sonst über Landkreis Greiz / Saale-Orla-Kreis
+  let view = { c: [50.64, 11.86], z: 11 };
+  try { view = JSON.parse(localStorage.getItem('waldwaechter.view')) || view; } catch { /* egal */ }
+  base = createBaseMap(mapEl, { center: view.c, zoom: view.z, basemap: s.basemap, alkis: s.layers.alkis !== false });
   map = base.map;
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+  map.on('moveend', () => {
+    try { const c = map.getCenter(); localStorage.setItem('waldwaechter.view', JSON.stringify({ c: [c.lat, c.lng], z: map.getZoom() })); } catch { /* egal */ }
+  });
   const updateZoomHint = () => { zoomHint.hidden = map.getZoom() >= ALKIS_MIN_ZOOM || store.get().settings.layers.alkis === false; };
   map.on('zoomend', updateZoomHint);
   store.subscribe(updateZoomHint);

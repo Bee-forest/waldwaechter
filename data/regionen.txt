@@ -1,4 +1,6 @@
 # Regionen, für die die App Flurstücksdaten (ALKIS) mitbringt.
 # Format:  Name; minLänge,minBreite,maxLänge,maxBreite   (Grad, WGS84)
 # Nach dem Ändern dieser Datei lädt GitHub die Daten automatisch (Reiter „Actions“).
+Landkreis Greiz; 11.78,50.56,12.37,50.96
+Saale-Orla-Kreis; 11.36,50.35,12.00,50.83
 Ilmenau und Umgebung; 10.80,50.62,10.98,50.74

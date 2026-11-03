@@ -7,7 +7,7 @@ import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox, polysOf, areaM2Polys } from '../geo.js';
 import { parcelExact, amtlicheFlaecheHa } from '../map/thueringen.js';
 import { computePlanMethode, pointRemaining, pointTotal } from './plan.js';
-import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, anteilSatz, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
+import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
@@ -343,6 +343,11 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('small', {}, `Raster ${RASTER_M} m in Schlangenlinien, Start 10–15 m vom Rand, Entnahmekreis ca. ${KREIS_M} m. „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
         parcelCard(),
         h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst insgesamt ${plan.total} Bäume für ein Jahrzehnt (Ziel-Entnahme: ca. ${fmt(plan.stufe * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
+        h('div', { class: 'calc-box' },
+          h('strong', {}, 'So kommt die Baumzahl zustande'),
+          zeilen.map((k) => { const n = plan.points.reduce((a, pt) => a + (pt.removals.find((x) => x.klasse === k)?.count || 0), 0);
+            return h('small', {}, `${DIMENSION[k].baeume}: ${plan.points.length} Punkte × ${anteilText(plan.jePunkt[k])} je Punkt = ${n}`); }),
+          h('small', {}, `Bei 25 m Raster sind das 16 Punkte je Hektar, also ${fmt(plan.points.length / plan.areaHa, 1)} Punkte je ha auf dieser Fläche. Die Gesamtzahl ergibt sich aus den Punkten, die tatsächlich auf der Fläche liegen – nicht aus einem Hektarwert.`)),
         h('details', { class: 'calc' }, h('summary', {}, 'Was bedeutet die Ziel-Entnahme Grundfläche?'),
           h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
           h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),

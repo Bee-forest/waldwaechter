@@ -28,9 +28,9 @@ export const gruppe4 = (art) => Object.keys(GRUPPEN).find((g) => GRUPPEN[g].arte
 
 // Stärkeklassen (BHD), für alle Baumarten gleich
 export const DIMENSION = {
-  dick: { label: 'dick', viele: 'Viele Dicke', baum: 'Dicker Baum', bhd: 'über 50 cm', dmin: 50, dmax: null, umfang: 'Umfang über 160 cm' },
-  mittel: { label: 'mittel', viele: 'Viele Mittlere', baum: 'Mittlerer Baum', bhd: '25–50 cm', dmin: 25, dmax: 50, umfang: 'Umfang ca. 80–160 cm' },
-  duenn: { label: 'dünn', viele: 'Viele Dünne', baum: 'Dünner Baum', bhd: '7–25 cm', dmin: 7, dmax: 25, umfang: 'Umfang bis ca. 80 cm' },
+  dick: { label: 'dick', viele: 'Viele Dicke', baum: 'Dicker Baum', baeume: 'Dicke Bäume', bhd: 'über 50 cm', dmin: 50, dmax: null, umfang: 'Umfang über 160 cm' },
+  mittel: { label: 'mittel', viele: 'Viele Mittlere', baum: 'Mittlerer Baum', baeume: 'Mittlere Bäume', bhd: '25–50 cm', dmin: 25, dmax: 50, umfang: 'Umfang ca. 80–160 cm' },
+  duenn: { label: 'dünn', viele: 'Viele Dünne', baum: 'Dünner Baum', baeume: 'Dünne Bäume', bhd: '7–25 cm', dmin: 7, dmax: 25, umfang: 'Umfang bis ca. 80 cm' },
 };
 // Szenario = Schwerpunkt der Stammzahl (≥ 40 % der Stämme und ≥ 10 Prozentpunkte Vorsprung)
 export const SZENARIO = { dick: 1, mittel: 2, duenn: 3 };

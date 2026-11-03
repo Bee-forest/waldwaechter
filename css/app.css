@@ -636,3 +636,6 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .parcel-facts div { display: grid; grid-template-columns: 9.5em 1fr; gap: 8px; }
 .parcel-facts dt { color: var(--ink-2); font-size: 14px; }
 .parcel-facts dd { margin: 0; font-weight: 600; font-size: 15px; }
+
+.calc-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.calc-box small { font-size: 14px; color: var(--ink-2); }

@@ -7,11 +7,11 @@ import { renderPlaceholder } from './placeholders.js';
 import { startTour, say } from './mascot.js';
 
 const TABS = [
-  { key: 'home', label: 'Startseite', icon: icon.map },
-  { key: 'massnahmen', label: 'Maßnahmen', icon: icon.tasks },
-  { key: 'finanzen', label: 'Finanzen', icon: icon.euro },
-  { key: 'aktuelles', label: 'Aktuelles', icon: icon.news },
-  { key: 'ki', label: 'KI-Assistent', icon: icon.ai },
+  { key: 'home', label: 'WaldWächter', icon: icon.tree },
+  { key: 'massnahmen', label: 'Aufgaben', icon: icon.checkmark },
+  { key: 'schaeden', label: 'Schäden', icon: icon.alert },
+  { key: 'rechner', label: 'Rechner', icon: icon.calc },
+  { key: 'silvana', label: 'Silvana', icon: icon.sparkle },
 ];
 
 // ---------- Darstellung ----------
@@ -19,7 +19,7 @@ export function applyTheme() {
   const pref = store.get().settings.theme;
   const dark = pref === 'dark' || (pref === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0F1A14' : '#23573A');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0F1A14' : '#EEF2EC');
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
@@ -59,10 +59,12 @@ async function main() {
   views.home.hidden = false;
   await initHome(views.home);
   initMeasures(views.massnahmen);
-  renderPlaceholder(views.finanzen, 'finanzen');
-  renderPlaceholder(views.aktuelles, 'aktuelles');
-  renderPlaceholder(views.ki, 'ki');
-  show(location.hash.replace('#/', '') || 'home');
+  renderPlaceholder(views.schaeden, 'schaeden');
+  renderPlaceholder(views.rechner, 'rechner');
+  renderPlaceholder(views.silvana, 'silvana');
+  const legacy = { finanzen: 'rechner', aktuelles: 'schaeden', ki: 'silvana' };
+  const start = location.hash.replace('#/', '');
+  show(legacy[start] || start || 'home');
 
   if (!store.get().onboardingDone) setTimeout(() => startTour(), 600);
   registerSW();

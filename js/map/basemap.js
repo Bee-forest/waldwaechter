@@ -3,13 +3,13 @@
 import { dopLayer, alkisLayer, TH } from './thueringen.js';
 
 export const CATEGORIES = {
-  Wald:           { color: '#2F7D3A', label: 'Wald' },
-  Landwirtschaft: { color: '#C99212', label: 'Landwirtschaft' },
-  Gewässer:       { color: '#1F74B8', label: 'Gewässer' },
-  Gebäude:        { color: '#9A4F3A', label: 'Gebäude' },
+  Wald:           { color: '#1F4A2C', label: 'Wald' },
+  Landwirtschaft: { color: '#D9A23B', label: 'Landwirtschaft' },
+  Gewässer:       { color: '#3F8CA8', label: 'Gewässer' },
+  Gebäude:        { color: '#7B7E86', label: 'Bebaut' },
 };
 
-export const BASEMAP_LABELS = { dop: 'Luftbild TH', osm: 'Karte', topo: 'Topo' };
+export const BASEMAP_LABELS = { osm: 'OSM', dop: 'Luftbild' };
 
 export const BASEMAPS = {
   // Amtliches Thüringer Luftbild (DOP 20 cm), GDI-Th

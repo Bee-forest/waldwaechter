@@ -1,7 +1,7 @@
 // Kleine UI-Bausteine: DOM-Helfer, Icons, Dialoge, Hinweise.
 
 /** Ersetzt Kinder; null/false werden ignoriert (statt als Text „null“ zu erscheinen). */
-export const fill = (el, ...kids) => el.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
+export const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false));
 
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
@@ -13,7 +13,7 @@ export function h(tag, attrs = {}, ...children) {
     else if (k === 'dataset') Object.assign(el.dataset, v);
     else el.setAttribute(k, v === true ? '' : v);
   }
-  for (const c of children.flat()) {
+  for (const c of children.flat(Infinity)) {
     if (c == null || c === false) continue;
     el.append(c instanceof Node ? c : document.createTextNode(String(c)));
   }
@@ -23,6 +23,12 @@ export function h(tag, attrs = {}, ...children) {
 const svg = (p, extra = '') => `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${p}</svg>`;
 
 export const icon = {
+  tree: svg('<path d="M12 3 6.5 11h3L6 16h12l-3.5-5h3L12 3Z" fill="currentColor" stroke="none"/><path d="M12 16v5"/>'),
+  checkmark: svg('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 'stroke-width="2.6"'),
+  alert: svg('<path d="M12 4v10"/><circle cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/>', 'stroke-width="3"'),
+  calc: svg('<rect x="5" y="3" width="14" height="18" rx="2.5"/><rect x="8" y="6" width="8" height="4" rx="1"/><path d="M8.5 14h.01M12 14h.01M15.5 14h.01M8.5 17.5h.01M12 17.5h.01M15.5 17.5h.01"/>', 'stroke-width="2.4"'),
+  sparkle: svg('<path d="M12 3c.6 4.6 3.4 7.4 8 8-4.6.6-7.4 3.4-8 8-.6-4.6-3.4-7.4-8-8 4.6-.6 7.4-3.4 8-8Z" fill="currentColor" stroke="none"/>'),
+  chevron: svg('<path d="m9 6 6 6-6 6"/>', 'stroke-width="3"'),
   map: svg('<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/>'),
   tasks: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5 2.5-2.5"/>'),
   euro: svg('<path d="M18 6.5A7 7 0 1 0 18 17.5"/><path d="M4 10h9M4 14h9"/>'),

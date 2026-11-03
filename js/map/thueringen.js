@@ -273,3 +273,20 @@ export function featureInfoUrl([lat, lng]) {
   });
   return `${TH.alkis}?${q}`;
 }
+
+// ---------- Fachebenen (WMS) für „Weitere Layer“ ----------
+// minZoom grob nach den Maßstabsgrenzen der Dienste. Ebenen ohne bestätigte
+// Adresse sind mit pending markiert und erscheinen noch nicht in der Auswahl.
+export const OVERLAYS = [
+  { key: 'standort', label: 'Standortkarte (Forst)', group: 'Wald', url: null, layers: null, pending: true, opacity: 0.6 },
+  { key: 'rettung', label: 'Rettungspunkte', group: 'Sicherheit', url: null, layers: null, pending: true },
+  { key: 'rettungswege', label: 'Rettungswege', group: 'Sicherheit', url: GP, layers: 'rettungswege', minZoom: 12 },
+  { key: 'schutz', label: 'Schutzgebiete (NSG, LSG)', group: 'Naturschutz', url: `${GP}/SCHUTZGEB`, layers: 'lsg,nsg', opacity: 0.55, minZoom: 8 },
+  { key: 'natura', label: 'Natura 2000 (FFH, Vogelschutz)', group: 'Naturschutz', url: `${GP}/SCHUTZGEB`, layers: 'spa,ffh_geb', opacity: 0.55, minZoom: 8 },
+  { key: 'biotope', label: 'Offenlandbiotope', group: 'Naturschutz', url: GP, layers: 'obk1_flaechen,obk1_linien,obk1_punkte', opacity: 0.7, minZoom: 13 },
+  { key: 'schaden', label: 'Waldschadflächen', group: 'Wald', url: `${GP}/FORST`, layers: 'waldschaeden', opacity: 0.65, minZoom: 9 },
+];
+
+export function overlayLayer(o) {
+  return wms(o.url, o.layers, { opacity: o.opacity ?? 0.85, minZoom: o.minZoom ?? 10 });
+}

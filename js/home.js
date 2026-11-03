@@ -6,7 +6,7 @@ import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, formatDist, centroid } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
-import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl } from './map/thueringen.js';
+import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, TH_ATTR } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 
 export const FEATURE_TYPES = {
@@ -19,6 +19,7 @@ export const FEATURE_TYPES = {
 let base, map, osmLayer;
 const catGroups = {};
 let allParcelsLayer, infoLayer, rescueLayer, selectionLayer, posMarker;
+const overlays = {};
 let selected = null; // { parcel, latlng }
 let ALL = [];
 
@@ -30,23 +31,68 @@ export async function initHome(root) {
   const mapEl = h('div', { id: 'map', class: 'map', 'aria-label': 'Karte' });
   const info = h('section', { id: 'infobox', class: 'infobox', 'aria-live': 'polite', hidden: true });
 
+  const head = h('header', { class: 'card app-head' });
+  const chips = h('div', { class: 'cat-chips', role: 'group', 'aria-label': 'Kategorien ein- und ausblenden' });
+  const baseSwitch = h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Basiskarte' });
   root.append(
-    h('div', { class: 'map-wrap' },
-      mapEl,
-      h('header', { class: 'map-top' },
-        h('div', { class: 'brand' }, h('span', { class: 'brand-bug', html: WANZE_SVG }), h('span', {}, 'Waldwächter')),
-        h('div', { class: 'map-top-actions' },
-          h('button', { class: 'fab', 'aria-label': 'Flurstück suchen', html: icon.search, onclick: openSearch }),
-          h('button', { class: 'fab', id: 'btn-profile', 'aria-label': 'Mein Profil', html: icon.user, onclick: () => openProfile() }),
+    head,
+    h('section', { class: 'card map-card', 'aria-label': 'Karte Thüringen' },
+      h('div', { class: 'map-card-head' },
+        h('h2', {}, 'Karte Thüringen'),
+        baseSwitch,
+        h('p', { class: 'muted' }, 'ALKIS-Flurstücke, Standortkarte, Rettungspunkte, Schutzgebiete, Natura 2000 und Biotope/LRT'),
+      ),
+      h('div', { class: 'map-wrap' },
+        mapEl,
+        h('div', { class: 'map-side' },
+          h('button', { class: 'fab small', 'aria-label': 'Flurstück suchen', html: icon.search, onclick: openSearch }),
+          h('button', { class: 'fab small', 'aria-label': 'Mein Standort', html: icon.locate, onclick: locateMe }),
         ),
       ),
-      h('div', { class: 'map-side' },
-        h('button', { class: 'fab', 'aria-label': 'Kartenebenen', html: icon.layers, onclick: openLayerSheet }),
-        h('button', { class: 'fab', 'aria-label': 'Mein Standort', html: icon.locate, onclick: locateMe }),
+      h('div', { class: 'map-actions' },
+        h('button', { class: 'pill-btn', onclick: openLayerSheet }, 'Weitere Layer', h('span', { class: 'plus' }, '+')),
+        h('button', { class: 'pill-btn', onclick: openSearch }, h('span', { html: icon.search }), 'Flurstück suchen'),
       ),
+      chips,
     ),
     info,
   );
+
+  // Kopf: Logo, Titel, Profil
+  const renderHead = () => {
+    const pr = store.get().profile;
+    const initials = (pr.name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+    fill(head,
+      h('img', { class: 'app-logo', src: 'img/logo.png', alt: 'WaldWächter-Logo' }),
+      h('div', { class: 'app-title' },
+        h('h1', {}, 'WaldWächter'),
+        h('p', {}, 'Digitale Wald- und Flächenbewirtschaftung für morgen.'),
+      ),
+      h('button', { class: 'profile-chip', id: 'btn-profile', 'aria-label': 'Mein Profil öffnen', onclick: () => openProfile() },
+        h('span', { class: 'avatar' }, initials),
+        h('span', { class: 'who' },
+          h('strong', {}, pr.name || 'Profil anlegen'),
+          h('span', {}, pr.fbg || 'Flächen, Konto, Einstellungen'),
+        ),
+        h('span', { class: 'chev', html: icon.chevron }),
+      ),
+    );
+  };
+  // Kategorie-Chips wie im Entwurf: gefüllt = sichtbar
+  const renderChips = () => {
+    const { layers } = store.get().settings;
+    fill(chips, ...Object.entries(CATEGORIES).map(([k, c]) => h('button', {
+      class: 'cat-chip', style: `--c:${c.color}`, 'aria-pressed': String(!!layers[k]),
+      onclick: () => { store.update((st) => { st.settings.layers[k] = !st.settings.layers[k]; }); osmLayer.refresh(); },
+    }, h('span', { class: 'dot' }), c.label)));
+  };
+  const renderBaseSwitch = () => fill(baseSwitch, ...Object.entries(BASEMAP_LABELS).map(([k, l]) => h('button', {
+    role: 'radio', 'aria-checked': String(base?.basemap === k),
+    onclick: () => { base.setBasemap(k); store.update((st) => { st.settings.basemap = k; }); },
+  }, l)));
+  renderHead();
+  renderChips();
+  store.subscribe(() => { renderHead(); renderChips(); renderBaseSwitch(); });
 
   const zoomHint = h('div', { class: 'zoom-hint', role: 'status' }, 'Für Flurstücke näher heranzoomen');
   mapEl.parentElement.append(zoomHint);
@@ -55,6 +101,10 @@ export async function initHome(root) {
   try { view = JSON.parse(localStorage.getItem('waldwaechter.view')) || view; } catch { /* egal */ }
   base = createBaseMap(mapEl, { center: view.c, zoom: view.z, basemap: s.basemap, alkis: s.layers.alkis !== false });
   map = base.map;
+  L.control.zoom({ position: 'topleft', zoomInTitle: 'Hineinzoomen', zoomOutTitle: 'Herauszoomen' }).addTo(map);
+  renderBaseSwitch();
+  // Fachebenen (Standortkarte, Schutzgebiete, …)
+  for (const o of OVERLAYS) if (!o.pending) overlays[o.key] = overlayLayer(o);
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
   map.on('moveend', () => {
     try { const c = map.getCenter(); localStorage.setItem('waldwaechter.view', JSON.stringify({ c: [c.lat, c.lng], z: map.getZoom() })); } catch { /* egal */ }
@@ -109,14 +159,14 @@ function drawParcels() {
     }
     if (m || selected?.parcel.id === p.id) addInfoPoints(p);
   }
-  selectionLayer.eachLayer((l) => l.bringToFront());
+  selectionLayer.eachLayer((l) => l.bringToFront?.());
 }
 
 function addInfoPoints(p) {
   for (const f of p.features || []) {
     if (f.line) infoLayer.addLayer(L.polyline(f.line, { color: '#F26B1D', weight: 6, opacity: 0.9, dashArray: '10 8', interactive: false }));
     const marker = L.marker(f.at, {
-      icon: L.divIcon({ className: 'ipoint', html: '<span aria-hidden="true">i</span>', iconSize: [30, 30], iconAnchor: [15, 15] }),
+      icon: L.divIcon({ className: 'fpoint', html: '<span aria-hidden="true">!</span>', iconSize: [26, 26], iconAnchor: [13, 13] }),
       keyboard: true, title: f.title, alt: f.title,
     });
     marker.bindPopup(() => h('div', { class: 'ipop' },
@@ -133,6 +183,9 @@ export function applyLayerVisibility() {
     if (layers[k]) { if (!map.hasLayer(g)) g.addTo(map); } else map.removeLayer(g);
   }
   if (layers.info) { if (!map.hasLayer(infoLayer)) infoLayer.addTo(map); } else map.removeLayer(infoLayer);
+  for (const [k, l] of Object.entries(overlays)) {
+    if (layers[k]) { if (!map.hasLayer(l)) l.addTo(map); } else map.removeLayer(l);
+  }
   if (layers.rescue) { if (!map.hasLayer(rescueLayer)) { drawRescue(); rescueLayer.addTo(map); } } else map.removeLayer(rescueLayer);
 }
 
@@ -147,8 +200,8 @@ async function drawRescue() {
 async function select(parcel, latlng) {
   selected = { parcel, latlng };
   selectionLayer.clearLayers();
-  selectionLayer.addLayer(L.polygon(parcel.ring, { color: '#F26B1D', weight: 4, fillOpacity: 0.06, interactive: false }));
-  selectionLayer.addLayer(L.circleMarker(latlng, { radius: 7, color: '#fff', weight: 3, fillColor: '#F26B1D', fillOpacity: 1, interactive: false }));
+  selectionLayer.addLayer(L.polygon(parcel.ring, { color: '#FFFFFF', weight: 3.5, fillColor: '#1F4A2C', fillOpacity: 0.35, interactive: false }));
+  selectionLayer.addLayer(infoPin(latlng));
   drawParcels();
   await renderInfo();
 }
@@ -162,11 +215,19 @@ function clearSelection() {
   requestAnimationFrame(invalidateMap);
 }
 
+/** Das braune „i“: markiert die angetippte Stelle; Antippen springt zur Infobox */
+function infoPin(latlng) {
+  return L.marker(latlng, {
+    icon: L.divIcon({ className: 'info-pin', html: '<span>i</span>', iconSize: [40, 40], iconAnchor: [20, 20] }),
+    title: 'Flurstücksinformationen', keyboard: true, zIndexOffset: 1000,
+  }).on('click', (e) => { L.DomEvent.stop(e); document.getElementById('infobox')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+}
+
 /** Rückfall ohne Vektordaten: amtliche Auskunft des WMS im iframe (braucht kein CORS) */
 function renderWmsInfo(latlng) {
   selected = null;
   selectionLayer.clearLayers();
-  selectionLayer.addLayer(L.circleMarker(latlng, { radius: 7, color: '#fff', weight: 3, fillColor: '#F26B1D', fillOpacity: 1, interactive: false }));
+  selectionLayer.addLayer(infoPin(latlng));
   const box = document.getElementById('infobox');
   fill(box,
     h('div', { class: 'info-head' },
@@ -185,7 +246,7 @@ function renderWmsInfo(latlng) {
   const wasHidden = box.hidden;
   box.hidden = false;
   box.scrollTop = 0;
-  if (wasHidden) requestAnimationFrame(() => { invalidateMap(); map.panTo(latlng, { animate: true }); });
+  requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 }
 
 /** Von außen (Profil-Liste, Suche): zum Flurstück springen und auswählen. */
@@ -288,7 +349,7 @@ async function renderInfo() {
   const wasHidden = box.hidden;
   box.hidden = false;
   box.scrollTop = 0;
-  if (wasHidden) requestAnimationFrame(() => { invalidateMap(); map.panTo(latlng, { animate: true }); });
+  requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 }
 
 export async function removeParcel(id) {
@@ -337,43 +398,29 @@ function openSearch() {
 
 function openLayerSheet() {
   const s = store.get().settings;
-  const toggle = (key, label, color) => h('label', { class: 'switch-row' },
+  const sw = (key, label, { color, disabled, note, onchange } = {}) => h('label', { class: `switch-row ${disabled ? 'disabled' : ''}` },
     color ? h('span', { class: 'swatch', style: `background:${color}` }) : null,
-    h('span', { class: 'switch-label' }, label),
-    h('input', { type: 'checkbox', role: 'switch', checked: s.layers[key], onchange: (e) => {
+    h('span', { class: 'switch-label' }, label, note ? h('small', {}, note) : null),
+    h('input', { type: 'checkbox', role: 'switch', disabled, checked: !disabled && !!s.layers[key], onchange: onchange || ((e) => {
       store.update((st) => { st.settings.layers[key] = e.target.checked; });
-      osmLayer.refresh();
-    } }),
+    }) }),
   );
+  const groups = [...new Set(OVERLAYS.map((o) => o.group))];
   dialog({
-    title: 'Kartenebenen',
+    title: 'Weitere Layer',
     body: h('div', { class: 'layer-sheet' },
-      h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Basiskarte' },
-        Object.entries(BASEMAP_LABELS).map(([k, l]) => h('button', {
-          role: 'radio', 'aria-checked': String(base.basemap === k),
-          onclick: (e) => {
-            base.setBasemap(k);
-            store.update((st) => { st.settings.basemap = k; });
-            e.currentTarget.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b === e.currentTarget)));
-          },
-        }, l)),
-      ),
-      h('label', { class: 'switch-row' },
-        h('span', { class: 'swatch', style: 'background:#F6D32D;outline:1px solid #8a7a10' }),
-        h('span', { class: 'switch-label' }, 'Flurstücksgrenzen (ALKIS)'),
-        h('input', { type: 'checkbox', role: 'switch', checked: s.layers.alkis !== false, onchange: (e) => {
-          store.update((st) => { st.settings.layers.alkis = e.target.checked; });
-          base.setAlkis(e.target.checked);
-        } })),
-      h('p', { class: 'sheet-label' }, 'Flächen und Objekte'),
-      Object.entries(CATEGORIES).map(([k, c]) => toggle(k, c.label, c.color)),
-      h('p', { class: 'sheet-label' }, 'Hinweise'),
-      toggle('info', 'Infopunkte (i)', '#F26B1D'),
-      toggle('rescue', 'Alle Rettungspunkte', '#C62828'),
-      h('label', { class: 'switch-row' },
-        h('span', { class: 'switch-label' }, 'Demo-Flächen (Raum Ilmenau) zeigen'),
-        h('input', { type: 'checkbox', role: 'switch', checked: !!s.demo, onchange: (e) => store.update((st) => { st.settings.demo = e.target.checked; }) })),
-      h('p', { class: 'hint' }, 'Luftbild und Flurstücksgrenzen: Geoportal Thüringen (GDI-Th). Grenzen erscheinen ab Zoomstufe 16 (Vorgabe des Dienstes: Maßstab 1:10.000). Gebäude, Wasser, Wald und Landwirtschaft aus OpenStreetMap ab Zoomstufe 15.'),
+      h('p', { class: 'sheet-label' }, 'Flurstücke'),
+      sw('alkis', 'Flurstücksgrenzen (ALKIS)', { color: '#F6D32D', note: 'ab Zoomstufe 16', onchange: (e) => {
+        store.update((st) => { st.settings.layers.alkis = e.target.checked; });
+        base.setAlkis(e.target.checked);
+      } }),
+      groups.map((g) => [
+        h('p', { class: 'sheet-label' }, g),
+        OVERLAYS.filter((o) => o.group === g).map((o) => sw(o.key, o.label, { disabled: o.pending, note: o.pending ? 'wird gerade angebunden' : null })),
+      ]),
+      h('p', { class: 'sheet-label' }, 'Zum Ausprobieren'),
+      sw('demo', 'Demo-Flächen (Raum Ilmenau)', { onchange: (e) => store.update((st) => { st.settings.demo = e.target.checked; st.settings.layers.demo = e.target.checked; }) }),
+      h('p', { class: 'hint' }, 'Quellen: Geoportal Thüringen (© GDI-Th, dl-de/by-2-0), ThüringenForst, TLUBN, OpenStreetMap. Fachebenen erscheinen je nach Dienst erst ab einer bestimmten Zoomstufe.'),
     ),
     actions: [{ label: 'Fertig', value: true, primary: true }],
   });

@@ -3,19 +3,19 @@ import { h, fill } from './ui.js';
 import { WANZE_SVG } from './mascot.js';
 
 const CONTENT = {
-  finanzen: {
-    title: 'Finanzen',
-    text: 'Hier siehst du bald Holzerlöse, Kosten deiner Maßnahmen und mögliche Fördermittel auf einen Blick.',
-    soon: ['Einnahmen und Ausgaben je Fläche', 'Abrechnungen der FBG', 'Förderprogramme für deinen Wald'],
+  schaeden: {
+    title: 'Schäden',
+    text: 'Hier meldest und verfolgst du bald Schäden auf deinen Flächen, mit Foto und Standort direkt aus dem Wald.',
+    soon: ['Borkenkäfer, Sturm- und Schneebruch melden', 'Waldschadflächen von ThüringenForst auf der Karte', 'Meldung an die FBG oder den Revierförster'],
   },
-  aktuelles: {
-    title: 'Aktuelles',
-    text: 'Hier erfährst du bald, was in deiner Region im Wald los ist.',
-    soon: ['Borkenkäfer-Warnstufe und Waldbrandgefahr', 'Termine deiner FBG', 'Holzmarkt und Preise'],
+  rechner: {
+    title: 'Rechner',
+    text: 'Hier rechnest du bald Holzmengen, Kosten und Erlöse für deine Flächen aus.',
+    soon: ['Holzvolumen und Sortimente schätzen', 'Kosten und Erlöse einer Maßnahme', 'Fördermittel für deinen Wald'],
   },
-  ki: {
-    title: 'KI-Assistent',
-    text: 'Bald kannst du mir hier Fragen zu deinem Wald stellen, zum Beispiel welche Baumart auf deinen Standort passt.',
+  silvana: {
+    title: 'Silvana',
+    text: 'Silvana ist bald deine KI-Assistentin für den Wald. Frag sie zum Beispiel, welche Baumart auf deinen Standort passt.',
     soon: ['Fragen zu Waldbau und Pflege', 'Baumarten und Schädlinge per Foto erkennen', 'Hilfe bei Förderanträgen'],
   },
 };

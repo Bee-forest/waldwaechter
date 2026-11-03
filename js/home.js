@@ -9,6 +9,7 @@ import { WANZE_SVG, say } from './mascot.js';
 import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 import { besonderheiten } from './map/besonderheiten.js';
+import { lrtCode, lrtHinweis } from './map/lrt.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt } from './map/bestand.js';
@@ -365,6 +366,13 @@ function renderGeoInfo(info) {
       h('p', { class: 'geo-kicker' }, 'Biotope und Besonderheiten'),
       h('ul', { class: 'geo-list' }, info.wald.map((x) => {
         const details = Object.entries(x.props).filter(([k]) => !/datum|flaeche|urheber|stand/i.test(k)).map(([k, v]) => `${umlaut(k)}: ${umlaut(v)}`).slice(0, 4);
+        const lh = x.layer === 'waldlebensraumtypen' ? lrtHinweis(lrtCode(x.props)) : null;
+        if (lh) return h('li', { class: 'func lrt' }, h('span', { class: 'func-icon', 'aria-hidden': 'true' }, lh.nadel ? '🌲' : '🌳'),
+          h('div', {}, h('strong', {}, lh.titel), h('span', { class: 'prot-type' }, `FFH-Lebensraumtyp · ${lh.p18}`),
+            h('ul', { class: 'lrt-punkte' }, lh.punkte.map((t) => h('li', {}, t))),
+            h('details', {}, h('summary', {}, 'Typische Baumarten laut Steckbrief'),
+              h('p', {}, `Hauptbaumarten: ${lh.haupt}`), h('p', {}, `Mischbaumarten: ${lh.misch}`), h('p', {}, `Begleitbaumarten: ${lh.begleit}`),
+              h('p', { class: 'hint' }, 'Quelle: Steckbriefe für die Wald-Lebensraumtypen in Thüringen, TLWJF 2003.'))));
         return h('li', { class: 'func' }, h('span', { class: 'func-icon', 'aria-hidden': 'true' }, '◆'),
           h('div', {}, h('strong', {}, x.label), h('p', {}, x.text), details.length ? h('span', { class: 'prot-type' }, details.join(' · ')) : null));
       })),

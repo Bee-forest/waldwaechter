@@ -121,3 +121,18 @@ export function besonderheiten(p) {
   return cache.get(p.id);
 }
 export { centroid };
+
+/** FFH-Wald-Lebensraumtypen innerhalb einer Fläche (Kartendienst ThüringenForst, live) → [Hinweis je LRT] */
+export async function lrtInFlaeche(sel) {
+  const { lrtCode, lrtHinweis } = await import('./lrt.js');
+  const polys = polysOf(sel);
+  const b = bbox(polys.flat(2));
+  const funde = await scanWmsLayer(FORST, 'waldlebensraumtypen', b, { max: 10 }).catch(() => []);
+  const codes = new Map();
+  for (const f of funde) {
+    if (!inPolys(f.at, polys)) continue;
+    const c = lrtCode(f.props);
+    if (c && !codes.has(c)) codes.set(c, lrtHinweis(c));
+  }
+  return [...codes.values()];
+}

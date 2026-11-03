@@ -678,3 +678,8 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .legend-swatches { list-style: none; padding: 0; margin: 0 0 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 13px; }
 .legend-swatches li { display: flex; align-items: center; gap: 6px; }
 .legend-swatches .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.25); flex: none; }
+
+.lrt-punkte { margin: 6px 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.func.lrt details { font-size: 14px; }
+.lrt-hinweis { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: #EEF5E8; border-left: 4px solid var(--primary); }
+.lrt-hinweis ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }

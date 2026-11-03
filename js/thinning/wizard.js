@@ -9,6 +9,7 @@ import { parcelExact, amtlicheFlaecheHa } from '../map/thueringen.js';
 import { computePlanMethode, pointRemaining, pointTotal, zufallsLage } from './plan.js';
 import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, MAX_FM_EINGRIFF, EIN_EINGRIFF_BIS, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
+import { lrtInFlaeche } from '../map/besonderheiten.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
 import { say, WANZE_SVG } from '../mascot.js';
@@ -288,8 +289,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
     if (!st.auto || st.auto.ring !== st.sel.ring) {
       st.auto = { ring: st.sel.ring, loading: true };
-      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null)]).then(([bestand, oberhoehe]) => {
-        st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe };
+      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null), lrtInFlaeche(st.sel).catch(() => [])]).then(([bestand, oberhoehe, lrt]) => {
+        st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe, lrt };
         if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = 'waldverzeichnis'; }
         if (st.step === 1) renderParams();
       });
@@ -388,6 +389,9 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
           h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),
           h('p', {}, 'Im Wald zählt die Baumzahl je Rasterpunkt. Wie viel Grundfläche dabei tatsächlich herauskommt, hängt von den Bäumen vor Ort ab und liegt meist etwas unter dem Zielwert.')),
+        (st.auto?.lrt || []).map((l) => h('div', { class: 'lrt-hinweis' },
+          h('strong', {}, `Lebensraumtyp auf der Fläche: ${l.titel}`),
+          h('ul', {}, l.punkte.map((t) => h('li', {}, t))))),
         h('p', { class: 'hint' }, plan.auswahl),
         h('details', { class: 'calc' }, h('summary', {}, 'So wurde bestimmt'), h('ol', {}, plan.schritte.map((t) => h('li', {}, t)))),
       ];

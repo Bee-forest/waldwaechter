@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Waldwächter</title>
+  <meta name="description" content="Waldwächter: Flurstücke, Maßnahmen und geführte Durchforstung für Waldbesitzer.">
+  <meta name="theme-color" content="#23573A">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+  <!-- iOS: Installation über „Teilen → Zum Home-Bildschirm“ -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Waldwächter">
+
+  <link rel="preload" href="fonts/AtkinsonHyperlegible-Regular.woff" as="font" type="font/woff" crossorigin>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <div class="boot">Waldwächter wird geladen …</div>
+  </div>
+  <noscript>Waldwächter braucht JavaScript. Bitte aktiviere es in deinem Browser.</noscript>
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+// Amtliche Geodienste des Freistaats Thüringen (Geoproxy, GDI-Th).
+// Lizenz: Datenlizenz Deutschland – Namensnennung 2.0 bzw. CC BY 4.0, Quelle „© GDI-Th“.
+/* global L */
+import { pointInPolygon, areaHa } from '../geo.js';
+
+const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
+export const TH_ATTR = '© <a href="https://www.geoportal-th.de" target="_blank" rel="noopener">GDI-Th</a>, dl-de/by-2-0';
+
+export const TH = {
+  dop: `${GP}/DOP`,                         // Luftbilder: th_dop (20 cm), th_dop200rgb (2 m)
+  alkis: `${GP}/adv_alkis_wms_th`,          // ALKIS farbig: adv_alkis_flurstuecke, adv_alkis_gebaeude …
+  alkisGelb: `${GP}/adv_alkis_wms_th_gelb`, // ALKIS nur Konturen in Gelb (für Luftbild)
+  wfs: [                                    // ALKIS vereinfacht (Flurstücke als Vektor)
+    { url: `${GP}/adv_alkis_wfs`, ns: 'http://repository.gdi-de.org/schemas/adv/produkt/alkis-vereinfacht/1.0' },
+    { url: `${GP}/adv_alkis_v2_wfs`, ns: 'http://repository.gdi-de.org/schemas/adv/produkt/alkis-vereinfacht/2.0' },
+  ],
+};
+
+const wms = (url, layers, opts = {}) => L.tileLayer.wms(url, {
+  layers, format: 'image/png', transparent: true, version: '1.3.0', attribution: TH_ATTR, maxZoom: 21, ...opts,
+});
+
+/** Thüringer Luftbild: 2-m-Bild für die Übersicht, 20-cm-Bild ab Zoom 14. */
+export function dopLayer() {
+  return L.layerGroup([
+    wms(TH.dop, 'th_dop200rgb', { format: 'image/jpeg', transparent: false, maxZoom: 13 }),
+    wms(TH.dop, 'th_dop', { format: 'image/jpeg', transparent: false, minZoom: 14 }),
+  ]);
+}
+
+/** ALKIS-Flurstücksgrenzen mit Nummern; auf dem Luftbild in Gelb. */
+export function alkisLayer(onAerial) {
+  return onAerial
+    ? wms(TH.alkisGelb, 'adv_alkis_flurstuecke', { minZoom: 15, opacity: 0.95 })
+    : wms(TH.alkis, 'adv_alkis_flurstuecke', { minZoom: 15, opacity: 0.85 });
+}
+
+// ---------- WFS: Flurstücke abfragen ----------
+
+let workingWfs = null; // zuletzt erfolgreicher Endpunkt
+
+async function wfsGet(params) {
+  const candidates = workingWfs ? [workingWfs, ...TH.wfs.filter((w) => w !== workingWfs)] : TH.wfs;
+  let lastErr;
+  for (const w of candidates) {
+    const q = new URLSearchParams({
+      SERVICE: 'WFS', VERSION: '2.0.0', REQUEST: 'GetFeature', TYPENAMES: 'ave:Flurstueck',
+      NAMESPACES: `xmlns(ave,${w.ns})`, SRSNAME: 'urn:ogc:def:crs:EPSG::4326', COUNT: '30',
+      ...params(w),
+    });
+    try {
+      const res = await fetch(`${w.url}?${q}`, { mode: 'cors' });
+      const text = await res.text();
+      if (!res.ok || /ExceptionReport/.test(text.slice(0, 600))) { lastErr = new Error(text.slice(0, 300)); continue; }
+      workingWfs = w;
+      return parseFlurstuecke(text);
+    } catch (e) { lastErr = e; }
+  }
+  const err = new Error('ALKIS-Abfrage nicht erreichbar');
+  err.cause = lastErr;
+  throw err;
+}
+
+/** Flurstück am Punkt [lat, lng] */
+export async function wfsParcelAt([lat, lng]) {
+  const d = 0.00004; // ca. 4 m
+  const list = await wfsGet(() => ({ BBOX: `${lat - d},${lng - d},${lat + d},${lng + d},urn:ogc:def:crs:EPSG::4326` }));
+  return list.find((p) => pointInPolygon([lat, lng], p.ring)) || list[0] || null;
+}
+
+/** Suche nach Gemarkung, Flur, Flurstücksnummer (Zähler[/Nenner]) */
+export async function wfsSearch({ gemarkung, flur, nr }) {
+  const esc = (s) => String(s).replace(/[<>&'"]/g, '');
+  const cond = [];
+  if (gemarkung) cond.push(`<fes:PropertyIsLike wildCard="*" singleChar="." escapeChar="!" matchCase="false"><fes:ValueReference>ave:gemarkung</fes:ValueReference><fes:Literal>${esc(gemarkung)}*</fes:Literal></fes:PropertyIsLike>`);
+  if (flur) cond.push(`<fes:PropertyIsEqualTo><fes:ValueReference>ave:flur</fes:ValueReference><fes:Literal>${esc(flur)}</fes:Literal></fes:PropertyIsEqualTo>`);
+  if (nr) {
+    const [z, n] = String(nr).split('/').map((s) => s.trim());
+    cond.push(`<fes:PropertyIsEqualTo><fes:ValueReference>ave:flstnrzae</fes:ValueReference><fes:Literal>${esc(z)}</fes:Literal></fes:PropertyIsEqualTo>`);
+    if (n) cond.push(`<fes:PropertyIsEqualTo><fes:ValueReference>ave:flstnrnen</fes:ValueReference><fes:Literal>${esc(n)}</fes:Literal></fes:PropertyIsEqualTo>`);
+  }
+  if (!cond.length) return [];
+  return wfsGet((w) => ({
+    FILTER: `<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0" xmlns:ave="${w.ns}">${cond.length > 1 ? `<fes:And>${cond.join('')}</fes:And>` : cond[0]}</fes:Filter>`,
+  }));
+}
+
+function parseFlurstuecke(xml) {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  const feats = [...doc.getElementsByTagNameNS('*', 'Flurstueck')];
+  return feats.map(parseOne).filter(Boolean);
+}
+
+function val(el, name) {
+  const n = el.getElementsByTagNameNS('*', name)[0];
+  return n ? n.textContent.trim() : '';
+}
+
+function parseOne(el) {
+  // Äußerer Ring des (ersten) Polygons
+  const ext = el.getElementsByTagNameNS('*', 'exterior')[0] || el;
+  const pl = ext.getElementsByTagNameNS('*', 'posList')[0];
+  let nums = [];
+  if (pl) nums = pl.textContent.trim().split(/\s+/).map(Number);
+  else nums = [...ext.getElementsByTagNameNS('*', 'pos')].flatMap((p) => p.textContent.trim().split(/\s+/).map(Number));
+  if (nums.length < 6) return null;
+  let ring = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) ring.push([nums[i], nums[i + 1]]);
+  // Achsreihenfolge prüfen: Thüringen liegt bei ca. 50–52° N und 9,8–13° O
+  if (ring[0][0] < 30 && ring[0][1] > 30) ring = ring.map(([a, b]) => [b, a]);
+  if (ring.length > 3 && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1]) ring.pop();
+
+  const zae = val(el, 'flstnrzae'), nen = val(el, 'flstnrnen');
+  const flaeche = Number(val(el, 'flaeche')) || null;
+  const nutzung = val(el, 'tntxt');
+  const gemarkung = val(el, 'gemarkung');
+  const gemeinde = val(el, 'gemeinde');
+  return {
+    id: val(el, 'flstkennz') || el.getAttributeNS('http://www.opengis.net/gml/3.2', 'id') || `${gemarkung}-${zae}-${nen}`,
+    source: 'alkis',
+    gemarkung: gemarkung || '–',
+    flur: String(Number(val(el, 'flur')) || val(el, 'flur') || '–'),
+    nr: nen ? `${zae}/${nen}` : zae,
+    gemeinde: gemeinde || '–',
+    ortsteil: gemarkung || '',
+    lage: val(el, 'lagebeztxt'),
+    nutzungText: nutzung,
+    nutzung: categorize(nutzung),
+    flaecheAmtlich: flaeche,
+    ring,
+    standort: null,
+    features: [],
+  };
+}
+
+export function categorize(t = '') {
+  if (/wald|gehölz|forst/i.test(t)) return 'Wald';
+  if (/fließ|stehend|gewässer|see|teich|bach|graben|fluss/i.test(t)) return 'Gewässer';
+  if (/wohn|gebäude|industrie|gewerbe|hof|siedlung|bau/i.test(t)) return 'Gebäude';
+  if (/acker|grünland|landwirtschaft|wiese|weide|garten|obst/i.test(t)) return 'Landwirtschaft';
+  return 'Wald';
+}
+
+export const amtlicheFlaecheHa = (p) => (p.flaecheAmtlich ? p.flaecheAmtlich / 10000 : areaHa(p.ring));

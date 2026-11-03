@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "Waldwächter",
+  "short_name": "Waldwächter",
+  "description": "Flurstücke, Maßnahmen und geführte Durchforstung für Waldbesitzer.",
+  "lang": "de",
+  "dir": "ltr",
+  "start_url": "./#/home",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#E9EEE6",
+  "theme_color": "#23573A",
+  "categories": ["productivity", "utilities", "navigation"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Neue Maßnahme", "url": "./#/massnahmen", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

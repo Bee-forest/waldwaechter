@@ -1,0 +1,44 @@
+name: ALKIS-Flurstücke laden
+
+on:
+  push:
+    paths: ['data/regionen.txt', 'tools/alkis_tiles.py']
+  workflow_dispatch:
+    inputs:
+      bbox:
+        description: 'Zusätzliche Region: minLänge,minBreite,maxLänge,maxBreite'
+        required: false
+      name:
+        description: 'Name der Region'
+        required: false
+        default: 'Zusatz'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alkis-daten
+  cancel-in-progress: false
+
+jobs:
+  laden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Flurstücke herunterladen
+        continue-on-error: true
+        run: |
+          if [ -n "${{ inputs.bbox }}" ]; then
+            python3 tools/alkis_tiles.py --bbox "${{ inputs.bbox }}" --name "${{ inputs.name }}"
+          else
+            python3 tools/alkis_tiles.py
+          fi
+      - name: Ergebnis speichern
+        run: |
+          git config user.name "Waldwächter-Daten"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/alkis
+          git commit -m "ALKIS-Flurstücke aktualisiert" || echo "Keine Änderungen"
+          git pull --rebase origin main
+          git push origin HEAD:main

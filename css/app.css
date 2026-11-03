@@ -472,3 +472,7 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
   box-shadow: var(--shadow); pointer-events: none; white-space: nowrap;
 }
 .diag { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--surface-2); padding: 10px; border-radius: 10px; max-height: 30vh; overflow: auto; margin: 6px 0 0; }
+
+.wms-info { width: 100%; height: 260px; border: 1px solid var(--line); border-radius: 12px; background: #fff; margin: 12px 0 8px; }
+.diag-wrap { margin-top: 12px; color: var(--ink-2); font-size: 14px; }
+.diag-wrap summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; }

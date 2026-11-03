@@ -6,7 +6,7 @@ import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, formatDist, centroid } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
-import { wfsDiagnose, ALKIS_MIN_ZOOM } from './map/thueringen.js';
+import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 
 export const FEATURE_TYPES = {
@@ -75,17 +75,8 @@ export async function initHome(root) {
     if (ticket !== busy) return; // inzwischen erneut getippt
     if (p) { ALL = await source.allParcels(); select(p, latlng); return; }
     clearSelection();
-    if (source.lastError) {
-      dialog({
-        mascot: true,
-        title: 'Flurstück konnte nicht abgefragt werden',
-        body: h('div', {},
-          h('p', { class: 'dialog-body' }, 'Das Geoportal Thüringen hat die Abfrage nicht beantwortet. Die Flurstücksgrenzen auf der Karte sind trotzdem korrekt.'),
-          h('p', { class: 'hint' }, 'Technische Details:'),
-          h('pre', { class: 'diag' }, wfsDiagnose.last || String(source.lastError)),
-        ),
-        actions: [{ label: 'OK', value: true, primary: true }],
-      });
+    if (source.lastError && map.getZoom() >= ALKIS_MIN_ZOOM - 1) {
+      renderWmsInfo(latlng);
     } else if (map.getZoom() < ALKIS_MIN_ZOOM) toast('Zoom näher heran, um ein Flurstück anzutippen.');
   });
 
@@ -163,6 +154,32 @@ function clearSelection() {
   box.hidden = true;
   drawParcels();
   requestAnimationFrame(invalidateMap);
+}
+
+/** Rückfall ohne Vektordaten: amtliche Auskunft des WMS im iframe (braucht kein CORS) */
+function renderWmsInfo(latlng) {
+  selected = null;
+  selectionLayer.clearLayers();
+  selectionLayer.addLayer(L.circleMarker(latlng, { radius: 7, color: '#fff', weight: 3, fillColor: '#F26B1D', fillOpacity: 1, interactive: false }));
+  const box = document.getElementById('infobox');
+  fill(box,
+    h('div', { class: 'info-head' },
+      h('div', {}, h('p', { class: 'info-kicker' }, 'Auskunft Geoportal Thüringen'), h('h2', {}, 'Flurstück am angetippten Punkt')),
+      h('button', { class: 'icon-btn', 'aria-label': 'Infobox schließen', html: icon.close, onclick: clearSelection }),
+    ),
+    h('iframe', { class: 'wms-info', src: featureInfoUrl(latlng), title: 'Flurstücksauskunft ALKIS', loading: 'lazy', referrerpolicy: 'no-referrer' }),
+    h('p', { class: 'hint' }, 'Für diese Stelle liegen in der App noch keine Flurstücksdaten vor. Deshalb kann die Fläche noch nicht zu deinen Flächen hinzugefügt werden. Die Auskunft oben kommt direkt vom Geoportal.'),
+    h('div', { class: 'info-block' },
+      h('h3', {}, 'Nächste Rettungspunkte'),
+      h('div', { class: 'rescue-actions' }, h('a', { class: 'btn btn-small', href: 'https://www.rettungspunkte-forst.de', target: '_blank', rel: 'noopener' }, 'Rettungspunkte-Karte (KWF)')),
+      h('p', { class: 'hint' }, 'Im Notfall immer 112 wählen.'),
+    ),
+    h('details', { class: 'diag-wrap' }, h('summary', {}, 'Technische Details'), h('pre', { class: 'diag' }, wfsDiagnose.last || String(source.lastError || ''))),
+  );
+  const wasHidden = box.hidden;
+  box.hidden = false;
+  box.scrollTop = 0;
+  if (wasHidden) requestAnimationFrame(() => { invalidateMap(); map.panTo(latlng, { animate: true }); });
 }
 
 /** Von außen (Profil-Liste, Suche): zum Flurstück springen und auswählen. */

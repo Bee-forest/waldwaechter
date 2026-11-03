@@ -1,0 +1,4 @@
+# Regionen, für die die App Flurstücksdaten (ALKIS) mitbringt.
+# Format:  Name; minLänge,minBreite,maxLänge,maxBreite   (Grad, WGS84)
+# Nach dem Ändern dieser Datei lädt GitHub die Daten automatisch (Reiter „Actions“).
+Ilmenau und Umgebung; 10.80,50.62,10.98,50.74

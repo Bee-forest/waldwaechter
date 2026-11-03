@@ -9,7 +9,7 @@
 
 import { parcels as demoParcels, stands, rescuePoints, gemarkungen, DEMO_CENTER } from './demo-data.js';
 import { pointInPolygon, distance } from '../geo.js';
-import { wfsParcelAt, wfsSearch } from '../map/thueringen.js';
+import { wfsParcelAt, wfsSearch, localParcelAt, localSearch } from '../map/thueringen.js';
 import { store } from '../store.js';
 
 const cache = new Map(); // per WFS geladene Flurstücke dieser Sitzung
@@ -43,6 +43,8 @@ export const source = {
       if (d) return d;
     }
     const own = stored().find((p) => pointInPolygon(latlng, p.ring));
+    const loc = await localParcelAt(latlng); // mitgelieferte ALKIS-Daten (data/alkis)
+    if (loc) { source.lastError = null; remember([loc]); return loc; }
     try {
       const p = await wfsParcelAt(latlng);
       source.lastError = null;
@@ -63,6 +65,8 @@ export const source = {
         (!q.flur || String(p.flur) === String(q.flur).trim()) &&
         (!q.nr || norm(p.nr) === norm(q.nr))));
     }
+    const loc = await localSearch(q);
+    if (loc?.length) { source.lastError = null; return [...out, ...remember(loc)]; }
     try {
       out.push(...remember(await wfsSearch(q)));
       source.lastError = null;

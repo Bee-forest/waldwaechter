@@ -165,3 +165,80 @@ export function categorize(t = '') {
 }
 
 export const amtlicheFlaecheHa = (p) => (p.flaecheAmtlich ? p.flaecheAmtlich / 10000 : areaHa(p.ring));
+
+// ---------- Lokale ALKIS-Kacheln (data/alkis, erzeugt von tools/alkis_tiles.py) ----------
+
+const LZ = 14;
+const tileX = (lon) => Math.floor(((lon + 180) / 360) * 2 ** LZ);
+const tileY = (lat) => Math.floor(((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * 2 ** LZ);
+const tileCache = new Map();
+let localIndex;
+
+function fromCompact(c) {
+  const ring = [];
+  for (let i = 0; i + 1 < c.r.length; i += 2) ring.push([c.r[i], c.r[i + 1]]);
+  return {
+    id: c.i, source: 'alkis', gemarkung: c.g || '–', flur: c.f || '–', nr: c.n, gemeinde: c.m || '–', ortsteil: c.g || '',
+    lage: c.l, nutzungText: c.t, nutzung: categorize(c.t), flaecheAmtlich: c.a || null, ring, standort: null, features: [],
+  };
+}
+
+async function loadTile(x, y) {
+  const key = `${x}/${y}`;
+  if (!tileCache.has(key)) {
+    tileCache.set(key, fetch(`data/alkis/${LZ}/${x}/${y}.json`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => list.map(fromCompact))
+      .catch(() => []));
+  }
+  return tileCache.get(key);
+}
+
+export async function localIndexInfo() {
+  localIndex ??= fetch('data/alkis/index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  return localIndex;
+}
+
+/** Flurstück aus den mitgelieferten Daten; null, wenn für diese Stelle keine Daten vorliegen */
+export async function localParcelAt([lat, lng]) {
+  const list = await loadTile(tileX(lng), tileY(lat));
+  if (!list.length) return null;
+  return list.find((p) => pointInPolygon([lat, lng], p.ring)) || null;
+}
+
+export async function localSearch({ gemarkung, flur, nr }) {
+  const idx = await localIndexInfo();
+  if (!idx?.gemarkungen) return null; // keine lokalen Daten
+  const norm = (s) => String(s || '').trim().toLowerCase();
+  const gems = Object.entries(idx.gemarkungen).filter(([g]) => norm(g).startsWith(norm(gemarkung)));
+  const out = [];
+  for (const [, file] of gems) {
+    const entries = await fetch(`data/alkis/gem/${file}`).then((r) => r.json()).catch(() => ({}));
+    for (const [k, [x, y]] of Object.entries(entries)) {
+      const [f, ...rest] = k.split('/');
+      const n = rest.join('/');
+      if (flur && String(Number(flur)) !== f) continue;
+      if (nr && norm(n) !== norm(nr) && norm(n.split('/')[0]) !== norm(nr)) continue;
+      const tile = await loadTile(x, y);
+      const p = tile.find((t) => t.flur === f && t.nr === n);
+      if (p) out.push(p);
+      if (out.length >= 30) return out;
+    }
+  }
+  return out;
+}
+
+// ---------- WMS-Auskunft (GetFeatureInfo) – wird im iframe angezeigt, daher ohne CORS ----------
+
+export function featureInfoUrl([lat, lng]) {
+  const R = 6378137;
+  const x = (lng * Math.PI / 180) * R;
+  const y = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R;
+  const half = 50 * 0.6; // 101 × 101 Pixel à 0,6 m (≈ Maßstab 1:2.000)
+  const q = new URLSearchParams({
+    SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo', LAYERS: 'adv_alkis_flurstuecke', QUERY_LAYERS: 'adv_alkis_flurstuecke',
+    STYLES: '', CRS: 'EPSG:3857', BBOX: [x - half, y - half, x + half, y + half].join(','), WIDTH: '101', HEIGHT: '101',
+    I: '50', J: '50', INFO_FORMAT: 'text/html', FEATURE_COUNT: '1',
+  });
+  return `${TH.alkis}?${q}`;
+}

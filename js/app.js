@@ -70,20 +70,30 @@ async function main() {
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('./sw.js').then((reg) => {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  const reload = () => { if (!reloaded) { reloaded = true; location.reload(); } };
+  // Nur nach einem echten Update neu laden, nicht bei der allerersten Installation
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) reload(); });
+
+  const offer = (worker) => {
+    say('Es gibt eine neue Version der App.', { duration: 0, actions: [h('button', { class: 'btn btn-small btn-primary', onclick: () => {
+      worker.postMessage('SKIP_WAITING');
+      setTimeout(reload, 1500); // Rückfall, falls der Browser kein controllerchange meldet
+    } }, 'Jetzt aktualisieren')] });
+  };
+
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+    if (reg.waiting && hadController) offer(reg.waiting); // Update lag schon bereit
     reg.addEventListener('updatefound', () => {
       const sw = reg.installing;
       sw?.addEventListener('statechange', () => {
-        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-          say('Es gibt eine neue Version der App.', { duration: 0, actions: [h('button', { class: 'btn btn-small btn-primary', onclick: () => sw.postMessage('SKIP_WAITING') }, 'Jetzt aktualisieren')] });
-        }
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) offer(sw);
       });
     });
+    // Beim Zurückkehren in die App nach Updates schauen
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
   }).catch(() => { /* z. B. kein HTTPS */ });
-  // Nur nach einem echten Update neu laden, nicht bei der allerersten Installation
-  const hadController = !!navigator.serviceWorker.controller;
-  let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
 }
 
 main();

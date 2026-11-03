@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.3.1';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -39,7 +39,8 @@ function tileKey(u) {
 }
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)));
+  // cache: 'reload' umgeht den HTTP-Cache, sonst landen nach einem Update alte Dateien im neuen Cache
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES.map((u) => new Request(u, { cache: 'reload' })))));
 });
 
 self.addEventListener('activate', (e) => {
@@ -73,14 +74,18 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(e.request).catch(() => caches.match('./index.html')));
     return;
   }
-  // App-Dateien: aus dem Cache, im Hintergrund aktualisieren
+  // Flurstücksdaten (data/…): Netz zuerst, offline aus dem Cache
+  if (url.pathname.includes('/data/')) { e.respondWith(networkFirst(e.request, DATA)); return; }
+
+  // App-Dateien: online immer die aktuelle Version, offline aus dem Cache
   e.respondWith((async () => {
-    const cached = await caches.match(e.request);
-    const fresh = fetch(e.request).then((res) => {
-      if (res.ok) caches.open(SHELL).then((c) => c.put(e.request, res.clone()));
+    try {
+      const res = await fetch(e.request, { cache: 'no-cache' });
+      if (res.ok) (await caches.open(SHELL)).put(e.request, res.clone());
       return res;
-    }).catch(() => cached);
-    return cached || fresh;
+    } catch {
+      return (await caches.match(e.request)) || new Response('offline', { status: 503 });
+    }
   })());
 });
 

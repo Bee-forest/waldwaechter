@@ -133,16 +133,22 @@ function parseOne(el) {
   if (ring[0][0] < 30 && ring[0][1] > 30) ring = ring.map(([a, b]) => [b, a]);
   if (ring.length > 3 && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1]) ring.pop();
 
-  const zae = val(el, 'flstnrzae'), nen = val(el, 'flstnrnen');
+  const kennz = val(el, 'flstkennz');
+  let zae = val(el, 'flstnrzae'), nen = val(el, 'flstnrnen');
+  if (!zae && /^\d{18}/.test(kennz)) { // LL GGGG FFF ZZZZZ NNNN __
+    zae = String(Number(kennz.slice(9, 14)));
+    nen = Number(kennz.slice(14, 18)) ? String(Number(kennz.slice(14, 18))) : '';
+  }
+  const flurRaw = val(el, 'flur').match(/\d+/)?.[0] || (/^\d{18}/.test(kennz) ? kennz.slice(6, 9) : '');
   const flaeche = Number(val(el, 'flaeche')) || null;
-  const nutzung = val(el, 'tntxt');
+  const nutzung = nutzungText(val(el, 'tntxt'));
   const gemarkung = val(el, 'gemarkung');
   const gemeinde = val(el, 'gemeinde');
   return {
     id: val(el, 'flstkennz') || el.getAttributeNS('http://www.opengis.net/gml/3.2', 'id') || `${gemarkung}-${zae}-${nen}`,
     source: 'alkis',
     gemarkung: gemarkung || '–',
-    flur: String(Number(val(el, 'flur')) || val(el, 'flur') || '–'),
+    flur: flurRaw ? String(Number(flurRaw)) : '–',
     nr: nen ? `${zae}/${nen}` : zae,
     gemeinde: gemeinde || '–',
     ortsteil: gemarkung || '',
@@ -156,7 +162,17 @@ function parseOne(el) {
   };
 }
 
+/** 'Wald; 3200|Grünland; 400' → 'Wald 0,32 ha, Grünland 400 m²' */
+export function nutzungText(raw = '') {
+  if (!raw.includes(';')) return raw;
+  return raw.split('|').map((seg) => { const [n, a] = seg.split(';'); return [Number(a) || 0, (n || '').trim().replace('Strassen', 'Straßen')]; })
+    .filter(([, n]) => n).sort((a, b) => b[0] - a[0])
+    .map(([a, n]) => (a ? `${n} ${a >= 10000 ? `${(a / 10000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} ha` : `${Math.round(a).toLocaleString('de-DE')} m²`}` : n))
+    .join(', ');
+}
+
 export function categorize(t = '') {
+  t = String(t).split(',')[0]; // größte Nutzung zuerst
   if (/wald|gehölz|forst/i.test(t)) return 'Wald';
   if (/fließ|stehend|gewässer|see|teich|bach|graben|fluss/i.test(t)) return 'Gewässer';
   if (/wohn|gebäude|industrie|gewerbe|hof|siedlung|bau/i.test(t)) return 'Gebäude';

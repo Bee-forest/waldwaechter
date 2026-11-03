@@ -31,6 +31,7 @@ WFS = [
 ]
 PAGE = 1000
 LOG = []
+LOG_KEYS = []
 
 
 def log(*a):
@@ -111,22 +112,45 @@ def parse(xml_bytes):
             pts = [(b, a) for a, b in pts]
         if pts[0] == pts[-1]:
             pts = pts[:-1]
+        kennz = vals.get('flstkennz', '')
         zae, nen = vals.get('flstnrzae', ''), vals.get('flstnrnen', '')
-        try:
-            flur = str(int(vals.get('flur', '')))
-        except ValueError:
-            flur = vals.get('flur', '')
+        if not zae and re.match(r'^\d{18}', kennz):   # LL GGGG FFF ZZZZZ NNNN __
+            zae = str(int(kennz[9:14]))
+            nen = str(int(kennz[14:18])) if int(kennz[14:18]) else ''
+        fm = re.search(r'\d+', vals.get('flur', '')) or (re.match(r'^\d{18}', kennz) and re.search(r'\d+', str(int(kennz[6:9]))))
+        flur = str(int(fm.group())) if fm else vals.get('flur', '')
         try:
             area = round(float(vals.get('flaeche', '') or 0))
         except ValueError:
             area = 0
+        if not LOG_KEYS:
+            LOG_KEYS.append(1)
+            log('  Felder: ' + ', '.join(f'{k}={v[:30]}' for k, v in vals.items() if k != 'geometrie'))
         out.append({
             'i': vals.get('flstkennz') or el.get('{http://www.opengis.net/gml/3.2}id') or f'{zae}-{nen}',
             'g': vals.get('gemarkung', ''), 'f': flur, 'n': f'{zae}/{nen}' if nen else zae,
-            'm': vals.get('gemeinde', ''), 'l': vals.get('lagebeztxt', ''), 't': vals.get('tntxt', ''), 'a': area,
+            'm': vals.get('gemeinde', ''), 'l': vals.get('lagebeztxt', ''), 't': nutzung_text(vals.get('tntxt', '')), 'a': area,
             'r': [round(c, 6) for p in pts for c in p],
         })
     return out
+
+
+def nutzung_text(raw):
+    """'Wald; 3200|Grünland; 400' → 'Wald 0,32 ha, Grünland 400 m²' (größte zuerst)"""
+    parts = []
+    for seg in raw.split('|'):
+        name, _, a = seg.partition(';')
+        try:
+            a = float(a.strip())
+        except ValueError:
+            a = 0
+        if name.strip():
+            parts.append((a, name.strip().replace('Strassen', 'Straßen')))
+    parts.sort(reverse=True)
+
+    def fmt(a):
+        return f"{a / 10000:.2f} ha".replace('.', ',') if a >= 10000 else f"{a:,.0f} m²".replace(',', '.')
+    return ', '.join(f'{n} {fmt(a)}' if a else n for a, n in parts)
 
 
 def get(url, tries=4):

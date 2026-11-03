@@ -14,14 +14,18 @@ def main():
         try:
             _, raw = get(f'https://geoportal.geoportal-th.de/dienste/atom_th_hoehendaten_{kind}?type=service&id={sid}')
             t = raw.decode('utf-8', 'replace')
-            ds = sorted(set(re.findall(r'href="([^"]*type=dataset[^"]*)"', t)))
+            log(f'{kind} ROH: ' + re.sub(r'\s+', ' ', t)[:2500])
+            ds = sorted(set(re.findall(r'(https?://[^"\'<> ]*type=dataset[^"\'<> ]*)', t)))
+            if kind == 'dgm':
+                ds.append('https://geoportal.geoportal-th.de/dienste/atom_th_hoehendaten_dgm?type=dataset&id=14418d25-fcd7-4a3f-99a9-e3059a2772af')
             titles = re.findall(r'<title>([^<]+)</title>', t)
             log(f'{kind} Service: Titel {titles[:12]}'); log(f'  Datasets: {ds[:10]}')
             for d in ds[:4]:
                 d = d.replace('&amp;', '&')
                 _, raw2 = get(d); t2 = raw2.decode('utf-8', 'replace')
-                links = re.findall(r'href="([^"]+)"', t2)
+                links = re.findall(r'href=["\']([^"\']+)["\']', t2)
                 tifs = [l for l in links if re.search(r'\.(tif|zip|xyz)', l, re.I)]
+                log('    ROH: ' + re.sub(r'\s+', ' ', t2)[:1800])
                 log(f'  Dataset {d}: {len(t2)} Zeichen, {len(links)} Links, {len(tifs)} Dateien; Titel {re.findall(r"<title>([^<]+)</title>", t2)[:4]}')
                 log(f'    Beispiele: {tifs[:6]}')
                 if tifs:

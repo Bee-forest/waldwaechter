@@ -1,0 +1,15 @@
+GetMap rettungswege (services) (8 km): HTTP 200 text/xml b'<ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.n'
+GetMap rettungswege (services) (30 km): HTTP 200 text/xml b'<ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.n'
+GetMap rettungspunkte (forst) (8 km): HTTP 200 image/png 2.92% gefüllt
+GetFeatureInfo [application/vnd.ogc.gml]: HTTP 200 application/vnd.ogc.gml; charset=UTF-8 | CORS: * | Bytes 539 | Treffer~1 | Koordinaten-Elemente: False
+   Elemente: ['FeatureCollection', 'boundedBy', 'null']
+GetFeatureInfo [text/xml]: HTTP 200 text/xml; charset=UTF-8 | CORS: * | Bytes 539 | Treffer~1 | Koordinaten-Elemente: False
+   Elemente: ['FeatureCollection', 'boundedBy', 'null']
+GetFeatureInfo [application/json]: HTTP 200 text/xml; charset=UTF-8 | CORS: * | Bytes 254 | Treffer~0 | Koordinaten-Elemente: False
+   Elemente: ['ServiceException', 'ServiceExceptionReport']
+GetFeatureInfo [text/plain]: HTTP 200 text/plain; charset=UTF-8 | CORS: * | Bytes 41 | Treffer~0 | Koordinaten-Elemente: False
+   Elemente: ['xml']
+GetFeatureInfo [text/html]: HTTP 200 text/html; charset=UTF-8 | CORS: * | Bytes 430 | Treffer~0 | Koordinaten-Elemente: False
+   Elemente: ['body', 'font', 'h4', 'html', 'table', 'td', 'tr']
+CORS WFS ALKIS: Access-Control-Allow-Origin = *
+CORS GetMap DOP: Access-Control-Allow-Origin = *

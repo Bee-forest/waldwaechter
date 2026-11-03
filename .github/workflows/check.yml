@@ -2,7 +2,7 @@ name: Dienste prüfen
 
 on:
   push:
-    paths: ['tools/check_dienste.py', 'tools/check_felder.py', 'tools/check_hoehe.py', '.github/workflows/check.yml']
+    paths: ['tools/check_dienste.py', 'tools/check_felder.py', 'tools/check_hoehe.py', 'tools/check_baumarten.py', '.github/workflows/check.yml']
   workflow_dispatch:
 
 permissions:
@@ -14,11 +14,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: python3 tools/check_hoehe.py
+      - run: python3 tools/check_baumarten.py
         continue-on-error: true
       - run: |
           git config user.name "Waldwächter-Daten"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/geodienste/hoehe.txt
+          git add data/geodienste/baumarten.txt
           git commit -m "Dienste geprüft" || exit 0
           for i in 1 2 3 4 5; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 10; done

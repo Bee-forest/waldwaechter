@@ -6,13 +6,35 @@ import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { centroid, formatHa, polysOf } from './geo.js';
 import { amtlicheFlaecheHa } from './map/thueringen.js';
+import { Pdf, herunterladen } from './pdf.js';
 
 export const LINKS = {
   foerderung: 'https://www.thueringenforst.de/angebote-produkte/forstamtsservice/forstfoerderung',
   formulare: 'https://www.thueringenforst.de/aktuelles-service/service/formularcenter/formulare-forstfoerderung',
   forstaemter: 'https://www.thueringenforst.de/ueber-uns/standorte/forstaemter',
 };
-export const RICHTLINIE = 'Thüringer Richtlinie zur Förderung forstwirtschaftlicher Maßnahmen 2025 (in Kraft seit 30.07.2025), Teil A – Naturnahe Waldbewirtschaftung';
+const FORM = 'https://www.thueringenforst.de/fileadmin/user_upload/PDF/';
+// Förderprogramme in Thüringen für Wiederbewaldung, Schutz und Pflege
+export const PROGRAMME = {
+  GANW: { kurz: 'Richtlinie, Teil A – Naturnahe Waldbewirtschaftung',
+    name: 'Thüringer Richtlinie zur Förderung forstwirtschaftlicher Maßnahmen 2025 (in Kraft seit 30.07.2025), Teil A – Naturnahe Waldbewirtschaftung',
+    formular: 'Antrag Naturnahe Waldbewirtschaftung (GANW 26)', url: `${FORM}Forstfoerderung__Thueringer_Richtlinie/Antrag_GANW_26_Naturnahe_Waldbewirtschaftung.pdf`,
+    wann: 'Waldumbau, Voranbau und Wiederaufforstung ohne Zusammenhang mit einem Extremwetterschaden.' },
+  GABE: { kurz: 'Richtlinie, Teil E – Bewältigung von Extremwetterereignissen',
+    name: 'Thüringer Richtlinie zur Förderung forstwirtschaftlicher Maßnahmen 2025, Teil E – Bewältigung von Extremwetterereignissen',
+    formular: 'Antrag Bewältigung Extremwetterereignisse (GABE 25)', url: `${FORM}Forstfoerderung__Thueringer_Richtlinie/Antrag_GABE_25_Bewaeltigung_von_Extremwetterereignissen.pdf`,
+    wann: 'Vorhaben, die unmittelbar mit Schäden durch Sturm, Dürre oder Borkenkäfer zusammenhängen und auf der geschädigten Fläche wieder standortgerechten, klimaangepassten Wald begründen.' },
+  LABE: { kurz: 'Thüringer Landesprogramm (Extremwetterfolgen)',
+    name: 'Thüringer Landesprogramm zur Bewältigung der Folgen von Extremwetterereignissen im Wald (konsolidierte Fassung, in Kraft seit 26.06.2024)',
+    formular: 'Antrag Landesprogramm (LABE 25)', url: `${FORM}Forstfoerderung_Landesprogramm/Antrag_LABE_25_Landesprogramm.pdf`,
+    wann: 'Ergänzt die Richtlinie für Vorhaben in Zusammenhang mit Kalamitäten – vor allem für kleine Waldbesitzende. Anträge laufend; das Budget war in den letzten Jahren oft im Jahresverlauf ausgeschöpft.' },
+};
+/** Empfehlung: ohne Schaden Teil A; Schadfläche und kleiner Besitz (bisher bis 20 ha) Landesprogramm; sonst Teil E */
+export function empfehleProgramm({ schaden, besitzHa }) {
+  if (schaden !== 'ja') return 'GANW';
+  return besitzHa != null && besitzHa <= 20 ? 'LABE' : 'GABE';
+}
+export const RICHTLINIE = PROGRAMME.GANW.name;
 
 // Allgemeine Förderbedingungen (ThüringenForst, Stand 2026)
 export const ALLGEMEIN = [
@@ -96,8 +118,8 @@ export function weiterZumAntrag(measureId, antragId = null) {
   else openFoerderantrag({ antragId: neuerAntrag([measureId]) });
 }
 
-const SCHRITTE = ['antragsteller', 'flaeche', 'massnahmen', 'erklaerungen', 'weitere', 'zusammenfassung'];
-const TITEL = { antragsteller: 'Antragsteller', flaeche: 'Waldfläche und Forstamt', massnahmen: 'Angaben zu den Maßnahmen', erklaerungen: 'Erklärungen', weitere: 'Noch eine Maßnahme?', zusammenfassung: 'Antrag prüfen und abschließen' };
+const SCHRITTE = ['programm', 'antragsteller', 'flaeche', 'massnahmen', 'erklaerungen', 'weitere', 'zusammenfassung'];
+const TITEL = { programm: 'Welches Förderprogramm passt?', antragsteller: 'Antragsteller', flaeche: 'Waldfläche und Forstamt', massnahmen: 'Angaben zu den Maßnahmen', erklaerungen: 'Erklärungen', weitere: 'Noch eine Maßnahme?', zusammenfassung: 'Antrag prüfen und abschließen' };
 
 export async function openFoerderantrag({ antragId, schritt = null, nurLesen = false } = {}) {
   const all = await source.allParcels();
@@ -113,13 +135,20 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
   const ms = () => (antragVon(antragId)?.massnahmen || []).map((id) => store.get().measures.find((m) => m.id === id)).filter(Boolean);
 
   // Forstamt aus dem Geoportal vorbelegen
-  if (!d.forstamt) {
-    const p = ms().map((m) => byId[m.parcelId]).find(Boolean);
-    if (p) import('./map/geoinfo.js').then((g) => g.queryPoint(centroid(p.ring))).then((info) => {
-      const fa = info?.zustaendig?.Forstamt;
-      if (fa && !d.forstamt) { d.forstamt = `Forstamt ${fa}`; speichere(); if (SCHRITTE[i] === 'flaeche') render(); }
-    }).catch(() => {});
+  // Besitzgröße: Summe der eigenen Waldflurstücke
+  if (d.besitzHa == null || d.besitzHa === '') {
+    const wald = store.get().parcels.filter((p) => (p.category || 'Wald') === 'Wald').map((p) => byId[p.id] || p);
+    const ha = wald.reduce((a, p) => a + (amtlicheFlaecheHa(p) || 0), 0);
+    if (ha) d.besitzHa = String(Math.round(ha * 100) / 100).replace('.', ',');
   }
+  // Forstamt und Waldschadfläche aus dem Geoportal
+  const p0 = ms().map((m) => byId[m.parcelId]).find(Boolean);
+  if (p0 && (!d.forstamt || d.schadenKarte == null)) import('./map/geoinfo.js').then((g) => g.queryPoint(centroid(p0.ring))).then((info) => {
+    const fa = info?.zustaendig?.Forstamt;
+    if (fa && !d.forstamt) d.forstamt = `Forstamt ${fa}`;
+    if (!info?.failed) { d.schadenKarte = (info.wald || []).some((x) => x.layer === 'waldschaeden'); if (!d.schaden) d.schaden = d.schadenKarte ? 'ja' : ''; }
+    speichere(); if (['flaeche', 'programm'].includes(SCHRITTE[i])) render();
+  }).catch(() => {});
 
   const feld = (label, key, attrs = {}, obj = d) => h('label', {}, label, h('input', { value: obj[key] ?? '', ...attrs, oninput: (e) => { obj[key] = e.target.value; speichere(); } }));
   const auswahl = (label, key, opts, obj = d, onchg) => h('label', {}, label, h('select', { onchange: (e) => { obj[key] = e.target.value; speichere(); onchg?.(); } },
@@ -133,6 +162,7 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
     for (const m of ms()) {
       const x = d.m[m.id] || {};
       const name = MT[m.type]?.label || m.type;
+      if (!x.ausfuehrung) out.push(`${name}: Angeben, wer die Arbeiten ausführt (Unternehmer).`);
       if (x.ausfuehrung === 'eigen') out.push(`${name}: Eigenleistungen sind nicht förderfähig – nur Arbeiten eines Unternehmers mit Rechnung.`);
       if (m.date && m.date < Date.now() - 86400000) out.push(`${name}: Der geplante Termin liegt in der Vergangenheit. Begonnene Maßnahmen werden nicht gefördert.`);
       if (m.type === 'pflanzung' && /fichte/i.test(m.details?.species || '') && !typen.some((t, k) => t === 'pflanzung' && !/fichte/i.test(ms()[k].details?.species || ''))) out.push('Pflanzung: Eine reine Fichtenkultur entspricht nicht dem Ziel stabiler Laub- und Mischbestände – plane standortgerechte Mischbaumarten ein und stimme die Baumartenwahl mit dem Forstamt ab.');
@@ -145,6 +175,10 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
       }
       if (m.thinning?.natura2000?.length || m.natura2000?.length) out.push(`${name}: Fläche im Schutzgebiet – Schutzgebietsverordnung beachten und mit dem Forstamt abstimmen.`);
     }
+    if (d.programm === 'GANW' && d.schaden === 'ja') out.push('Programm: Die Fläche ist eine Schadfläche – prüfe Teil E der Richtlinie oder das Landesprogramm.');
+    if ((d.programm === 'GABE' || d.programm === 'LABE') && d.schaden !== 'ja') out.push('Programm: Teil E und das Landesprogramm setzen einen Schaden durch Extremwetter voraus – sonst Teil A wählen.');
+    if (d.programm === 'GABE' || d.programm === 'LABE') out.push('Programm: Den Schaden dokumentieren (Fotos, Schadursache, betroffene Fläche) und dem Antrag beilegen.');
+    if (d.programm === 'LABE') out.push('Programm: Das Budget des Landesprogramms ist begrenzt – den Antrag möglichst früh im Jahr stellen.');
     if (!d.pi) out.push('Personenident (PI Forst) fehlt – ohne PI kann der Antrag nicht bearbeitet werden. Ein PI kann beim Forstamt beantragt werden.');
     if (d.rolle === 'bevollmaechtigt') out.push('Du stellst den Antrag für jemand anderen: Die unterschriebene Vollmacht muss beiliegen.');
     return out;
@@ -154,7 +188,23 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
     const q = SCHRITTE[i];
     const liste = ms();
     let inhalt = [];
-    if (q === 'antragsteller') {
+    if (q === 'programm') {
+      const besitz = Number(String(d.besitzHa || '').replace(',', '.')) || null;
+      const empf = empfehleProgramm({ schaden: d.schaden, besitzHa: besitz });
+      d.programm ||= empf;
+      inhalt = [
+        h('p', { class: 'muted' }, 'In Thüringen gibt es für Pflanzung, Schutz und Pflege drei Wege. Welcher passt, hängt davon ab, ob die Fläche durch Extremwetter geschädigt ist und wie groß dein Waldbesitz ist.'),
+        auswahl('Ist die Fläche durch Sturm, Dürre oder Borkenkäfer geschädigt (Schadfläche)?', 'schaden', [['ja', 'Ja – Schad- oder Kalamitätsfläche'], ['nein', 'Nein – Waldumbau oder Voranbau im gesunden Bestand']], d, () => { d.programm = ''; render(); }),
+        d.schadenKarte != null ? h('p', { class: 'hint' }, d.schadenKarte ? 'Laut Karte „Waldschadflächen“ von ThüringenForst liegt das Flurstück in einer Schadfläche.' : 'In der Karte „Waldschadflächen“ von ThüringenForst ist hier keine Schadfläche verzeichnet.') : null,
+        h('label', {}, 'Wie groß ist dein gesamter Waldbesitz in Thüringen (ha)?', h('input', { inputmode: 'decimal', value: d.besitzHa || '', oninput: (e) => { d.besitzHa = e.target.value; d.programm = ''; speichere(); }, onchange: () => render() }),
+          h('small', { class: 'hint' }, 'Vorbelegt aus deinen Waldflurstücken in der App.')),
+        h('p', { class: 'sheet-label' }, 'Förderprogramm wählen'),
+        h('div', { class: 'q-cards' }, Object.entries(PROGRAMME).map(([k, pr]) => h('button', { type: 'button', class: `q-option ${d.programm === k ? 'on' : ''}`, onclick: () => { d.programm = k; speichere(); render(); } },
+          h('span', { class: 'q-text' }, h('strong', {}, `${pr.kurz}${k === empf ? ' – empfohlen' : ''}`), h('small', {}, pr.wann), h('small', {}, `Formular: ${pr.formular}`))))),
+        h('p', { class: 'hint' }, 'Dieselbe Maßnahme darf nur aus einem Programm gefördert werden. Die Grenze von 20 ha für das Landesprogramm stammt aus der bisherigen Fassung – das Forstamt bestätigt dir, welches Programm gilt.'),
+      ];
+      speichere();
+    } else if (q === 'antragsteller') {
       inhalt = [
         feld('Name, Vorname bzw. Betrieb', 'name'), feld('Straße, Hausnummer', 'strasse'), feld('PLZ, Ort', 'ort'),
         feld('Telefon', 'telefon', { type: 'tel' }), feld('E-Mail', 'email', { type: 'email' }),
@@ -249,19 +299,136 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
       offen.length ? hinweis(`Noch offen: ${offen.join(', ')}.`) : hinweis('Alle Pflichtangaben sind ausgefüllt.', 'ok'),
       erklOffen ? hinweis(`${erklOffen} Erklärung${erklOffen > 1 ? 'en' : ''} noch nicht bestätigt.`) : null,
       h('dl', { class: 'parcel-facts' },
-        h('div', {}, h('dt', {}, 'Richtlinie'), h('dd', {}, RICHTLINIE)),
+        h('div', {}, h('dt', {}, 'Förderprogramm'), h('dd', {}, (PROGRAMME[d.programm] || PROGRAMME.GANW).name)),
         h('div', {}, h('dt', {}, 'Antragsteller'), h('dd', {}, [d.name, d.strasse, d.ort].filter(Boolean).join(', ') || '–')),
         h('div', {}, h('dt', {}, 'Einreichen bei'), h('dd', {}, d.forstamt || 'zuständiges Forstamt')),
         h('div', {}, h('dt', {}, 'Maßnahmen'), h('dd', {}, h('ul', { class: 'mat-kurz' }, liste.map((m) => h('li', {}, `${MT[m.type]?.label}: ${FOERDER[m.type]?.gegenstand || ''}${d.m[m.id]?.kostenNetto ? ` – ${d.m[m.id].kostenNetto} €` : ''}`))))),
         h('div', {}, h('dt', {}, 'Kosten gesamt laut Angeboten'), h('dd', {}, `${summe.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`))),
       h('h3', { class: 'sheet-label' }, 'So geht es weiter'),
       h('ol', { class: 'mess-liste' },
-        h('li', {}, 'Amtliches Antragsformular „Antrag Naturnahe Waldbewirtschaftung“ aus dem ', h('a', { href: LINKS.formulare, target: '_blank', rel: 'noopener' }, 'Formularcenter von ThüringenForst'), ' laden und die Angaben von hier übertragen (oder diese Übersicht dem Forstamt zeigen).'),
+        h('li', {}, 'Amtliches Formular ', h('a', { href: (PROGRAMME[d.programm] || PROGRAMME.GANW).url, target: '_blank', rel: 'noopener' }, `„${(PROGRAMME[d.programm] || PROGRAMME.GANW).formular}“`), ' laden (', h('a', { href: LINKS.formulare, target: '_blank', rel: 'noopener' }, 'Formularcenter'), ') und die Angaben aus dem PDF übertragen – oder das PDF beim Forstamt vorlegen.'),
         h('li', {}, 'Anlagen beifügen: Lageplan bzw. Karte der Fläche (Übersicht drucken), Angebote, ggf. Vollmacht.'),
         h('li', {}, 'Im Original unterschreiben und per Post beim Forstamt einreichen.'),
         h('li', {}, 'Erst nach Erhalt des Zuwendungsbescheids mit der Arbeit beginnen.')),
-      h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn', onclick: () => window.print() }, 'Übersicht drucken / als PDF')),
+      h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn btn-primary', onclick: () => pdfErstellen() }, 'Antrag als PDF herunterladen')),
       h('p', { class: 'hint' }, 'Die Höhe der Förderung (Festbeträge bzw. Fördersätze) setzt die Bewilligungsstelle nach der Richtlinie fest – das Forstamt berät dich dazu.'));
+  }
+
+  // ---------- PDF ----------
+  function pdfErstellen() {
+    const liste = ms();
+    const pr = PROGRAMME[d.programm] || PROGRAMME.GANW;
+    const doc = new Pdf();
+    const L = 50, R = 545, LW = 150;
+    let y = 50;
+    const platz = (hoehe) => { if (y + hoehe > 800) { fuss(); doc.neueSeite(); y = 50; } };
+    let seite = 1;
+    const fuss = () => { doc.linie(L, 812, R, 812); doc.text(L, 825, `WaldWächter – Antragsentwurf, kein amtliches Formular. Angaben in „${pr.formular}“ übertragen.`, { size: 7.5, farbe: [90, 100, 90] }); doc.text(R - 40, 825, `Seite ${seite++}`, { size: 7.5, farbe: [90, 100, 90] }); };
+    const titel = (t) => { platz(34); y += 10; doc.text(L, y, t, { bold: true, size: 12.5, farbe: [27, 77, 46] }); y += 6; doc.linie(L, y, R, y, { w: 1, farbe: [27, 77, 46] }); y += 14; };
+    const zeile = (k, v) => {
+      const zl = doc.umbrechen(v == null || v === '' ? '–' : String(v), R - L - LW, { size: 9.5 });
+      platz(zl.length * 12 + 4);
+      doc.text(L, y, k, { bold: true, size: 9, farbe: [70, 80, 70] });
+      zl.forEach((t, k2) => doc.text(L + LW, y + k2 * 12, t, { size: 9.5 }));
+      y += zl.length * 12 + 4;
+    };
+    const absatz = (t, opt = {}) => { const zl = doc.umbrechen(t, R - L - (opt.einzug || 0), { size: opt.size || 9.5, bold: opt.bold }); platz(zl.length * 12 + 2); zl.forEach((x) => { doc.text(L + (opt.einzug || 0), y, x, { size: opt.size || 9.5, bold: opt.bold, farbe: opt.farbe }); y += 12; }); y += 2; };
+    const euro = (v) => `${Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
+    doc.text(L, y, 'Antrag auf Gewährung einer Zuwendung – Entwurf', { bold: true, size: 16, farbe: [27, 77, 46] }); y += 18;
+    absatz(pr.name, { size: 10 });
+    absatz(`Formular: ${pr.formular} · Einreichen bei: ${d.forstamt || 'zuständiges Forstamt'} · erstellt am ${new Date().toLocaleDateString('de-DE')}`, { size: 9, farbe: [90, 100, 90] });
+
+    titel('1. Antragsteller');
+    zeile('Name / Betrieb', d.name); zeile('Anschrift', [d.strasse, d.ort].filter(Boolean).join(', '));
+    zeile('Telefon / E-Mail', [d.telefon, d.email].filter(Boolean).join(' · ')); zeile('Personenident (PI Forst)', d.pi || 'noch nicht vorhanden – beim Forstamt beantragen');
+    zeile('Antrag gestellt als', d.rolle === 'bevollmaechtigt' ? `Bevollmächtigte/r für ${d.eigentuemer || '…'} (Vollmacht liegt bei)` : 'Eigentümer/in');
+    zeile('Kontoinhaber/in', d.kontoinhaber); zeile('IBAN', d.iban);
+    zeile('Vorsteuerabzug', d.vorsteuer === 'ja' ? 'berechtigt – Kosten netto' : d.vorsteuer === 'nein' ? 'nicht berechtigt – Kosten brutto' : 'keine Angabe');
+    zeile('Waldbesitz gesamt', d.besitzHa ? `${d.besitzHa} ha` : null);
+    zeile('Schadfläche', d.schaden === 'ja' ? 'ja – Schaden durch Extremwetter' : d.schaden === 'nein' ? 'nein' : null);
+
+    titel('2. Waldfläche');
+    const parcels = [...new Set(liste.map((m) => m.parcelId).filter(Boolean))].map((id) => byId[id]).filter(Boolean);
+    parcels.forEach((p) => zeile(`Gemarkung ${p.gemarkung}`, `Flur ${p.flur}, Flurstück ${p.nr}, ${formatHa(amtlicheFlaecheHa(p))} (amtlich)${p.lage ? `, Lage: ${p.lage}` : ''}`));
+    y = lageplan(doc, parcels, liste, y);
+
+    titel('3. Beantragte Maßnahmen');
+    let summe = 0;
+    liste.forEach((m, k) => {
+      const x = d.m[m.id] || {};
+      const det = m.details || {};
+      platz(40);
+      absatz(`3.${k + 1} ${MT[m.type]?.label || m.type} – ${FOERDER[m.type]?.gegenstand || ''}`, { bold: true, size: 10.5 });
+      const ha = m.flaeche?.ha ?? (m.parcelId && byId[m.parcelId] ? amtlicheFlaecheHa(byId[m.parcelId]) : null);
+      zeile('Fläche', ha ? `${m.flaeche ? 'Teilfläche' : 'ganzes Flurstück'}, ${formatHa(ha)}` : null);
+      for (const [key, label] of MT[m.type]?.fields || []) if (det[key] !== '' && det[key] != null) zeile(label.replace(/ \(.*\)/, ''), det[key]);
+      if (m.zaun?.material?.length) zeile('Material', m.zaun.material.map((z) => `${z.menge} ${z.einheit} ${z.name}`).join('; '));
+      if (x.verfahren) zeile('Kulturbegründung', x.verfahren === 'voranbau' ? 'Voranbau unter Schirm' : 'Wiederaufforstung');
+      if (x.sortiment) zeile('Sortiment', x.sortiment);
+      if (x.herkunft) zeile('Herkunftsgebiet', x.herkunft);
+      if (x.baumschule) zeile('Baumschule', x.baumschule);
+      if (x.kultur) zeile('Geschützte Kultur', x.kultur === 'ja' ? 'vorhanden bzw. geplant' : 'keine');
+      if (x.pflanzjahr) zeile('Jahr der Pflanzung', x.pflanzjahr);
+      zeile('Geplanter Termin', m.date ? new Date(m.date).toLocaleDateString('de-DE') : 'nach Erhalt des Zuwendungsbescheids');
+      zeile('Ausführung', x.ausfuehrung === 'unternehmer' ? `Unternehmer${x.unternehmer ? `: ${x.unternehmer}` : ''}` : x.ausfuehrung === 'eigen' ? 'Eigenleistung (nicht förderfähig!)' : null);
+      const kosten = Number(String(x.kostenNetto || '').replace(',', '.')) || 0;
+      summe += kosten;
+      zeile(d.vorsteuer === 'ja' ? 'Kosten (netto)' : 'Kosten', kosten ? `${euro(kosten)}${x.angebot ? ' – Angebot liegt bei' : ''}` : null);
+      y += 4;
+    });
+    zeile('Kosten gesamt', euro(summe));
+
+    const pruef = pruefungen();
+    if (pruef.length) { titel('4. Hinweise zu den Förderbedingungen'); pruef.forEach((t) => absatz(`• ${t}`, { einzug: 6 })); }
+    titel(`${pruef.length ? 5 : 4}. Erklärungen`);
+    const E = [['nichtBegonnen', 'Mit den Maßnahmen wurde noch nicht begonnen; Beginn erst nach Erhalt des Zuwendungsbescheids.'], ['zweckbindung', 'Die Zweckbindung wird eingehalten (z. B. Pflanzung 5 Jahre).'], ['keineDoppel', 'Für dieselben Maßnahmen werden keine anderen öffentlichen Mittel beantragt oder bezogen.'], ['unternehmer', 'Die Arbeiten führt ein Unternehmer aus (keine Eigenleistung).'], ['richtig', 'Die Angaben sind vollständig und richtig.']];
+    E.forEach(([k, t]) => { platz(14); doc.rechteck(L, y - 8, 9, 9, { stroke: [60, 70, 60] }); if (d.erkl[k]) { doc.linie(L + 1.5, y - 3.5, L + 4, y - 0.5, { w: 1.4, farbe: [27, 77, 46] }); doc.linie(L + 4, y - 0.5, L + 8, y - 7, { w: 1.4, farbe: [27, 77, 46] }); } const zl = doc.umbrechen(t, R - L - 16, { size: 9.5 }); zl.forEach((z, k2) => doc.text(L + 16, y + k2 * 12, z, { size: 9.5 })); y += zl.length * 12 + 4; });
+    titel('Anlagen');
+    ['Lageplan / Karte der Fläche (siehe Abschnitt 2)', 'Angebote bzw. Kostenvoranschläge', d.rolle === 'bevollmaechtigt' ? 'Vollmacht der Eigentümerin / des Eigentümers' : null, d.programm !== 'GANW' ? 'Dokumentation des Schadens (Fotos, Ursache, Fläche)' : null, liste.some((m) => m.type === 'pflanzung') ? 'Herkunftsnachweis des Pflanzguts (nach Lieferung)' : null].filter(Boolean).forEach((t) => absatz(`• ${t}`, { einzug: 6 }));
+    platz(70); y += 30;
+    doc.linie(L, y, L + 200, y, { farbe: [60, 70, 60] }); doc.linie(L + 260, y, R, y, { farbe: [60, 70, 60] });
+    doc.text(L, y + 12, 'Ort, Datum', { size: 8.5, farbe: [90, 100, 90] }); doc.text(L + 260, y + 12, 'Unterschrift (im Original)', { size: 8.5, farbe: [90, 100, 90] });
+    fuss();
+    const name = `Foerderantrag_${pr.formular.match(/\(([^)]+)\)/)?.[1]?.replace(/\s+/g, '') || 'Entwurf'}_${(d.name || 'Waldbesitz').replace(/[^\wäöüÄÖÜß-]+/g, '_')}.pdf`;
+    herunterladen(doc.blob(), name);
+    toast('PDF wird heruntergeladen');
+  }
+
+  function lageplan(doc, parcels, liste, y) {
+    // Flurstücke grau, Maßnahmenflächen farbig; lokale Projektion in Metern
+    const flaechen = liste.map((m, k) => ({ k, polys: m.flaeche?.ring ? [[m.flaeche.ring]] : m.thinning?.ring ? polysOf(m.thinning) : null, linie: m.zaun && !m.zaun.geschlossen ? m.zaun.pts : null })).filter((f) => f.polys || f.linie);
+    const allePunkte = [...parcels.flatMap((p) => polysOf(p).flat(2)), ...flaechen.flatMap((f) => (f.polys ? f.polys.flat(2) : f.linie))];
+    if (!allePunkte.length) return y;
+    const lat0 = allePunkte.reduce((a, p) => a + p[0], 0) / allePunkte.length;
+    const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    const xy = ([la, ln]) => [ln * kx, -la * ky];
+    const P = allePunkte.map(xy);
+    const minX = Math.min(...P.map((p) => p[0])), maxX = Math.max(...P.map((p) => p[0])), minY = Math.min(...P.map((p) => p[1])), maxY = Math.max(...P.map((p) => p[1]));
+    const BX = 50, BB = 495, BH = 250;
+    const sk = Math.min((BB - 40) / Math.max(1, maxX - minX), (BH - 40) / Math.max(1, maxY - minY));
+    if (y + BH + 30 > 800) { doc.neueSeite(); y = 50; }
+    const ox = BX + (BB - (maxX - minX) * sk) / 2, oy = y + (BH - (maxY - minY) * sk) / 2;
+    const tr = (ll) => { const [a, b] = xy(ll); return [ox + (a - minX) * sk, oy + (b - minY) * sk]; };
+    doc.rechteck(BX, y, BB, BH, { stroke: [170, 180, 170], fill: [248, 250, 246] });
+    parcels.forEach((p) => polysOf(p).forEach((poly) => doc.polygon(poly.map((r) => r.map(tr)), { fill: [233, 239, 228], stroke: [120, 130, 110], w: 1 })));
+    const FARBEN = [[242, 107, 29], [47, 125, 58], [63, 127, 176], [176, 92, 166]];
+    flaechen.forEach((f) => {
+      const c = FARBEN[f.k % FARBEN.length];
+      if (f.polys) f.polys.forEach((poly) => doc.polygon(poly.map((r) => r.map(tr)), { stroke: c, w: 1.8 }));
+      else f.linie.slice(1).forEach((pt, j) => { const [a, b] = tr(f.linie[j]), [c2, d2] = tr(pt); doc.linie(a, b, c2, d2, { w: 2, farbe: c }); });
+    });
+    // Nordpfeil und Maßstab
+    doc.linie(BX + BB - 20, y + 40, BX + BB - 20, y + 16, { w: 1.4, farbe: [40, 50, 40] }); doc.linie(BX + BB - 24, y + 22, BX + BB - 20, y + 16, { w: 1.4, farbe: [40, 50, 40] }); doc.linie(BX + BB - 16, y + 22, BX + BB - 20, y + 16, { w: 1.4, farbe: [40, 50, 40] });
+    doc.text(BX + BB - 23, y + 12, 'N', { bold: true, size: 9 });
+    const meter = [10, 20, 50, 100, 200, 500, 1000].find((m) => m * sk >= 60) || 1000;
+    doc.linie(BX + 14, y + BH - 14, BX + 14 + meter * sk, y + BH - 14, { w: 2, farbe: [40, 50, 40] });
+    doc.text(BX + 14, y + BH - 20, `${meter} m`, { size: 8 });
+    y += BH + 8;
+    const leg = [['Flurstück', [120, 130, 110]], ...flaechen.map((f) => [`Fläche ${MT[liste[f.k].type]?.label || ''}`, FARBEN[f.k % FARBEN.length]])];
+    let lx = BX;
+    leg.forEach(([t, c]) => { doc.rechteck(lx, y - 7, 10, 7, { stroke: c, w: 1.6 }); doc.text(lx + 14, y, t, { size: 8.5 }); lx += 24 + t.length * 4.6; });
+    return y + 14;
   }
 
   function abschliessen() {

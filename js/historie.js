@@ -48,6 +48,7 @@ function openDetail(p, T) {
   body.append(
     h('div', { class: 'historie-kopf' }, mapEl,
       h('p', { class: 'muted map-legende' }, h('span', { class: 'sw sw-flst' }), 'Flurstück ', h('span', { class: 'sw sw-mn' }), 'Fläche der gewählten Maßnahme')),
+    h('h2', { class: 'section-title flst-titel' }, 'Angaben zum Flurstück'),
     h('dl', { class: 'parcel-facts' },
       h('div', {}, h('dt', {}, 'Gemarkung / Flur'), h('dd', {}, `${p.gemarkung}, Flur ${p.flur}`)),
       h('div', {}, h('dt', {}, 'Fläche (amtlich)'), h('dd', {}, formatHa(amtlicheFlaecheHa(p)))),
@@ -89,8 +90,8 @@ function openDetail(p, T) {
     for (const [k, label, kind] of T[m.type]?.fields || []) {
       const v = m.details?.[k];
       if (v === '' || v == null) continue;
-      const einheit = /\(([^)]{1,4})\)$/.exec(label)?.[1];
-      z(label === 'Fläche (ha)' ? 'Angegebene Fläche' : label.replace(/ \(.*\)/, ''), einheit ? `${v} ${einheit}` : v);
+      const einheit = /\(([^)]{1,8})\)$/.exec(label)?.[1];
+      z(label === 'Fläche (ha)' ? 'Angegebene Fläche' : label.replace(/ \(.*\)/, ''), einheit && !/je /.test(einheit) ? `${v} ${einheit}` : v);
     }
     const t = m.thinning, pl = t?.plan;
     if (pl) {

@@ -7,43 +7,46 @@ import { source } from './data/source.js';
 import { distance, bearing, formatDist, formatHa, areaHa } from './geo.js';
 import { miniKarte } from './flaeche.js';
 
-const STAND = 'Stand Herbst 2026, brutto inkl. 19 % MwSt., ohne Versand';
+const STAND = 'Stand 11/2026, brutto inkl. 19 % MwSt., ohne Versand; ab-Preise je nach Menge';
 const MWST = 1.19;
 // WBS Waldbesitzer Service GmbH, Materialsortiment Herbst 2026 (Preise zzgl. MwSt. → hier brutto)
 const WBS = { shop: 'Waldbesitzer Service GmbH (WBS)', url: 'https://www.waldbesitzer-service.de/seite/883737/materialsortiment-herbst-2026', wbs: true };
 const wbs = (netto, extra = {}) => ({ ...WBS, preis: Math.round(netto * MWST * 100) / 100, netto, hinweis: `${netto.toLocaleString('de-DE', { minimumFractionDigits: 2 })} € zzgl. MwSt.`, ...extra });
 const Q = {
+  grube: { shop: 'GRUBE Forstbedarf', url: 'https://www.grube.de/p/arcelormittal-wildgatter-knotengeflecht-1602015l/P73-721A/' },
+  grubePfahl: { shop: 'GRUBE Forstbedarf', url: 'https://www.grube.de/eckpfahl-cw-60-73-277/' },
+  driller: { shop: 'Drahtwaren Driller', url: 'https://www.draht-driller.de/knotengeflecht-verzinkt-2-00-x-1-60/11609/knotengeflecht-l-160-23-15-2-0-1-6-mm-starkverzinkt' },
+  drillerPfahl: { shop: 'Drahtwaren Driller', url: 'https://draht-driller.de/detail/index/sArticle/5492' },
+  latef: { shop: 'LATEF Land- und Gartentechnik', url: 'https://www.latef.de/onlineshop/wildzaun-stabmattenzaun/wildschutzzaunknotengeflecht/normalverzinkt/180/knotengeflecht-160/20/15-l' },
   siepmann: { shop: 'Siepmann', url: 'https://www.siepmann.net/Landwirtschaftliche_Z%C3%A4une/Knotengeflecht.html' },
-  hornbach: { shop: 'Hornbach (online)', url: 'https://www.hornbach.de/s/Knotengeflecht' },
-  wbv: { shop: 'WBV Fränkische Schweiz (Sammelbestellung)', url: 'https://www.wbvfs.de/images/pdf/Maschinensaetze-21.07.2022-Geschaeftsstelle.pdf' },
-  aquagartStrebe: { shop: 'Aquagart (über Kaufland)', url: 'https://www.kaufland.de/product/400248373/' },
-  aquagartAnker: { shop: 'Aquagart (über Kaufland)', url: 'https://www.kaufland.de/product/400248373/' },
-  alberts: { shop: 'Alberts (über Kaufland)', url: 'https://www.kaufland.de/product/530362892/' },
 };
 // Zaunhöhen: Knotengeflecht (Höhe/Anzahl waagerechter Drähte/Abstand senkrechter Drähte), passende Z-Profil-Länge
 export const HOEHEN = [
-  { cm: 160, typ: '160/20/15L', draehte: 20, pfahl: 210, text: 'Rehwild – im Wald am häufigsten', preise: [wbs(60.37, { hinweis: 'WBS-Nr. 3, 60,37 € zzgl. MwSt.' }), { ...Q.wbv, preis: 94.96, hinweis: '1,60 m, 50 m (Stand 2022)' }, { ...Q.hornbach, preis: 119.00, hinweis: '160/23/15' }] },
-  { cm: 200, typ: '200/22/15L', draehte: 22, pfahl: 250, text: 'Rot- und Damwild', preise: [wbs(65.09, { hinweis: 'WBS-Nr. 90, 65,09 € zzgl. MwSt.' }), { ...Q.siepmann, preis: 99.90, hinweis: '200/22/15' }] },
+  { cm: 160, typ: '160/20/15L', draehte: 20, pfahl: 210, text: 'Rehwild – im Wald am häufigsten', preise: [
+    wbs(60.37, { hinweis: 'WBS-Nr. 3, 60,37 € zzgl. MwSt.' }),
+    { ...Q.latef, preis: 75.58, hinweis: '160/20/15 L, normalverzinkt' },
+    { ...Q.grube, preis: 122.00, hinweis: 'ArcelorMittal 160/20/15L' },
+    { ...Q.driller, preis: 128.98, hinweis: 'L 160/20/15, starkverzinkt, ab-Preis' }] },
+  { cm: 200, typ: '200/22/15L', draehte: 22, pfahl: 250, text: 'Rot- und Damwild', preise: [
+    wbs(65.09, { hinweis: 'WBS-Nr. 90, 65,09 € zzgl. MwSt.' }),
+    { ...Q.siepmann, preis: 99.90, hinweis: '200/22/15' }] },
 ];
 const PFAHL_PREISE = {
-  210: [wbs(4.77, { hinweis: 'WBS-Nr. 4, 4,77 € zzgl. MwSt.' }), { ...Q.hornbach, preis: 10.99 }],
-  250: [wbs(5.40, { hinweis: 'WBS-Nr. 89, 5,40 € zzgl. MwSt.' }), { ...Q.hornbach, preis: 13.99 }],
+  210: [wbs(4.77, { hinweis: 'WBS-Nr. 4, 4,77 € zzgl. MwSt.' }), { ...Q.drillerPfahl, preis: 7.08, hinweis: 'Z-Profil 2100 mm, ab-Preis (Mengenrabatt)' }, { ...Q.grubePfahl, preis: 10.50, hinweis: 'Z-Profil-Stahlpfahl, ab-Preis' }],
+  250: [wbs(5.40, { hinweis: 'WBS-Nr. 89, 5,40 € zzgl. MwSt.' }), { ...Q.drillerPfahl, preis: 8.60, hinweis: 'Z-Profil 2500 mm, ab-Preis (Mengenrabatt)' }],
 };
 const PREISE = {
-  strebePfahl: [wbs(4.77, { hinweis: 'Z-Profil 2100 mm als Strebe, WBS-Nr. 4' }), { ...Q.hornbach, preis: 10.99 }],
+  strebePfahl: [wbs(4.77, { hinweis: 'Z-Profil 2100 mm als Strebe, WBS-Nr. 4' }), { ...Q.drillerPfahl, preis: 7.08, hinweis: 'Z-Profil 2100 mm, ab-Preis' }],
   eckverbinder: [wbs(7.07, { hinweis: 'WBS-Nr. 8, 7,07 € zzgl. MwSt.' })],
-  einschlaghilfe: [wbs(31.85, { hinweis: 'WBS-Nr. 133, 31,85 € zzgl. MwSt.' })],
-  strebe: [{ ...Q.aquagartStrebe, preis: 34.66, hinweis: 'Eck-Strebenset, 5 Stück 173,30 €' }],
-  spanndraht: [{ ...Q.hornbach, preis: 0.26, hinweis: '3,0 mm, 125 m für 32,30 €' }],
-  erdanker: [{ ...Q.alberts, preis: 0.52, hinweis: '25 × 250 mm für 12,99 €' }, { ...Q.aquagartAnker, preis: 1.79, hinweis: 'W-Profil 50 cm, 50 Stück 89,30 €' }],
-  drahtspanner: [], tor: [],
+  einschlaghilfe: [wbs(31.85, { hinweis: 'WBS-Nr. 133, 31,85 € zzgl. MwSt.' }), { ...Q.grubePfahl, preis: 26.90, hinweis: 'Einschlaghilfe für Z-Profilpfosten' }],
+  spanndraht: [], erdanker: [], drahtspanner: [], tor: [],
 };
 export const SHOPS = [
-  { name: 'Waldbesitzer Service GmbH (WBS), Schleiz', url: WBS.url, text: 'Sammelbestellung von Zaunmaterial über die FBG, zweimal im Jahr (Frühjahr/Herbst). Preise laut aktuellem Bestellformular.' },
-  { name: 'Siepmann', url: Q.siepmann.url, text: 'Knotengeflecht in vielen Höhen, günstige Rollenpreise.' },
-  { name: 'Aquagart', url: 'https://www.aquagart.de/forst-weidezaun/wildzaun-knotengeflecht/', text: 'Wildzaun, Z-Profile, Strebensets, Erdanker – auch als Komplettset.' },
-  { name: 'Hornbach', url: Q.hornbach.url, text: 'Knotengeflecht, Z-Profile 1,80–2,50 m, Spanndraht.' },
-  { name: 'Drahtwaren Driller', url: 'https://www.draht-driller.de/zaeune/wildschutzzaun', text: 'Fachhändler für Wildschutzzaun und Zubehör.' },
+  { name: 'Waldbesitzer Service GmbH (WBS), Schleiz', url: WBS.url, text: 'Sammelbestellung von Zaunmaterial über die FBG, zweimal im Jahr (Frühjahr/Herbst).' },
+  { name: 'GRUBE Forstbedarf', url: 'https://www.grube.de/', text: 'Forstversand mit Knotengeflecht, Z-Profil-Pfählen, Verstrebungssets, Einschlaghilfen und Werkzeug.' },
+  { name: 'Drahtwaren Driller', url: 'https://www.draht-driller.de/zaeune/wildschutzzaun', text: 'Fachhändler für Wildschutzzaun: Knotengeflecht, Z-Profile, Eck- und Anfangssets, Mengenrabatt.' },
+  { name: 'LATEF Land- und Gartentechnik', url: 'https://www.latef.de/onlineshop/wildzaun-stabmattenzaun/wildschutzzaunknotengeflecht/normalverzinkt/180/knotengeflecht-160/20/15-l', text: 'Fachhändler (Bad Lausick) mit Knotengeflecht in leichter und mittlerer Ausführung.' },
+  { name: 'Siepmann', url: 'https://www.siepmann.net/Landwirtschaftliche_Z%C3%A4une/Knotengeflecht.html', text: 'Fachhändler für landwirtschaftliche Zäune und Knotengeflecht.' },
 ];
 
 const euro = (v) => (v == null ? '–' : `${Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);

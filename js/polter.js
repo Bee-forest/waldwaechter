@@ -136,6 +136,12 @@ export function stammSkizze(mark = 'alle') {
   </svg>`;
 }
 
+// Höhen intern immer in cm; Eingabe wahlweise in cm oder m (Einstellung bleibt gespeichert)
+const EINHEIT_KEY = 'waldwaechter.polterEinheit';
+const leseEinheit = () => { try { return localStorage.getItem(EINHEIT_KEY) === 'm' ? 'm' : 'cm'; } catch { return 'cm'; } };
+const merkeEinheit = (e) => { try { localStorage.setItem(EINHEIT_KEY, e); } catch { /* egal */ } };
+const hoeheText = (cm, e) => (e === 'm' ? `${zahlText(cm / 100)} m` : `${zahlText(cm, 0)} cm`);
+
 // ---------- Assistent ----------
 export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
   const all = await source.allParcels();
@@ -143,7 +149,7 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
   const mine = store.get().parcels.filter((p) => byId[p.id]);
   const s = { i: 0, parcelId, polterNr: '', species: 'Fichte', sortiment: null, verfahren: null, pos: null,
     lab: null, t: null, hv: [], hr: [], rueck: true, c: 0, cLos: false, red: null, u: null, entrindet: false,
-    l: null, hs: [], staemme: [], neu: { l: null, d1: null, d2: null, rinde: 'oR', rabzug: null } };
+    l: null, hs: [], staemme: [], einheit: leseEinheit(), neu: { l: null, d1: null, d2: null, rinde: 'oR', rabzug: null } };
   const body = h('div', { class: 'polter' });
   const page = openPage('Poltervermessung', body);
 
@@ -171,6 +177,12 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       return h('label', { class: 'polter-feld' }, label, h('span', { class: 'mit-einheit' }, inp, einheit ? h('span', {}, einheit) : null));
     };
     let upd = () => {};
+    const einheitWahl = () => h('div', { class: 'einheit-zeile' }, h('span', {}, 'Höhe eingeben in'),
+      h('div', { class: 'segmented compact einheit-wahl', role: 'radiogroup', 'aria-label': 'Einheit der Höhe' },
+        [['cm', 'cm'], ['m', 'm']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-label': k === 'cm' ? 'Zentimeter' : 'Meter', 'aria-checked': String(s.einheit === k),
+          onclick: () => { s.einheit = k; merkeEinheit(k); render(); } }, l))));
+    const ausCm = (cm) => (cm == null ? null : s.einheit === 'm' ? cm / 100 : cm);
+    const inCm = (x) => (x == null ? null : s.einheit === 'm' ? Math.round(x * 1000) / 10 : x);
     const v = s.verfahren && VERFAHREN[s.verfahren];
 
     if (q === 'start') {
@@ -261,8 +273,8 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       bild = polterSkizze({ mark: istB ? 'hb' : `h${Math.min(i, 4)}`, sektionen: 5 });
       title = istB ? `Restsektion B – Höhe HB (${seite === 'v' ? 'Vorderseite' : 'Rückseite'})` : `Sektion ${i + 1} von ${n} – Höhe H${i + 1} (${seite === 'v' ? 'Vorderseite' : 'Rückseite'})`;
       help = `Senkrecht über der Sektionsmitte bei ${zahlText(mitte)} m (vom Polteranfang) messen. Latte unten am Holz ansetzen – oberhalb der Unterlagen, nicht am Boden.`;
-      inhalt = [zahlFeld('Höhe', arr[i], (x) => { arr[i] = x; }, { einheit: 'cm' }),
-        h('p', { class: 'muted' }, `Bisher gemessen: ${arr.slice(0, n + (lb > 0 ? 1 : 0)).map((x, k) => (x != null ? `${k === n ? 'HB' : `H${k + 1}`} ${zahlText(x, 0)}` : null)).filter(Boolean).join(' · ') || '–'}`)];
+      inhalt = [einheitWahl(), zahlFeld('Höhe', ausCm(arr[i]), (x) => { arr[i] = inCm(x); }, { einheit: s.einheit }),
+        h('p', { class: 'muted' }, `Bisher gemessen: ${arr.slice(0, n + (lb > 0 ? 1 : 0)).map((x, k) => (x != null ? `${k === n ? 'HB' : `H${k + 1}`} ${hoeheText(x, s.einheit)}` : null)).filter(Boolean).join(' · ') || '–'}`)];
       upd = () => { nextBtn.disabled = !(arr[i] > 0); };
     } else if (q === 'rueckfrage') {
       bild = polterSkizze({ mark: 'alle' });
@@ -287,11 +299,11 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       title = 'Polterhöhen H';
       help = 'An mehreren Stellen von der Unter- bis zur Oberkante messen. Nach jeder Messung „Höhe hinzufügen“.';
       const inp = h('input', { type: 'text', inputmode: 'decimal', autofocus: true, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } } });
-      const add = () => { const x = zahl(inp.value); if (x > 0) { s.hs.push(x); render(); } };
-      inhalt = [h('label', { class: 'polter-feld' }, 'Höhe', h('span', { class: 'mit-einheit' }, inp, h('span', {}, 'cm'))),
+      const add = () => { const x = inCm(zahl(inp.value)); if (x > 0) { s.hs.push(x); render(); } };
+      inhalt = [einheitWahl(), h('label', { class: 'polter-feld' }, 'Höhe', h('span', { class: 'mit-einheit' }, inp, h('span', {}, s.einheit))),
         h('button', { type: 'button', class: 'btn', onclick: add }, 'Höhe hinzufügen'),
-        s.hs.length ? h('ul', { class: 'mess-werte' }, s.hs.map((x, k) => h('li', {}, `H${k + 1}: ${zahlText(x, 0)} cm`, h('button', { type: 'button', class: 'link-btn', onclick: () => { s.hs.splice(k, 1); render(); } }, 'entfernen')))) : null,
-        s.hs.length ? h('p', { class: 'muted' }, `Mittlere Höhe: ${zahlText(s.hs.reduce((a, b) => a + b, 0) / s.hs.length, 1)} cm`) : null];
+        s.hs.length ? h('ul', { class: 'mess-werte' }, s.hs.map((x, k) => h('li', {}, `H${k + 1}: ${hoeheText(x, s.einheit)}`, h('button', { type: 'button', class: 'link-btn', onclick: () => { s.hs.splice(k, 1); render(); } }, 'entfernen')))) : null,
+        s.hs.length ? h('p', { class: 'muted' }, `Mittlere Höhe: ${hoeheText(s.hs.reduce((a, b) => a + b, 0) / s.hs.length, s.einheit)}`) : null];
       canNext = s.hs.length >= 2;
       if (!canNext) inhalt.push(h('p', { class: 'hint' }, 'Mindestens zwei Höhen messen.'));
     } else if (q === 'reduktion') {

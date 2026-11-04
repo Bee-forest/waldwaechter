@@ -763,3 +763,5 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .q-nav .btn-primary { flex: 1; }
 .polter-ergebnis small b { white-space: nowrap; }
 .polter .q-nav { background: var(--bg); padding: 10px 0; }
+.einheit-zeile { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.einheit-wahl button { min-width: 56px; white-space: nowrap; }

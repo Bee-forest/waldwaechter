@@ -107,7 +107,7 @@ export function computePlanMethode(sel, p, wald = null) {
   return {
     methode: 'raster-2026-11',
     areaHa: ha,
-    areaAmtlich: !clip && sh.flaecheHa != null && (wald?.status !== 'teil' || wald.quelle === 'ALKIS-Nutzung'),
+    areaAmtlich: !clip && sh.flaecheHa != null && wald?.status !== 'teil',
     flaecheGesamtHa: flaeche,
     wald: wald ? { status: wald.status, waldHa: wald.waldHa ?? null, gesamtHa: wald.gesamtHa ?? flaeche, quelle: wald.quelle || null } : null,
     areaGeoHa: geoHa,

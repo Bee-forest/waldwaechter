@@ -99,21 +99,20 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       h('strong', {}, 'Selbst eingezeichnete Fläche'),
       h('p', {}, 'Das Raster liegt auf der ganzen eingezeichneten Fläche – ohne Abgleich mit den amtlichen Waldflächen. Achte darauf, nur Wald einzuzeichnen.'));
     if (w.status === 'teil') return h('div', { class: 'lrt-hinweis wald-hinweis ok' },
-      h('strong', {}, `Raster nur auf Wald und Gehölz: ${formatHa(w.waldHa)} von ${formatHa(w.gesamtHa)}`),
-      h('p', {}, `Auf Wiese, Acker, Wegen und anderen Flächen liegen keine Rasterpunkte (${w.quelle === 'ALKIS-Nutzung' ? 'Flächenanteil amtlich laut ALKIS, Lage aus der Nutzungskarte' : 'laut ALKIS-Nutzungskarte'}). Stimmt das vor Ort nicht, kannst du die Fläche selbst einzeichnen.`), btn);
+      h('strong', {}, `Raster nur auf der Waldfläche: ca. ${formatHa(w.waldHa)} von ${formatHa(w.gesamtHa)}`),
+      h('p', {}, `Außerhalb der Waldfläche liegen keine Rasterpunkte (Quelle: ${w.quelle || 'Waldfläche'}). Stimmt das vor Ort nicht, kannst du die Fläche selbst einzeichnen.`), btn);
     if (w.status === 'kein') return h('div', { class: 'lrt-hinweis wald-hinweis' },
-      h('strong', {}, 'Laut ALKIS ist hier kein Wald und kein Gehölz'),
-      h('p', {}, 'Deshalb legt die App kein automatisches Raster. Ist die Fläche vor Ort trotzdem Wald (z. B. aufgeforstet oder Kataster nicht aktuell), zeichne sie selbst ein – dann wird das Raster auf deine Fläche gelegt.'), btn);
+      h('strong', {}, `Hier ist keine Waldfläche verzeichnet (${w.quelle || 'Waldfläche'})`),
+      h('p', {}, 'Deshalb legt die App kein automatisches Raster. Ist die Fläche vor Ort trotzdem Wald (z. B. aufgeforstet oder Daten nicht aktuell), zeichne sie selbst ein – dann wird das Raster auf deine Fläche gelegt.'), btn);
     return h('div', { class: 'lrt-hinweis wald-hinweis' },
       h('strong', {}, 'Waldflächen konnten nicht geprüft werden'),
-      h('p', {}, 'Der Nutzungsdienst war nicht erreichbar. Das Raster liegt deshalb auf der ganzen Fläche – prüfe vor Ort, ob alle Punkte im Wald liegen, oder zeichne den Waldteil selbst ein.'), btn);
+      h('p', {}, 'Die Waldflächen-Karte war nicht erreichbar. Das Raster liegt deshalb auf der ganzen Fläche – prüfe vor Ort, ob alle Punkte im Wald liegen, oder zeichne den Waldteil selbst ein.'), btn);
   }
   function waldAnteilZeile() {
-    const pc = st.sel?.parcel;
-    const t = pc?.nutzungText && nutzungAnteile({ nutzungText: pc.nutzungText, flaecheAmtlich: st.sel.flaecheHa != null ? st.sel.flaecheHa * 10000 : null, ring: st.sel.ring, polys: st.sel.polys });
-    if (!t) return null;
-    const w = t.Wald || 0;
-    return h('div', {}, h('dt', {}, 'Davon Wald/Gehölz'), h('dd', {}, w > 0 ? `${formatHa(w)} – nur hier liegt das Raster` : 'keine – Raster nur über „Einzeichnen“'));
+    const w = st.auto?.ring === st.sel?.ring ? st.auto?.wald : null;
+    if (!w || w.status === 'frei') return null;
+    const txt = { ganz: `${formatHa(w.gesamtHa)} – die ganze Fläche`, teil: `ca. ${formatHa(w.waldHa)} – nur hier liegt das Raster`, kein: 'keine – Raster nur über „Einzeichnen“', fehler: 'nicht abrufbar – Raster über die ganze Fläche' }[w.status];
+    return h('div', {}, h('dt', {}, 'Waldfläche'), h('dd', {}, txt));
   }
   const selPolys = () => polysOf(st.sel);
   const selHa = () => st.sel?.stand?.anteilHa ?? st.sel?.flaecheHa ?? areaM2Polys(selPolys()) / 10000;
@@ -448,7 +447,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           zeilen.map((k) => h('small', {}, `${DIMENSION[k].label[0].toUpperCase()}${DIMENSION[k].label.slice(1)} (${DIMENSION[k].bhd}): ${anteilSatz(plan.jePunkt[k])}`)),
           h('small', {}, `Raster ${fmt(plan.raster || RASTER_M, 1)} m in Schlangenlinien, Lage zufällig, Entnahmekreis ca. ${plan.kreis || KREIS_M} m.${plan.eng ? ' Weil je 25-m-Punkt viele Bäume anfielen, ist das Raster auf 12,5 m verdichtet – so entstehen keine Lücken.' : ''} „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
         parcelCard(),
-        kein ? null : h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.wald?.status === 'teil' ? ' Wald und Gehölz' : ''}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst bei diesem Eingriff ${plan.total} Bäume (ca. ${fmt(ei.vEingriff * plan.areaHa)} Fm bzw. ${fmt(ei.gEingriff * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
+        kein ? null : h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.wald?.status === 'teil' ? ' Waldfläche' : ''}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst bei diesem Eingriff ${plan.total} Bäume (ca. ${fmt(ei.vEingriff * plan.areaHa)} Fm bzw. ${fmt(ei.gEingriff * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
         h('div', { class: 'calc-box' },
           h('strong', {}, 'So kommt die Baumzahl zustande'),
           zeilen.map((k) => { const n = plan.points.reduce((a, pt) => a + (pt.removals.find((x) => x.klasse === k)?.count || 0), 0);

@@ -743,3 +743,23 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .gps-feld { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 15px; }
 .hm-details .parcel-facts { margin: 0; }
 .section-title.flst-titel { margin-top: 14px; }
+
+/* Neue Maßnahme als Seitenfolge, Poltervermessung */
+.type-grid.einspaltig { grid-template-columns: 1fr; }
+.type-grid.einspaltig .type-tile { text-align: left; }
+.polter { display: grid; gap: 12px; }
+.polter .step-title { margin: 4px 0 0; }
+.polter-bild { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+.polter-skizze { width: 100%; height: auto; display: block; font-family: inherit; }
+.polter-inhalt { display: grid; gap: 10px; }
+.polter-inhalt label { display: grid; gap: 4px; font-weight: 600; }
+.polter-feld .mit-einheit { display: flex; align-items: center; gap: 8px; }
+.polter-feld .mit-einheit input { flex: 1; font-size: 22px; font-weight: 700; min-height: 52px; }
+.polter-feld .mit-einheit span { font-weight: 700; color: var(--ink-2); min-width: 2.2em; }
+.mess-liste { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.mess-werte { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.mess-werte li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--surface-2); border-radius: 10px; }
+.q-nav { display: flex; gap: 10px; justify-content: space-between; margin-top: 6px; }
+.q-nav .btn-primary { flex: 1; }
+.polter-ergebnis small b { white-space: nowrap; }
+.polter .q-nav { background: var(--bg); padding: 10px 0; }

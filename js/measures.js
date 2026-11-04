@@ -12,18 +12,7 @@ import { SPECIES } from './thinning/plan.js';
 import { WANZE_SVG } from './mascot.js';
 import { flaechenWahl } from './flaeche.js';
 import { openFlurstueckHistorie } from './historie.js';
-
-const zahl = (v) => { const n = Number(String(v ?? '').trim().replace(',', '.')); return Number.isFinite(n) && String(v ?? '').trim() !== '' ? n : null; };
-export const fmtZahl = (v, d = 2) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
-/** Raummaß und Festmeter eines Polters (Sektionsverfahren mit gemittelter Höhe). */
-export function polterRechnung(d) {
-  const laenge = zahl(d.laenge), holzlaenge = zahl(d.holzlaenge), faktor = zahl(d.faktor) ?? 0.7;
-  const hs = String(d.hoehen || '').split(/[;\s]+/).map(zahl).filter((x) => x != null && x > 0);
-  if (!laenge || !holzlaenge || !hs.length) return null;
-  const hMittel = hs.reduce((a, b) => a + b, 0) / hs.length;
-  const rm = laenge * hMittel * holzlaenge;
-  return { laenge, holzlaenge, faktor, hMittel, nH: hs.length, rm, fm: rm * faktor };
-}
+import { openPolterVermessung } from './polter.js';
 
 export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
@@ -31,7 +20,7 @@ export const MEASURE_TYPES = {
   pflege:       { label: 'Pflege', fields: [['art', 'Art der Pflege', ['Jungwuchspflege', 'Jungbestandspflege', 'Freischneiden', 'Wertastung']], ['area', 'Fläche (ha)', 'decimal']] },
   durchforstung:{ label: 'Durchforstung mit GPS', gruppe: 'holzernte', info: 'Geführt per GPS-Raster', fields: [] },
   holzernte_df: { label: 'Durchforstung', gruppe: 'holzernte', info: 'Ohne GPS-Raster dokumentieren', fields: [['verfahren', 'Verfahren', ['motormanuell', 'Harvester', 'Harvester und motormanuell', 'Seilkran', 'Rückepferd']], ['species', 'Hauptbaumart', 'species'], ['baeume', 'Anzahl entnommener Bäume', 'number'], ['menge', 'Entnahmemenge (Fm)', 'decimal'], ['area', 'Fläche (ha)', 'decimal']] },
-  polter:       { label: 'Poltervermessung', gruppe: 'holzernte', info: 'Raummeter und Festmeter berechnen', fields: [['polterNr', 'Polter-Nr.', 'text'], ['species', 'Baumart', 'species'], ['sortiment', 'Sortiment', ['Stammholz (lang)', 'Stammholz (Abschnitte)', 'Industrieholz', 'Brennholz', 'Energieholz']], ['holzlaenge', 'Holzlänge (m)', 'decimal'], ['laenge', 'Polterlänge (m)', 'decimal'], ['hoehen', 'Polterhöhen (m)', 'hoehen'], ['faktor', 'Umrechnungsfaktor (Fm je rm)', 'decimal'], ['rm', 'Raummaß (rm)', 'calc'], ['fm', 'Holzmenge (Fm)', 'calc'], ['pos', 'Standort des Polters', 'gps']] },
+  polter:       { label: 'Poltervermessung', gruppe: 'holzernte', info: 'Schritt für Schritt nach RVR: Sortiment, Messverfahren, Volumen', fields: [['polterNr', 'Polter-Nr.', 'text'], ['species', 'Baumart', 'species'], ['sortiment', 'Sortiment', 'text'], ['verfahren', 'Messverfahren', 'text'], ['laenge', 'Poltertiefe (m)', 'text'], ['stueck', 'Anzahl Stämme', 'text'], ['rm', 'Raummaß netto (Rm m.R.)', 'text'], ['red', 'Reduktionsfaktor', 'text'], ['faktor', 'Umrechnungsfaktor', 'text'], ['fm', 'Holzmenge (Fm o.R.)', 'text'], ['pos', 'Standort des Polters', 'text']] },
   verkehrssicherung: { label: 'Verkehrssicherung', fields: [] },
   sonstiges:    { label: 'Sonstiges', fields: [['what', 'Was wird gemacht?', 'text'], ['amount', 'Menge / Umfang', 'text']] },
 };
@@ -259,60 +248,34 @@ async function openNewMeasure({ parcelId } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id]);
-  const body = h('div', { class: 'new-measure' });
-  const page = openPage('Neue Maßnahme', body);
+  const seiten = []; // geöffnete Seiten – nach dem Speichern alle schließen
+  const neueSeite = (titel, inhalt) => { const pg = openPage(titel, inhalt, { onClose: () => { const k = seiten.indexOf(pg); if (k >= 0) seiten.splice(k, 1); } }); seiten.push(pg); return pg; };
+  const alleSchliessen = () => [...seiten].reverse().forEach((pg) => pg.close());
+  const kachel = (label, info, onclick, feature = false) => h('button', { class: `type-tile ${feature ? 'type-feature' : ''}`, onclick }, h('strong', {}, label), info ? h('span', {}, info) : null);
 
-  // Kacheln: Holzernte fasst Durchforstung mit GPS, Durchforstung und Poltervermessung zusammen
-  const KACHELN = [['holzernte', 'Holzernte', 'Durchforstung mit GPS, Durchforstung, Poltervermessung'],
-    ...Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe !== 'holzernte').map(([k, t]) => [k, t.label, null])];
-  const HOLZERNTE = Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe === 'holzernte');
-  const typeGrid = h('div', { class: 'type-grid', role: 'radiogroup', 'aria-label': 'Art der Maßnahme' },
-    KACHELN.map(([k, label, info]) => h('button', {
-      class: `type-tile ${k === 'holzernte' ? 'type-feature' : ''}`, role: 'radio', 'aria-checked': 'false', dataset: { k },
-      onclick: () => (k === 'holzernte' ? pickHolzernte() : pickType(k)),
-    }, h('strong', {}, label), info ? h('span', {}, info) : null)),
-  );
-  const subHost = h('div', { class: 'holzernte-host' });
-  typeGrid.firstChild.after(subHost); // Auswahl direkt unter der Kachel Holzernte
-  const formHost = h('div');
-  body.append(h('h2', { class: 'step-title' }, 'Art der Maßnahme'), typeGrid, formHost);
-  const markiere = (k) => typeGrid.querySelectorAll(':scope > .type-tile').forEach((b, i) => b.setAttribute('aria-checked', String(KACHELN[i][0] === k)));
+  // Seite 1: Art der Maßnahme (Holzernte fasst Durchforstung mit GPS, Durchforstung und Poltervermessung zusammen)
+  neueSeite('Neue Maßnahme', h('div', { class: 'new-measure' },
+    h('h2', { class: 'step-title' }, 'Art der Maßnahme'),
+    h('div', { class: 'type-grid' },
+      kachel('Holzernte', 'Durchforstung mit GPS, Durchforstung, Poltervermessung', holzernteSeite, true),
+      Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe !== 'holzernte').map(([k, t]) => kachel(t.label, null, () => formularSeite(k))))));
 
-  function pickHolzernte(sub = null) {
-    markiere('holzernte');
-    fill(subHost, h('div', { class: 'holzernte-wahl', role: 'radiogroup', 'aria-label': 'Holzernte' }, h('p', { class: 'sheet-label' }, 'Welche Holzernte?'),
-      HOLZERNTE.map(([k, t]) => h('button', { class: 'type-tile', role: 'radio', 'aria-checked': String(sub === k), onclick: () => pickHolzernte(k) },
-        h('strong', {}, t.label), h('span', {}, t.info)))));
-    if (sub) pickType(sub, true); else formHost.replaceChildren();
+  // Seite 2: Holzernte
+  function holzernteSeite() {
+    neueSeite('Holzernte', h('div', { class: 'new-measure' },
+      h('h2', { class: 'step-title' }, 'Welche Holzernte?'),
+      h('div', { class: 'type-grid einspaltig' },
+        Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe === 'holzernte').map(([k, t]) => kachel(t.label, t.info, () => {
+          if (k === 'durchforstung') { alleSchliessen(); openThinningWizard({ parcelId }); return; }
+          if (k === 'polter') { openPolterVermessung({ parcelId, onSaved: alleSchliessen }); return; }
+          formularSeite(k);
+        }, k === 'durchforstung')))));
   }
 
-  function pickType(type, holz = false) {
-    if (!holz) { markiere(type); subHost.replaceChildren(); }
-    if (type === 'durchforstung') {
-      fill(formHost, 
-        h('div', { class: 'card callout' },
-          h('div', { class: 'callout-bug', html: WANZE_SVG }),
-          h('div', {},
-            h('p', {}, 'Bei der Durchforstung wählst du zuerst den Bestand, gibst die waldbaulichen Daten ein und ich lege ein Raster aus roten Punkten darüber. Im Wald führe ich dich per GPS von Punkt zu Punkt.'),
-            h('button', { class: 'btn btn-primary btn-block', onclick: () => { page.close(); openThinningWizard({ parcelId }); } }, 'Durchforstung planen'),
-          ),
-        ),
-      );
-      return;
-    }
+  // Seite 3: Eingabe der Maßnahme
+  function formularSeite(type) {
     const t = MEASURE_TYPES[type];
     const flHost = h('div', { class: 'flaeche-host' });
-    // Poltervermessung: Raummaß = Polterlänge × mittlere Polterhöhe × Holzlänge; Festmeter = Raummaß × Umrechnungsfaktor
-    const polterRechner = h('div', { class: 'calc-box polter-rechner', 'aria-live': 'polite' });
-    let polterPos = null;
-    const gpsFeld = h('div', { class: 'gps-feld' });
-    const zeigeGps = () => fill(gpsFeld, h('span', {}, polterPos ? `Standort: ${polterPos}` : 'Standort des Polters (für Abfuhr und Holzkäufer)'),
-      h('button', { type: 'button', class: 'btn btn-small', onclick: () => {
-        if (!navigator.geolocation) { toast('Kein GPS verfügbar'); return; }
-        navigator.geolocation.getCurrentPosition((pos) => { polterPos = `${pos.coords.latitude.toFixed(6)} N, ${pos.coords.longitude.toFixed(6)} O`; zeigeGps(); },
-          () => toast('Standort nicht verfügbar'), { enableHighAccuracy: true, timeout: 15000 });
-      } }, polterPos ? 'Neu erfassen' : 'Standort erfassen'));
-    if (type === 'polter') zeigeGps();
     let wahl = null;
     const zeigeWahl = (id) => { wahl?.entferne(); wahl = null; flHost.replaceChildren(); if (id && byId[id]) { wahl = flaechenWahl(byId[id]); flHost.append(wahl.el); } };
     const form = h('form', { class: 'form', onsubmit: (e) => {
@@ -321,15 +284,14 @@ async function openNewMeasure({ parcelId } = {}) {
       const fl = wahl ? wahl.wert() : null;
       if (wahl && !fl) { toast('Bitte mindestens 3 Eckpunkte der Teilfläche einzeichnen.'); return; }
       const kosten = String(fd.get('kosten') || '').trim();
-      const details = Object.fromEntries(t.fields.filter(([, , kind]) => kind !== 'calc' && kind !== 'gps').map(([k]) => [k, String(fd.get(k) || '').trim()]));
-      if (type === 'polter') { const r = polterRechnung(details); if (r) { details.rm = fmtZahl(r.rm, 2); details.fm = fmtZahl(r.fm, 2); } if (polterPos) details.pos = polterPos; }
+      const details = Object.fromEntries(t.fields.map(([k]) => [k, String(fd.get(k) || '').trim()]));
       store.update((s) => {
         s.measures.push({ id: uid(), type, parcelId: fd.get('parcel') || null, date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
           note: String(fd.get('note') || '').trim(), details, status: 'geplant', createdAt: Date.now(),
           ...(fl?.modus === 'teil' ? { flaeche: { ring: fl.ring, ha: fl.ha } } : {}), kosten: kosten ? Number(kosten.replace(',', '.')) : null,
-          ...(type === 'verkehrssicherung' ? { date: null, serie: { termine: VSP_TERMINE.map((t) => ({ ...t })) }, erledigt: {} } : {}) });
+          ...(type === 'verkehrssicherung' ? { date: null, serie: { termine: VSP_TERMINE.map((x) => ({ ...x })) }, erledigt: {} } : {}) });
       });
-      page.close();
+      alleSchliessen();
       toast(`${t.label} gebucht`);
     } },
       h('h2', { class: 'step-title' }, 'Fläche und Angaben'),
@@ -339,40 +301,16 @@ async function openNewMeasure({ parcelId } = {}) {
           mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${CATEGORIES[p.category].label}, ${formatHa(amtlicheFlaecheHa(byId[p.id]))})`)),
         )),
       flHost,
-      t.fields.filter(([, , kind]) => kind !== 'calc' && kind !== 'gps').map(([k, label, kind]) => h('label', {}, label,
+      t.fields.map(([k, label, kind]) => h('label', {}, label,
         Array.isArray(kind) ? h('select', { name: k }, kind.map((o) => h('option', {}, o)))
           : kind === 'species' ? h('select', { name: k }, SPECIES.map((o) => h('option', {}, o)))
-          : kind === 'hoehen' ? h('input', { name: k, type: 'text', inputmode: 'decimal', placeholder: 'z. B. 2,1; 2,3; 1,9 – alle 2–3 m messen' })
-          : h('input', { name: k, type: kind === 'number' ? 'number' : 'text', inputmode: kind === 'decimal' ? 'decimal' : kind === 'number' ? 'numeric' : null, min: kind === 'number' ? 0 : null,
-              value: type === 'polter' && k === 'faktor' ? '0,70' : null }))),
-      type === 'polter' ? polterRechner : null,
-      type === 'polter' ? gpsFeld : null,
+          : h('input', { name: k, type: kind === 'number' ? 'number' : 'text', inputmode: kind === 'decimal' ? 'decimal' : kind === 'number' ? 'numeric' : null, min: kind === 'number' ? 0 : null }))),
       h('label', {}, 'Geplanter Termin', h('input', { type: 'date', name: 'date' })),
       h('label', {}, 'Kosten (€, optional)', h('input', { name: 'kosten', type: 'number', inputmode: 'decimal', min: 0, step: '0.01' })),
       h('label', {}, 'Notiz', h('textarea', { name: 'note', rows: 3 })),
       h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, `${t.label} buchen`),
     );
-    fill(formHost, form);
+    neueSeite(t.label, h('div', { class: 'new-measure' }, form));
     if (parcelId) zeigeWahl(parcelId);
-    if (type === 'polter') {
-      const upd = () => {
-        const fd = new FormData(form);
-        const r = polterRechnung(Object.fromEntries(['holzlaenge', 'laenge', 'hoehen', 'faktor', 'species'].map((k) => [k, String(fd.get(k) || '')])));
-        fill(polterRechner, h('strong', {}, 'Ergebnis'),
-          r ? [h('small', {}, `Mittlere Polterhöhe: ${fmtZahl(r.hMittel, 2)} m (aus ${r.nH} Messung${r.nH > 1 ? 'en' : ''})`),
-               h('small', {}, `Raummaß: ${fmtZahl(r.laenge, 2)} m × ${fmtZahl(r.hMittel, 2)} m × ${fmtZahl(r.holzlaenge, 2)} m = ${fmtZahl(r.rm, 2)} rm`),
-               h('small', {}, h('b', {}, `Holzmenge: ${fmtZahl(r.rm, 2)} rm × ${fmtZahl(r.faktor, 2)} = ${fmtZahl(r.fm, 2)} Fm`))]
-            : h('small', {}, 'Trage Holzlänge, Polterlänge und die Polterhöhen ein – die App rechnet Raummeter und Festmeter.'),
-          h('small', { class: 'hint' }, 'Umrechnungsfaktor als Richtwert: Nadelholz gerade ca. 0,70, Laubholz ca. 0,65, krummes oder starkastiges Holz eher 0,60. Maßgeblich ist die Vereinbarung mit dem Holzkäufer.'));
-      };
-      form.addEventListener('input', upd);
-      form.querySelector('select[name=species]')?.addEventListener('change', (e) => {
-        const f = form.querySelector('input[name=faktor]');
-        if (f && ['0,70', '0,65'].includes(f.value)) f.value = /eiche|buche|ahorn|esche|birke|erle|linde|kirsche|hainbuche|laub/i.test(e.target.value) ? '0,65' : '0,70';
-        upd();
-      });
-      upd();
-    }
-    form.querySelector('select, input')?.focus();
   }
 }

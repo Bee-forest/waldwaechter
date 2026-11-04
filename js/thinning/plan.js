@@ -1,5 +1,6 @@
 // Rechenkern der Durchforstungsmethode (ohne UI, gut testbar).
 import { areaHa, generateGrid, inPolys, polysOf, areaM2Polys } from '../geo.js';
+import { imWald } from './wald.js';
 import { bestimme, DIMENSION, RASTER_M, amPunkt, QUALITAET_TEXT, AUSWAHL_TEXT } from './methode.js';
 
 export const SPECIES = ['Fichte', 'Kiefer', 'Lärche', 'Douglasie', 'Tanne', 'Buche', 'Eiche', 'Bergahorn', 'Esche', 'Birke', 'Erle'];
@@ -67,7 +68,8 @@ export function zufallsLage() {
   return { offset: [Math.random(), Math.random()], relativ: true, umkehren: Math.random() < 0.5, erzeugt: Date.now() };
 }
 
-export function computePlanMethode(sel, p) {
+export function computePlanMethode(sel, p, wald = null) {
+  // wald: Ergebnis von waldbereich() – Raster nur auf Wald- und Gehölzflächen
   // sel: { ring, polys?, flaecheHa? } – bei Flurstücken amtliche Fläche und vollständige Geometrie
   const sh = Array.isArray(sel) ? { ring: sel } : sel;
   const polys = polysOf(sh);
@@ -76,7 +78,8 @@ export function computePlanMethode(sel, p) {
   const geoHa = clip
     ? generateGrid(sh.ring, 5, { polys }).filter((pt) => inPolys(pt, clip)).length * 25 / 10000
     : areaM2Polys(polys) / 10000;
-  const ha = clip ? geoHa : sh.flaecheHa ?? geoHa;
+  const flaeche = clip ? geoHa : sh.flaecheHa ?? geoHa;
+  const ha = wald?.status === 'teil' ? wald.waldHa : wald?.status === 'kein' ? 0 : flaeche;
   const r = bestimme(p);
   const raster = r.raster || RASTER_M;
   p.spacing = raster;
@@ -87,6 +90,8 @@ export function computePlanMethode(sel, p) {
   const off = p.lage.relativ ? p.lage.offset.map((v) => v * raster) : p.lage.offset.map((v) => v % raster);
   let grid = generateGrid(sh.ring, raster, { offset: off, polys });
   if (clip) grid = grid.filter((pt) => inPolys(pt, clip));
+  if (wald?.status === 'kein') grid = [];
+  else if (wald?.status === 'teil') grid = grid.filter((pt) => imWald(wald, pt));
   if (p.lage.umkehren) grid = grid.reverse();
   // „in jedem n-ten Punkt“: fortlaufend über alle Punkte mitzählen
   const points = grid.map((at, i) => ({
@@ -102,7 +107,9 @@ export function computePlanMethode(sel, p) {
   return {
     methode: 'raster-2026-11',
     areaHa: ha,
-    areaAmtlich: !clip && sh.flaecheHa != null,
+    areaAmtlich: !clip && sh.flaecheHa != null && (wald?.status !== 'teil' || wald.quelle === 'ALKIS-Nutzung'),
+    flaecheGesamtHa: flaeche,
+    wald: wald ? { status: wald.status, waldHa: wald.waldHa ?? null, gesamtHa: wald.gesamtHa ?? flaeche, quelle: wald.quelle || null } : null,
     areaGeoHa: geoHa,
     stufe: r.stufe,
     eingriffe: { ...r.eingriffe, nr: p.eingriffNr },

@@ -5,8 +5,9 @@ import { store, uid } from '../store.js';
 import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
 import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox, polysOf, areaM2Polys, generateGrid, inPolys } from '../geo.js';
-import { parcelExact, amtlicheFlaecheHa } from '../map/thueringen.js';
+import { parcelExact, amtlicheFlaecheHa, nutzungAnteile } from '../map/thueringen.js';
 import { computePlanMethode, pointRemaining, pointTotal, zufallsLage } from './plan.js';
+import { waldbereich } from './wald.js';
 import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, MAX_FM_EINGRIFF, EIN_EINGRIFF_BIS, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { lrtInFlaeche } from '../map/besonderheiten.js';
@@ -78,9 +79,41 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       h('div', {}, h('dt', {}, 'Gemarkung / Flur'), h('dd', {}, `${pc.gemarkung}, Flur ${pc.flur}`)),
       h('div', {}, h('dt', {}, st.sel.flaecheHa != null ? 'Fläche (amtlich)' : 'Fläche (berechnet)'), h('dd', {}, st.sel.flaecheHa != null ? `${selHa().toLocaleString('de-DE', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ha (${Math.round(selHa() * 10000).toLocaleString('de-DE')} m²)` : formatHa(selHa()))),
       pc.nutzungText ? h('div', {}, h('dt', {}, 'Nutzung laut ALKIS'), h('dd', {}, pc.nutzungText)) : null,
+      waldAnteilZeile(),
       pc.lage ? h('div', {}, h('dt', {}, 'Lage'), h('dd', {}, pc.lage)) : null,
       teile || loecher ? h('div', {}, h('dt', {}, 'Form'), h('dd', {}, [teile, loecher ? `${loecher} ausgesparte Fläche${loecher > 1 ? 'n' : ''}` : null].filter(Boolean).join(', '))) : null,
     );
+  }
+  // Bekannte Daten passen nicht (z. B. Wald fehlt im ALKIS)? → Fläche selbst einzeichnen, Raster ohne Waldabgleich
+  function selbstEinzeichnen() {
+    const ring = st.sel?.ring;
+    st.mode = 'draw'; st.draft = []; st.sel = null; st.plan = null; st.auto = null; st.params = null;
+    go(0);
+    if (ring?.length >= 3) setTimeout(() => map.fitBounds(L.polygon(ring).getBounds(), { padding: [24, 24], maxZoom: 18 }), 120);
+  }
+  function waldHinweis(plan) {
+    const w = plan.wald;
+    if (!w || w.status === 'ganz') return null;
+    const btn = h('button', { type: 'button', class: 'btn btn-small', onclick: selbstEinzeichnen }, 'Fläche selbst einzeichnen');
+    if (w.status === 'frei') return h('div', { class: 'lrt-hinweis wald-hinweis ok' },
+      h('strong', {}, 'Selbst eingezeichnete Fläche'),
+      h('p', {}, 'Das Raster liegt auf der ganzen eingezeichneten Fläche – ohne Abgleich mit den amtlichen Waldflächen. Achte darauf, nur Wald einzuzeichnen.'));
+    if (w.status === 'teil') return h('div', { class: 'lrt-hinweis wald-hinweis ok' },
+      h('strong', {}, `Raster nur auf Wald und Gehölz: ${formatHa(w.waldHa)} von ${formatHa(w.gesamtHa)}`),
+      h('p', {}, `Auf Wiese, Acker, Wegen und anderen Flächen liegen keine Rasterpunkte (${w.quelle === 'ALKIS-Nutzung' ? 'Flächenanteil amtlich laut ALKIS, Lage aus der Nutzungskarte' : 'laut ALKIS-Nutzungskarte'}). Stimmt das vor Ort nicht, kannst du die Fläche selbst einzeichnen.`), btn);
+    if (w.status === 'kein') return h('div', { class: 'lrt-hinweis wald-hinweis' },
+      h('strong', {}, 'Laut ALKIS ist hier kein Wald und kein Gehölz'),
+      h('p', {}, 'Deshalb legt die App kein automatisches Raster. Ist die Fläche vor Ort trotzdem Wald (z. B. aufgeforstet oder Kataster nicht aktuell), zeichne sie selbst ein – dann wird das Raster auf deine Fläche gelegt.'), btn);
+    return h('div', { class: 'lrt-hinweis wald-hinweis' },
+      h('strong', {}, 'Waldflächen konnten nicht geprüft werden'),
+      h('p', {}, 'Der Nutzungsdienst war nicht erreichbar. Das Raster liegt deshalb auf der ganzen Fläche – prüfe vor Ort, ob alle Punkte im Wald liegen, oder zeichne den Waldteil selbst ein.'), btn);
+  }
+  function waldAnteilZeile() {
+    const pc = st.sel?.parcel;
+    const t = pc?.nutzungText && nutzungAnteile({ nutzungText: pc.nutzungText, flaecheAmtlich: st.sel.flaecheHa != null ? st.sel.flaecheHa * 10000 : null, ring: st.sel.ring, polys: st.sel.polys });
+    if (!t) return null;
+    const w = t.Wald || 0;
+    return h('div', {}, h('dt', {}, 'Davon Wald/Gehölz'), h('dd', {}, w > 0 ? `${formatHa(w)} – nur hier liegt das Raster` : 'keine – Raster nur über „Einzeichnen“'));
   }
   const selPolys = () => polysOf(st.sel);
   const selHa = () => st.sel?.stand?.anteilHa ?? st.sel?.flaecheHa ?? areaM2Polys(selPolys()) / 10000;
@@ -212,6 +245,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     } else {
       content.append(
         h('p', {}, 'Tippe in der Karte nacheinander auf die Eckpunkte des Bestands.'),
+        h('p', { class: 'hint' }, 'Eine eingezeichnete Fläche wird nicht mit den amtlichen Waldflächen abgeglichen – das Raster liegt auf der ganzen Fläche. So kannst du auch durchforsten, wenn die bekannten Daten nicht passen.'),
         h('p', { class: 'draw-status', 'aria-live': 'polite' }, st.draft.length >= 3 ? `${st.draft.length} Eckpunkte, ${formatHa(areaHa(st.draft))}` : `${st.draft.length} von mindestens 3 Eckpunkten`),
         h('div', { class: 'btn-row' },
           h('button', { class: 'btn', disabled: !st.draft.length, onclick: () => { st.draft.pop(); updateDraft(); } }, 'Letzten Punkt entfernen'),
@@ -291,8 +325,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
     if (!st.auto || st.auto.ring !== st.sel.ring) {
       st.auto = { ring: st.sel.ring, loading: true };
-      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null), lrtInFlaeche(st.sel).catch(() => []), natura2000InFlaeche(st.sel).catch(() => [])]).then(([bestand, oberhoehe, lrt, natura]) => {
-        st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe, lrt, natura };
+      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null), lrtInFlaeche(st.sel).catch(() => []), natura2000InFlaeche(st.sel).catch(() => []), waldbereich(st.sel, st.mode).catch(() => ({ status: 'fehler' }))]).then(([bestand, oberhoehe, lrt, natura, wald]) => {
+        st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe, lrt, natura, wald };
         if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = 'waldverzeichnis'; }
         if (st.step === 1) renderParams();
       });
@@ -317,6 +351,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       help = 'Der Termin wird mit der Brut- und Setzzeit abgeglichen, falls die Fläche in einem Schutzgebiet liegt.';
       const md = (arr) => ymd(new Date(new Date().getFullYear(), arr[0] - 1, arr[1]));
       content = [
+        a.wald?.status === 'kein' ? waldHinweis({ wald: a.wald }) : null,
         h('label', { class: 'date-field' }, 'Geplanter Termin',
           h('input', { type: 'date', value: ymd(f.termin), onchange: (e) => { if (e.target.value) { f.termin = new Date(`${e.target.value}T09:00`).getTime(); renderParams(); } } })),
         a.loading ? h('p', { class: 'muted' }, 'Prüfe Schutzgebiete auf der Fläche …')
@@ -387,13 +422,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       ];
       canNext = !loading && !!f.hoKlasse;
     } else {
-      const plan = computePlanMethode(st.sel, f);
+      const plan = computePlanMethode(st.sel, f, st.auto?.wald);
       st.plan = plan;
+      const kein = plan.wald?.status === 'kein';
       const ei = plan.eingriffe;
       title = ei.anzahl > 1 ? `Dein Eingriff ${ei.nr} von ${ei.anzahl}` : 'Dein Eingriff';
       help = `${plan.gruppeLabel} · Szenario ${plan.szenario} · B° ${bLabel(f.b)} · Oberhöhe ${HOEHENKLASSEN.find((x) => x.key === f.hoKlasse).label}`;
       const zeilen = ['dick', 'mittel', 'duenn'].filter((k) => plan.jePunkt[k] > 0);
       content = [
+        waldHinweis(plan),
         h('div', { class: 'preview' },
           h('div', {}, h('span', { class: 'pv-n' }, `ca. ${fmt(ei.vEingriff)}`), h('span', {}, 'Fm/ha bei diesem Eingriff')),
           h('div', {}, h('span', { class: 'pv-n' }, ei.anzahl), h('span', {}, ei.anzahl === 1 ? 'Eingriff im Jahrzehnt' : 'Eingriffe im Jahrzehnt')),
@@ -411,12 +448,12 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           zeilen.map((k) => h('small', {}, `${DIMENSION[k].label[0].toUpperCase()}${DIMENSION[k].label.slice(1)} (${DIMENSION[k].bhd}): ${anteilSatz(plan.jePunkt[k])}`)),
           h('small', {}, `Raster ${fmt(plan.raster || RASTER_M, 1)} m in Schlangenlinien, Lage zufällig, Entnahmekreis ca. ${plan.kreis || KREIS_M} m.${plan.eng ? ' Weil je 25-m-Punkt viele Bäume anfielen, ist das Raster auf 12,5 m verdichtet – so entstehen keine Lücken.' : ''} „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
         parcelCard(),
-        h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst bei diesem Eingriff ${plan.total} Bäume (ca. ${fmt(ei.vEingriff * plan.areaHa)} Fm bzw. ${fmt(ei.gEingriff * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
+        kein ? null : h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.wald?.status === 'teil' ? ' Wald und Gehölz' : ''}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst bei diesem Eingriff ${plan.total} Bäume (ca. ${fmt(ei.vEingriff * plan.areaHa)} Fm bzw. ${fmt(ei.gEingriff * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
         h('div', { class: 'calc-box' },
           h('strong', {}, 'So kommt die Baumzahl zustande'),
           zeilen.map((k) => { const n = plan.points.reduce((a, pt) => a + (pt.removals.find((x) => x.klasse === k)?.count || 0), 0);
             return h('small', {}, `${DIMENSION[k].baeume}: ${plan.points.length} Punkte × ${anteilText(plan.jePunkt[k])} je Punkt = ${n}`); }),
-          h('small', {}, `Bei ${fmt(plan.raster || 25, 1)} m Raster sind das ${Math.round(10000 / ((plan.raster || 25) ** 2))} Punkte je Hektar, also ${fmt(plan.points.length / plan.areaHa, 1)} Punkte je ha auf dieser Fläche. Die Gesamtzahl ergibt sich aus den Punkten, die tatsächlich auf der Fläche liegen – nicht aus einem Hektarwert.`)),
+          h('small', {}, `Bei ${fmt(plan.raster || 25, 1)} m Raster sind das ${Math.round(10000 / ((plan.raster || 25) ** 2))} Punkte je Hektar, also ${plan.areaHa ? fmt(plan.points.length / plan.areaHa, 1) : 0} Punkte je ha auf dieser Fläche. Die Gesamtzahl ergibt sich aus den Punkten, die tatsächlich auf der Fläche liegen – nicht aus einem Hektarwert.`)),
         h('details', { class: 'calc' }, h('summary', {}, 'Was bedeutet die Ziel-Entnahme Grundfläche?'),
           h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
           h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),
@@ -432,6 +469,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('details', { class: 'calc' }, h('summary', {}, 'So wurde bestimmt'), h('ol', {}, plan.schritte.map((t) => h('li', {}, t)))),
       ];
       nextLabel = 'Raster auf die Karte legen';
+      canNext = !kein;
     }
 
     const nextBtn = h('button', { class: 'btn btn-primary btn-large', disabled: !canNext, onclick: () => (q === 'ergebnis' ? go(2) : next()) }, nextLabel);
@@ -481,7 +519,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function renderGrid() {
     drawSelection();
-    st.plan ??= computePlanMethode(st.sel, st.params);
+    st.plan ??= computePlanMethode(st.sel, st.params, st.auto?.wald);
     const plan = st.plan;
     drawGrid(plan.points, { numbers: true });
     const radius = st.plan?.kreis || KREIS_M;
@@ -611,7 +649,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     let thinning, note;
     if (ei.nr < ei.anzahl) {
       const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0, termin: when.getTime() };
-      thinning = { ...base, params, plan: computePlanMethode(st.sel, params) };
+      thinning = { ...base, params, plan: computePlanMethode(st.sel, params, st.auto?.wald) };
       note = `Eingriff ${ei.nr + 1} von ${ei.anzahl} – neues, zufällig gelegtes Raster.`;
     } else {
       thinning = { ...base, params: null, plan: null };

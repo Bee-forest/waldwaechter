@@ -551,3 +551,46 @@ export async function parcelExact(p) {
   } catch { /* offline: gespeicherte Daten */ }
   return p;
 }
+
+// ---------- Waldmaske (ALKIS tatsächliche Nutzung, Layer „Vegetation“) ----------
+// Der Nutzungsdienst gibt Wald und Gehölz nur zusammen mit den übrigen Vegetationsflächen heraus
+// (Einzellayer sind gesperrt). Wald/Gehölz sind dort grün gefüllt, Landwirtschaft beige, Heide/Moor anders.
+const R_M = 6378137;
+const merc = ([lat, lng]) => [(lng * Math.PI / 180) * R_M, Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R_M];
+export const istWaldFarbe = (r, g, b, a) => a > 60 && g > r + 12 && g > b + 12;
+
+/** Lädt die Waldmaske (≈1 m je Pixel) für die Fläche. Ergebnis ist reine Daten (ohne Funktionen). */
+export async function waldMaske(ring) {
+  const ms = ring.map(merc);
+  const xs = ms.map((m) => m[0]), ys = ms.map((m) => m[1]);
+  const k = 1 / Math.cos((ring.reduce((s, p) => s + p[0], 0) / ring.length) * Math.PI / 180); // Mercator-Streckung
+  const pad = 20 * k;
+  const bb = [Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) + pad, Math.max(...ys) + pad];
+  const mpp = Math.max(k, (bb[2] - bb[0]) / 2048, (bb[3] - bb[1]) / 2048); // ~1 m je Pixel, höchstens 2048 px
+  const W = Math.max(16, Math.round((bb[2] - bb[0]) / mpp)), H = Math.max(16, Math.round((bb[3] - bb[1]) / mpp));
+  const q = new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: 'Vegetation', STYLES: '', CRS: 'EPSG:3857', BBOX: bb.join(','), WIDTH: String(W), HEIGHT: String(H), FORMAT: 'image/png', TRANSPARENT: 'true' });
+  const res = await fetch(`${GP}?${q}`, { mode: 'cors' });
+  if (!res.ok || !/png/.test(res.headers.get('content-type') || '')) throw new Error('Waldflächen nicht verfügbar');
+  const bmp = await createImageBitmap(await res.blob());
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'); ctx.drawImage(bmp, 0, 0, W, H);
+  const d = ctx.getImageData(0, 0, W, H).data;
+  const wald = new Uint8Array(W * H);
+  let n = 0;
+  for (let i = 0; i < wald.length; i++) if (istWaldFarbe(d[i * 4], d[i * 4 + 1], d[i * 4 + 2], d[i * 4 + 3])) { wald[i] = 1; n++; }
+  return { bb, W, H, wald, leer: n === 0 };
+}
+
+/** Liegt der Punkt [lat, lng] laut Maske im Wald/Gehölz? Ein Pixel Toleranz (Grenzlinien, Symbole). */
+export function istWald(mk, ll) {
+  const [x, y] = merc(ll);
+  const px = Math.floor((x - mk.bb[0]) / (mk.bb[2] - mk.bb[0]) * mk.W), py = Math.floor((mk.bb[3] - y) / (mk.bb[3] - mk.bb[1]) * mk.H);
+  if (px < 0 || py < 0 || px >= mk.W || py >= mk.H) return false;
+  if (mk.wald[py * mk.W + px]) return true;
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const xx = px + dx, yy = py + dy;
+    if (xx >= 0 && yy >= 0 && xx < mk.W && yy < mk.H && mk.wald[yy * mk.W + xx]) n++;
+  }
+  return n >= 5;
+}

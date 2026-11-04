@@ -701,3 +701,6 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .verlauf-list li { display: flex; gap: 10px; }
 .link-list { padding-left: 18px; display: grid; gap: 6px; }
 @media print { .tabbar, .page-head .icon-btn, .btn-row, .mascot-say { display: none !important; } .page { position: static !important; } }
+.lrt-hinweis.wald-hinweis { background: #FFF6E5; border-left-color: #C2410C; }
+.lrt-hinweis.wald-hinweis.ok { background: #EEF6EE; border-left-color: #3B7A3B; }
+.lrt-hinweis.wald-hinweis .btn { margin-top: 6px; }

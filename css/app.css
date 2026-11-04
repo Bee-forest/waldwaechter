@@ -704,3 +704,30 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .lrt-hinweis.wald-hinweis { background: #FFF6E5; border-left-color: #C2410C; }
 .lrt-hinweis.wald-hinweis.ok { background: #EEF6EE; border-left-color: #3B7A3B; }
 .lrt-hinweis.wald-hinweis .btn { margin-top: 6px; }
+
+/* Flurstückhistorie und Flächenwahl */
+.historie-btn { margin-top: 12px; }
+.mini-map { height: 240px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); margin: 8px 0; }
+.historie-map { height: 260px; margin-top: 0; }
+.flaeche-wahl { display: grid; gap: 6px; margin: 4px 0 8px; }
+.flaeche-wahl .segmented button { flex: 1; }
+.historie-list { display: grid; gap: 8px; margin-top: 12px; }
+.historie-item { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font: inherit; color: inherit; cursor: pointer; }
+.historie-item .hi-main { flex: 1; display: grid; gap: 2px; }
+.historie-item .hi-main span { color: var(--muted, #666); font-size: .9rem; }
+.historie-item .hi-side { display: grid; justify-items: end; gap: 0; font-size: .85rem; }
+.historie-item .hi-side b { font-size: 1.2rem; }
+.historie-item .hi-arrow { width: 18px; height: 18px; color: var(--muted, #666); }
+.map-legende { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .85rem; }
+.map-legende .sw { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
+.map-legende .sw-flst { border: 2px solid #F2C94C; }
+.map-legende .sw-mn { background: rgba(242,107,29,.35); border: 2px solid #F26B1D; margin-left: 10px; }
+.historie-massnahmen .measure { padding: 0; overflow: hidden; }
+.hm-kopf { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 14px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.hm-kopf strong { flex: 1; }
+.hm-datum { font-variant-numeric: tabular-nums; color: var(--muted, #666); min-width: 84px; }
+.hm-details { padding: 0 14px 14px; display: grid; gap: 10px; }
+.kosten-feld { display: grid; gap: 4px; max-width: 220px; }
+.historie-kopf { position: sticky; top: -16px; z-index: 5; background: var(--bg, #F3F5EF); margin: -16px -16px 8px; padding: 16px 16px 4px; }
+.historie-kopf .mini-map { margin: 0; height: 220px; }
+.historie-kopf .map-legende { margin: 6px 0 0; }

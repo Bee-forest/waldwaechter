@@ -10,6 +10,8 @@ import { amtlicheFlaecheHa } from './map/thueringen.js';
 import { openThinningWizard } from './thinning/wizard.js';
 import { SPECIES } from './thinning/plan.js';
 import { WANZE_SVG } from './mascot.js';
+import { flaechenWahl } from './flaeche.js';
+import { openFlurstueckHistorie } from './historie.js';
 
 export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
@@ -96,6 +98,7 @@ async function render() {
     ),
     h('button', { class: 'btn btn-primary btn-block btn-large', onclick: () => openNewMeasure() }, h('span', { html: icon.plus }), 'Neue Maßnahme beginnen'),
     kalender(list, byId),
+    h('button', { class: 'btn btn-block historie-btn', onclick: () => openFlurstueckHistorie() }, h('span', { html: icon.map || icon.list || '' }), 'Flurstückhistorie'),
     list.length ? h('h2', { class: 'section-title' }, 'Alle Maßnahmen') : null,
     list.length
       ? h('ul', { class: 'measure-list' }, list.map((m) => measureCard(m, byId)))
@@ -214,6 +217,8 @@ function measureCard(m, byId) {
     h('p', { class: 'measure-where' }, where),
     m.serie ? vspFelder(m) : m.status === 'fertig' ? h('p', { class: 'muted' }, `Termin ${m.date ? fmtDate(m.date) : 'offen'}`) : datumFeld(m),
     details.length ? h('p', { class: 'measure-details' }, details.join('; ')) : null,
+    m.flaeche?.ring ? h('p', { class: 'measure-details' }, `Teilfläche ${formatHa(m.flaeche.ha)}`) : null,
+    m.kosten ? h('p', { class: 'measure-details' }, `Kosten: ${Number(m.kosten).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`) : null,
     m.thinning?.plan ? h('p', { class: 'measure-details' }, `${m.thinning.plan.eingriffe?.anzahl > 1 ? `Eingriff ${m.thinning.plan.eingriffe.nr} von ${m.thinning.plan.eingriffe.anzahl}, ` : ''}${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.total} Bäume Entnahme geplant`) : null,
     m.note ? h('p', { class: 'measure-note' }, m.note) : null,
     progress,
@@ -223,7 +228,7 @@ function measureCard(m, byId) {
       action,
       h('button', { class: 'btn', onclick: () => openVerlauf(m.id) }, m.anhaenge?.length ? `Verlauf · ${m.anhaenge.length} Anhang${m.anhaenge.length > 1 ? 'e' : ''}` : 'Verlauf'),
       m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn', onclick: () => {
-        store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = x.status === 'geplant' ? 'arbeit' : 'fertig'; });
+        store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = x.status === 'geplant' ? 'arbeit' : 'fertig'; if (x.status === 'fertig') x.finishedAt = Date.now(); });
       } }, m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren') : null,
       h('button', { class: 'icon-btn danger', 'aria-label': 'Maßnahme löschen', html: icon.trash, onclick: async () => {
         if (await confirmDialog('Möchtest du diese Maßnahme wirklich löschen?', { ok: 'Löschen', danger: true })) {
@@ -266,13 +271,20 @@ async function openNewMeasure({ parcelId } = {}) {
       return;
     }
     const t = MEASURE_TYPES[type];
+    const flHost = h('div', { class: 'flaeche-host' });
+    let wahl = null;
+    const zeigeWahl = (id) => { wahl?.entferne(); wahl = null; flHost.replaceChildren(); if (id && byId[id]) { wahl = flaechenWahl(byId[id]); flHost.append(wahl.el); } };
     const form = h('form', { class: 'form', onsubmit: (e) => {
       e.preventDefault();
       const fd = new FormData(form);
+      const fl = wahl ? wahl.wert() : null;
+      if (wahl && !fl) { toast('Bitte mindestens 3 Eckpunkte der Teilfläche einzeichnen.'); return; }
+      const kosten = String(fd.get('kosten') || '').trim();
       const details = Object.fromEntries(t.fields.map(([k]) => [k, String(fd.get(k) || '').trim()]));
       store.update((s) => {
         s.measures.push({ id: uid(), type, parcelId: fd.get('parcel') || null, date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
           note: String(fd.get('note') || '').trim(), details, status: 'geplant', createdAt: Date.now(),
+          ...(fl?.modus === 'teil' ? { flaeche: { ring: fl.ring, ha: fl.ha } } : {}), kosten: kosten ? Number(kosten.replace(',', '.')) : null,
           ...(type === 'verkehrssicherung' ? { date: null, serie: { termine: VSP_TERMINE.map((t) => ({ ...t })) }, erledigt: {} } : {}) });
       });
       page.close();
@@ -280,19 +292,22 @@ async function openNewMeasure({ parcelId } = {}) {
     } },
       h('h2', { class: 'step-title' }, 'Fläche und Angaben'),
       h('label', {}, 'Fläche',
-        h('select', { name: 'parcel' },
+        h('select', { name: 'parcel', onchange: (e) => zeigeWahl(e.target.value) },
           h('option', { value: '' }, mine.length ? 'Fläche wählen' : 'Noch keine eigenen Flächen'),
           mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${CATEGORIES[p.category].label}, ${formatHa(amtlicheFlaecheHa(byId[p.id]))})`)),
         )),
+      flHost,
       t.fields.map(([k, label, kind]) => h('label', {}, label,
         Array.isArray(kind) ? h('select', { name: k }, kind.map((o) => h('option', {}, o)))
           : kind === 'species' ? h('select', { name: k }, SPECIES.map((o) => h('option', {}, o)))
           : h('input', { name: k, type: kind === 'number' ? 'number' : 'text', inputmode: kind === 'decimal' ? 'decimal' : kind === 'number' ? 'numeric' : null, min: kind === 'number' ? 0 : null }))),
       h('label', {}, 'Geplanter Termin', h('input', { type: 'date', name: 'date' })),
+      h('label', {}, 'Kosten (€, optional)', h('input', { name: 'kosten', type: 'number', inputmode: 'decimal', min: 0, step: '0.01' })),
       h('label', {}, 'Notiz', h('textarea', { name: 'note', rows: 3 })),
       h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, `${t.label} buchen`),
     );
     fill(formHost, form);
+    if (parcelId) zeigeWahl(parcelId);
     form.querySelector('select, input')?.focus();
   }
 }

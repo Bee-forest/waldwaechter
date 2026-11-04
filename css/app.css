@@ -553,7 +553,7 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .geo-facts { font-size: 13px; color: var(--ink-2); }
 .geo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .geo-list p { font-size: 15px; margin-top: 2px; }
-.prot { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: start; }
+.prot { display: grid; grid-template-columns: 52px 1fr auto; gap: 10px; align-items: start; }
 .prot-badge { display: grid; place-items: center; height: 34px; border-radius: 10px; font-weight: 700; font-size: 14px; color: #fff; background: #7B7E86; }
 .prot-3 .prot-badge { background: #B42318; }
 .prot-2 .prot-badge { background: #C46A12; }
@@ -683,3 +683,17 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .func.lrt details { font-size: 14px; }
 .lrt-hinweis { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: #EEF5E8; border-left: 4px solid var(--primary); }
 .lrt-hinweis ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+
+.vp-form fieldset { border: 1px solid var(--line, #cfd8cc); border-radius: 14px; padding: 10px 12px; display: grid; gap: 8px; }
+.vp-form legend { font-weight: 700; padding: 0 6px; }
+.vp-form textarea { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line, #cfd8cc); background: var(--surface); color: var(--ink); }
+.check-row { display: flex; gap: 8px; align-items: flex-start; font-size: 15px; }
+.check-row input { margin-top: 3px; }
+.warn-line { margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: #FFF1E6; border-left: 4px solid #C2410C; font-size: 14px; }
+.lrt-hinweis.brutzeit { background: #FFF6E5; border-left-color: #C2410C; }
+.anhang-list, .verlauf-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.anhang-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--surface-2); }
+.anhang-list li div { display: grid; }
+.verlauf-list li { display: flex; gap: 10px; }
+.link-list { padding-left: 18px; display: grid; gap: 6px; }
+@media print { .tabbar, .page-head .icon-btn, .btn-row, .mascot-say { display: none !important; } .page { position: static !important; } }

@@ -1,5 +1,7 @@
 // Reiter 2: Maßnahmen – Übersicht, neue Maßnahme anlegen.
-import { h, fill, icon, openPage, confirmDialog, toast, fmtDate } from './ui.js';
+import { h, fill, icon, openPage, confirmDialog, toast, fmtDate, dialog } from './ui.js';
+import { inBrutzeit, nachBrutzeit, BRUTZEIT } from './schutzgebiete.js';
+import { openVertraeglichkeit, openVerlauf, protokoll } from './vertraeglichkeit.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { CATEGORIES } from './map/basemap.js';
@@ -143,10 +145,24 @@ const wo = (m, byId) => { const p = byId[m.parcelId]; return m.thinning?.label |
 
 function datumFeld(m) {
   return h('label', { class: 'date-field' }, 'Termin',
-    h('input', { type: 'date', value: m.date ? ymd(new Date(m.date)) : '', onchange: (e) => {
+    h('input', { type: 'date', value: m.date ? ymd(new Date(m.date)) : '', onchange: async (e) => {
       const v = e.target.value;
-      store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.date = v ? new Date(`${v}T09:00`).getTime() : null; });
-      if (v) { const d = new Date(`${v}T09:00`); monat = new Date(d.getFullYear(), d.getMonth(), 1); }
+      let ts = v ? new Date(`${v}T09:00`).getTime() : null;
+      const natura = m.thinning?.natura2000 || [];
+      if (ts && m.type === 'durchforstung' && natura.length && inBrutzeit(ts) && !m.anhaenge?.some((a) => a.typ === 'vertraeglichkeit')) {
+        const w = await dialog({
+          title: 'Termin in der Brut- und Setzzeit',
+          body: h('div', {}, h('p', {}, `Die Fläche liegt im ${natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}. Der Termin fällt in die Brut- und Setzzeit (${BRUTZEIT.text}).`),
+            h('p', {}, 'Lege den Einschlag am besten außerhalb dieser Zeit. Ist das nicht zu umgehen, ist eine Verträglichkeits-Vorprüfung nötig.')),
+          actions: [{ label: 'Auf 1. Juli verschieben', value: 'verschieben' }, { label: 'Termin behalten – Vorprüfung ausfüllen', value: 'pruefung', primary: true }],
+        });
+        if (w === 'verschieben') ts = nachBrutzeit(ts);
+        else if (w === 'pruefung') setTimeout(() => openVertraeglichkeit(m.id), 50);
+        else { e.target.value = m.date ? ymd(new Date(m.date)) : ''; return; }
+      }
+      store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.date = ts; });
+      protokoll(m.id, ts ? `Termin auf ${new Date(ts).toLocaleDateString('de-DE')} gelegt` : 'Termin entfernt');
+      if (ts) { const d = new Date(ts); monat = new Date(d.getFullYear(), d.getMonth(), 1); }
     } }));
 }
 
@@ -200,8 +216,11 @@ function measureCard(m, byId) {
     m.thinning?.plan ? h('p', { class: 'measure-details' }, `${m.thinning.plan.eingriffe?.anzahl > 1 ? `Eingriff ${m.thinning.plan.eingriffe.nr} von ${m.thinning.plan.eingriffe.anzahl}, ` : ''}${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.total} Bäume Entnahme geplant`) : null,
     m.note ? h('p', { class: 'measure-note' }, m.note) : null,
     progress,
+    m.type === 'durchforstung' && m.thinning?.natura2000?.length && m.date && inBrutzeit(m.date) && !m.anhaenge?.some((a) => a.typ === 'vertraeglichkeit')
+      ? h('p', { class: 'warn-line' }, `Termin in der Brut- und Setzzeit (Natura 2000) – verschieben oder Verträglichkeits-Vorprüfung ausfüllen.`) : null,
     h('div', { class: 'measure-actions' },
       action,
+      h('button', { class: 'btn', onclick: () => openVerlauf(m.id) }, m.anhaenge?.length ? `Verlauf · ${m.anhaenge.length} Anhang${m.anhaenge.length > 1 ? 'e' : ''}` : 'Verlauf'),
       m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn', onclick: () => {
         store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = x.status === 'geplant' ? 'arbeit' : 'fertig'; });
       } }, m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren') : null,

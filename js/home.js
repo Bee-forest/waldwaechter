@@ -10,6 +10,7 @@ import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, IN
 import { openProfile } from './profile.js';
 import { besonderheiten } from './map/besonderheiten.js';
 import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
+import { zeigeVerordnung } from './schutzgebiete.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt } from './map/bestand.js';
@@ -347,6 +348,7 @@ function renderGeoInfo(info) {
             h('span', { class: 'prot-type' }, `${x.label} – ${LEVEL[x.level]}`),
             h('p', {}, x.text),
           ),
+          h('button', { class: 'legend-i', type: 'button', 'aria-label': `Schutzgebietsverordnung: ${x.label}`, title: 'Schutzgebietsverordnung', onclick: () => zeigeVerordnung(x) }, 'i'),
         )))
       : h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Kein Schutzgebiet am angetippten Punkt.'),
   ));

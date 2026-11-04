@@ -3,7 +3,7 @@
 
 const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
 const FORST = `${GP}/forst/FORST`;
-const SCHUTZ = `${GP}/SCHUTZGEB`;
+export const SCHUTZ = `${GP}/SCHUTZGEB`;
 
 const QUERIES = [
   { key: 'standort', url: FORST, layer: 'standort_fl' },
@@ -28,7 +28,7 @@ const QUERIES = [
   { key: 'schutz', url: SCHUTZ, layer: 'naturpark', label: 'Naturpark', short: 'NP', level: 0, text: 'Großräumige Erholungslandschaft. Für die Waldbewirtschaftung meist ohne besondere Auflagen.' },
 ];
 
-function gfiUrl(url, layer, [lat, lng]) {
+export function gfiUrl(url, layer, [lat, lng]) {
   const R = 6378137;
   const x = (lng * Math.PI / 180) * R;
   const y = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R;
@@ -42,7 +42,7 @@ function gfiUrl(url, layer, [lat, lng]) {
 
 const SKIP = new Set(['boundedBy', 'Box', 'coordinates', 'Point', 'pos', 'posList', 'gml_id', 'localId', 'null', 'Flaeche', 'Shape_Area', 'Shape_Length', 'OBJECTID', 'FID', 'id']);
 
-function parseFeatures(xml) {
+export function parseFeatures(xml) {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   const members = [...doc.getElementsByTagNameNS('*', 'featureMember'), ...doc.getElementsByTagNameNS('*', 'member')];
   const roots = members.length ? members : [doc.documentElement];

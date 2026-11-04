@@ -10,6 +10,8 @@ import { computePlanMethode, pointRemaining, pointTotal, zufallsLage } from './p
 import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, MAX_FM_EINGRIFF, EIN_EINGRIFF_BIS, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { lrtInFlaeche } from '../map/besonderheiten.js';
+import { natura2000InFlaeche, inBrutzeit, nachBrutzeit, BRUTZEIT } from '../schutzgebiete.js';
+import { openVertraeglichkeit, protokoll } from '../vertraeglichkeit.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
 import { say, WANZE_SVG } from '../mascot.js';
@@ -289,8 +291,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
     if (!st.auto || st.auto.ring !== st.sel.ring) {
       st.auto = { ring: st.sel.ring, loading: true };
-      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null), lrtInFlaeche(st.sel).catch(() => [])]).then(([bestand, oberhoehe, lrt]) => {
-        st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe, lrt };
+      Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null), lrtInFlaeche(st.sel).catch(() => []), natura2000InFlaeche(st.sel).catch(() => [])]).then(([bestand, oberhoehe, lrt, natura]) => {
+        st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe, lrt, natura };
         if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = 'waldverzeichnis'; }
         if (st.step === 1) renderParams();
       });
@@ -389,6 +391,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
           h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),
           h('p', {}, 'Im Wald zählt die Baumzahl je Rasterpunkt. Wie viel Grundfläche dabei tatsächlich herauskommt, hängt von den Bäumen vor Ort ab und liegt meist etwas unter dem Zielwert.')),
+        st.auto?.natura?.length ? h('div', { class: 'lrt-hinweis brutzeit' },
+          h('strong', {}, `Natura 2000: ${st.auto.natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}`),
+          h('ul', {}, h('li', {}, `Brut- und Setzzeit (${BRUTZEIT.text}) beachten: Lege den Einschlag am besten davor oder danach.`),
+            h('li', {}, 'Lässt er sich nicht verschieben, ist eine Verträglichkeits-Vorprüfung nötig – die App führt dich beim Start durch das Formular.'))) : null,
         (st.auto?.lrt || []).map((l) => h('div', { class: 'lrt-hinweis' },
           h('strong', {}, `Lebensraumtyp auf der Fläche: ${l.titel}`),
           h('ul', {}, l.punkte.map((t) => h('li', {}, t))))),
@@ -477,7 +483,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         m = { id: st.measureId, type: 'durchforstung', parcelId: st.sel.parcelId, date: Date.now(), note: '', details: {}, status: 'arbeit', createdAt: Date.now() };
         s.measures.push(m);
       }
-      m.thinning = { ...(m.thinning || {}), mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
+      m.thinning = { ...(m.thinning || {}), ...(st.auto?.natura ? { natura2000: st.auto.natura, lrt: st.auto.lrt } : {}), mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
       Object.assign(m, patch);
     });
   }
@@ -517,11 +523,42 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   async function startThinning() {
     if (!(await pruefeKonflikt())) return;
+    if (!(await pruefeBrutzeit())) return;
     unlockAudio(); // Nutzergeste → Audio für iOS-Fallback freischalten
     await requestCompass();
+    const warSchon = measure()?.status === 'arbeit';
     saveMeasure({ status: 'arbeit' });
+    protokoll(st.measureId, warSchon ? 'Arbeit im Bestand fortgesetzt' : 'Durchforstung im Bestand begonnen');
     legeFolgeAn();
     go(3);
+  }
+
+  // Natura 2000 + Brut- und Setzzeit: verschieben oder Verträglichkeits-Vorprüfung
+  async function pruefeBrutzeit() {
+    const natura = st.auto?.natura || measure()?.thinning?.natura2000 || [];
+    if (!natura.length || !inBrutzeit(Date.now())) return true;
+    if (measure()?.anhaenge?.some((a) => a.typ === 'vertraeglichkeit')) return true;
+    const v = await dialog({
+      title: 'Brut- und Setzzeit im Natura 2000-Gebiet',
+      body: h('div', {},
+        h('p', {}, `Die Fläche liegt im ${natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}. Jetzt ist Brut- und Setzzeit (${BRUTZEIT.text}).`),
+        h('p', {}, 'Lege den Einschlag am besten außerhalb dieser Zeit. Ist das nicht zu umgehen, fülle eine Verträglichkeits-Vorprüfung aus – sie wird an die Maßnahme angehängt.')),
+      actions: [{ label: 'Abbrechen', value: null }, { label: 'Auf 1. Juli verschieben', value: 'verschieben' }, { label: 'Nicht vermeidbar – Vorprüfung ausfüllen', value: 'pruefung', primary: true }],
+    });
+    if (v === 'verschieben') {
+      const d = nachBrutzeit();
+      saveMeasure({ status: 'geplant', date: d });
+      protokoll(st.measureId, `Wegen Brut- und Setzzeit auf ${new Date(d).toLocaleDateString('de-DE')} verschoben`);
+      toast(`Einschlag auf ${new Date(d).toLocaleDateString('de-DE')} verschoben – steht im Maßnahmenkalender`);
+      close();
+      return false;
+    }
+    if (v === 'pruefung') {
+      saveMeasure({ status: 'geplant' });
+      openVertraeglichkeit(st.measureId, { kontext: { natura2000: natura, lrt: st.auto?.lrt }, onSaved: () => startThinning() });
+      return false;
+    }
+    return false;
   }
 
   // Nächste Durchforstung automatisch in den Kalender: innerhalb des Jahrzehnts der nächste Eingriff
@@ -532,9 +569,11 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const cur = measure();
     if (!ei || !cur || store.get().measures.some((m) => m.thinning?.vorgaenger === cur.id)) return null;
     const abstand = Math.max(1, ei.abstandJahre || Math.round(10 / (ei.anzahl || 1)));
-    const when = new Date(); when.setFullYear(when.getFullYear() + abstand); when.setHours(9, 0, 0, 0);
+    let when = new Date(); when.setFullYear(when.getFullYear() + abstand); when.setHours(9, 0, 0, 0);
+    // im Natura 2000-Gebiet nicht in die Brut- und Setzzeit legen
+    if ((cur.thinning?.natura2000 || st.auto?.natura || []).length && inBrutzeit(when.getTime())) when = new Date(nachBrutzeit(when.getTime()));
     const serie = cur.thinning?.serie || cur.id;
-    const base = { mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, vorgaenger: cur.id, serie };
+    const base = { natura2000: cur.thinning?.natura2000, lrt: cur.thinning?.lrt, mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, vorgaenger: cur.id, serie };
     let thinning, note;
     if (ei.nr < ei.anzahl) {
       const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0 };
@@ -784,6 +823,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     stopNav();
     const skipped = st.plan.points.filter((p) => p.status === 'skipped').length;
     saveMeasure(skipped ? {} : { status: 'fertig', finishedAt: Date.now() });
+    if (!skipped) protokoll(st.measureId, 'Durchforstung abgeschlossen');
     if (skipped) {
       targetIdx = -1;
       highlightTarget();

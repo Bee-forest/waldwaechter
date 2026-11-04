@@ -1,6 +1,7 @@
 // Wald-Lebensraumtypen (FFH-RL Anhang I) in Thüringen – Kurzfassung der Steckbriefe der TLWJF
 // (Boddenberg, Seiler, Henkel, Stand 08.12.2003). Baumarten-Kürzel wie im Steckbrief.
-// nadel: Nadelholz-LRT – in der Regel keine Einschränkung der Nutzung (Festlegung Auftraggeberin).
+// nadel: Nadelholz-LRT – für die Bewirtschaftung in der Regel ohne Bedeutung (Festlegung Auftraggeberin).
+// Bewertung nach „Bewertungsmatrices für die Wald-LRT in Thüringen“ (TLWJF, 03.05.2004), Stufe B = gute Ausprägung.
 
 export const LRT = {
   '9110': { name: 'Hainsimsen-Buchenwald', haupt: 'Buche, z. T. Eiche', misch: 'Eiche, Kiefer (Ostthüringen), Fichte, Tanne', begleit: 'Tanne, Birke, Aspe, Fichte, Bergahorn, Eberesche, Kiefer', p18: 'kein §18-Biotop' },
@@ -24,19 +25,35 @@ export function lrtCode(props = {}) {
   return null;
 }
 
-/** Was der LRT für Durchforstung und Nutzung bedeutet – in einfachen Worten */
+/** Ist der LRT für die Bewirtschaftung wichtig? Nadelholz-LRT nur, wenn sie immer §18-Biotop sind (Moorwald). */
+export const lrtWichtig = (code) => { const l = LRT[code]; return !!l && (!l.nadel || /immer §18/.test(l.p18)); };
+
+// Biotope aus der Waldbiotopkartierung, die nur Nadelholzbestände beschreiben, sind für die Bewirtschaftung unwichtig
+export const biotopWichtig = (name = '', props = {}) => {
+  const t = name || Object.entries(props).filter(([k]) => /name|bezeich|typ|text/i.test(k)).map(([, v]) => v).join(' ');
+  return !/^(\S+\s)?(fichten|kiefern|lärchen|laerchen|douglasien|nadel)/i.test(t.trim()) && !/nadel(holz|wald|forst)/i.test(t);
+};
+
+// Was einen guten Erhaltungszustand (Stufe B) ausmacht – Bewertungsmatrix TLWJF 2004
+export const ERHALTUNG_B = [
+  'Mindestens 3 Biotop- oder Altbäume je Hektar stehen lassen (hervorragend: mehr als 6). Biotopbäume sind Höhlen- und Horstbäume sowie Bäume ab 35 cm BHD mit Faulstellen, Pilzkonsolen, abgebrochener Krone oder abfallender Rinde.',
+  'Mindestens 1 starkes Totholz je Hektar liegen oder stehen lassen (hervorragend: mehr als 3, liegend und stehend). Starkes Totholz: ab 3 m Länge und bei Buche/Eiche ab 50 cm, Edellaubholz ab 40 cm, sonstigem Laubholz ab 30 cm Durchmesser.',
+  'Lebensraumtypische Gehölze über 80 % der Kronen, davon lebensraumtypische Haupt- und Mischbaumarten über 60 %.',
+  'Waldboden schonen: auf höchstens einem Drittel der Fläche Spuren durch Befahren, nur auf Rückegassen fahren.',
+];
+
+/** Was der LRT für Durchforstung und Nutzung bedeutet – in einfachen Worten (nur für wichtige LRT) */
 export function lrtHinweis(code) {
   const l = LRT[code];
-  if (!l) return null;
+  if (!l || !lrtWichtig(code)) return null;
   const punkte = [];
   if (l.nadel) {
-    punkte.push('Nadelholz-Lebensraumtyp: Die Nutzung ist in der Regel nicht eingeschränkt. Die Durchforstung kann wie geplant laufen.');
-    if (/immer §18/.test(l.p18)) punkte.push(`Achtung, ${l.p18}: Wasserhaushalt nicht verändern (keine Gräben), nasse Bereiche nicht befahren.`);
-    else if (/nass/.test(l.p18)) punkte.push('Auf nassen, sehr feuchten oder Block-Standorten ist er zugleich §18-Biotop: dort Wasserhaushalt nicht verändern, nasse Bereiche nicht befahren.');
+    punkte.push(`${l.p18[0].toUpperCase()}${l.p18.slice(1)}: Wasserhaushalt nicht verändern (keine Gräben), nasse Bereiche nicht befahren.`);
   } else {
-    punkte.push(`Lebensraumtypische Baumarten fördern: Hauptbaumarten ${l.haupt}; Mischbaumarten ${l.misch}. Sie müssen zusammen mehr als die Hälfte der Kronen stellen.`);
-    punkte.push('Gesellschaftsfremde Baumarten (z. B. Douglasie, Lärche; in Laubwald-LRT oft auch Fichte) bevorzugt entnehmen – ihr Anteil muss unter 30 % bleiben.');
-    punkte.push('Verschlechterungsverbot: keine Kahlschläge, Biotop- und Höhlenbäume sowie stehendes und liegendes Totholz erhalten.');
+    punkte.push(`Lebensraumtypische Baumarten fördern: Hauptbaumarten ${l.haupt}; Mischbaumarten ${l.misch}.`);
+    punkte.push('Gesellschaftsfremde Baumarten (z. B. Douglasie, Lärche; in Laubwald-LRT oft auch Fichte) bevorzugt entnehmen.');
+    punkte.push(...ERHALTUNG_B);
+    punkte.push('Keine Kahlschläge (Verschlechterungsverbot).');
     if (l.prioritaer || /immer §18/.test(l.p18)) punkte.push(`${l.prioritaer ? 'Prioritärer Lebensraum. ' : ''}${l.p18[0].toUpperCase()}${l.p18.slice(1)}: Maßnahmen vorher mit dem Forstamt bzw. der Unteren Naturschutzbehörde abstimmen.`);
     else if (/§18/.test(l.p18) && !/kein/.test(l.p18)) punkte.push(`${l.p18[0].toUpperCase()}${l.p18.slice(1)}.`);
   }

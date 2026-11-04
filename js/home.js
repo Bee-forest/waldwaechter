@@ -9,7 +9,7 @@ import { WANZE_SVG, say } from './mascot.js';
 import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 import { besonderheiten } from './map/besonderheiten.js';
-import { lrtCode, lrtHinweis } from './map/lrt.js';
+import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt } from './map/bestand.js';
@@ -361,10 +361,13 @@ function renderGeoInfo(info) {
       : h('p', { class: 'muted' }, 'Keine besonderen Waldfunktionen ausgewiesen – normale Bewirtschaftung.'),
   ));
   // Biotope, LRT, Schäden
-  if (info.wald.length) {
+  // Nadelholz-LRT (z. B. 9410) und reine Nadelholz-Biotope sind für die Bewirtschaftung unwichtig → nicht anzeigen
+  const waldWichtig = info.wald.filter((x) => x.layer === 'waldlebensraumtypen' ? (lrtCode(x.props) ? lrtWichtig(lrtCode(x.props)) : true)
+    : x.layer === 'waldbiotope' ? biotopWichtig('', x.props) : true);
+  if (waldWichtig.length) {
     blocks.push(h('div', { class: 'geo-card' },
       h('p', { class: 'geo-kicker' }, 'Biotope und Besonderheiten'),
-      h('ul', { class: 'geo-list' }, info.wald.map((x) => {
+      h('ul', { class: 'geo-list' }, waldWichtig.map((x) => {
         const details = Object.entries(x.props).filter(([k]) => !/datum|flaeche|urheber|stand/i.test(k)).map(([k, v]) => `${umlaut(k)}: ${umlaut(v)}`).slice(0, 4);
         const lh = x.layer === 'waldlebensraumtypen' ? lrtHinweis(lrtCode(x.props)) : null;
         if (lh) return h('li', { class: 'func lrt' }, h('span', { class: 'func-icon', 'aria-hidden': 'true' }, lh.nadel ? '🌲' : '🌳'),

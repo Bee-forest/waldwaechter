@@ -6,6 +6,7 @@
 import { bbox, polysOf, inPolys, centroid, distance } from '../geo.js';
 import { parcelsNear, scanWmsLayer, nutzungAnteile, FORST, GP } from './thueringen.js';
 import { umlaut } from './geoinfo.js';
+import { biotopWichtig } from './lrt.js';
 
 export const BESONDERHEIT = {
   vsp: {
@@ -104,6 +105,7 @@ export async function biotope(p) {
     // sehr kleine Flecken aus Flächenlayern sind meist Punktsymbole
     const typ = f.q.typ === 'biotop' && f.px < 400 ? 'punktbiotop' : f.q.typ;
     const name = biotopName(f.props);
+    if (!biotopWichtig(name, f.props)) continue;
     out.push({ type: typ, at: f.at, name, props: f.props, ...BESONDERHEIT[typ], title: name ? `${BESONDERHEIT[typ].title}: ${name}` : BESONDERHEIT[typ].title });
   }
   return out;
@@ -132,7 +134,7 @@ export async function lrtInFlaeche(sel) {
   for (const f of funde) {
     if (!inPolys(f.at, polys)) continue;
     const c = lrtCode(f.props);
-    if (c && !codes.has(c)) codes.set(c, lrtHinweis(c));
+    if (c && !codes.has(c)) { const hw = lrtHinweis(c); if (hw) codes.set(c, hw); }
   }
   return [...codes.values()];
 }

@@ -6,7 +6,8 @@ const KEY = 'waldwaechter.v1';
 const defaults = () => ({
   parcels: [],      // { id, gemarkung, flur, nr, category, addedAt, ring, … } – ALKIS-Flurstücke mit Geometrie
   measures: [],     // siehe measures.js
-  profile: { name: '', email: '', fbg: '', accountHolder: '', iban: '' },
+  foerderantraege: [], // siehe foerderung.js – Entwürfe für Förderanträge (ThüringenForst)
+  profile: { name: '', email: '', fbg: '', accountHolder: '', iban: '', strasse: '', ort: '', telefon: '', pi: '' },
   settings: {
     theme: 'auto',          // auto | light | dark
     arrivalRadius: 8,       // m – ab dieser Entfernung gilt ein Rasterpunkt als erreicht

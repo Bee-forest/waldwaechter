@@ -793,3 +793,17 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .shop-liste li > div { display: grid; gap: 2px; }
 .shop-liste small { color: var(--ink-2); }
 .mat-kurz { margin: 0; padding-left: 18px; font-weight: 500; font-size: 14px; }
+
+/* Förderantrag */
+.lrt-hinweis.ok { background: #EEF6EE; border-left-color: #3B7A3B; }
+.antrag { display: grid; gap: 12px; }
+.antrag-inhalt { display: grid; gap: 10px; }
+.antrag-inhalt > label, .antrag-massnahme > label { display: grid; gap: 4px; font-weight: 600; }
+.antrag-inhalt label.check, .antrag-massnahme label.check { display: flex; align-items: flex-start; gap: 10px; font-weight: 500; }
+label.check input[type=checkbox] { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+.antrag-massnahme { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.antrag-massnahme h3 { margin: 0; font-size: 17px; }
+.erkl-liste { display: grid; gap: 12px; }
+.antrag-zusammen { display: grid; gap: 10px; }
+.foerder-frage ul { margin: 4px 0 0; }
+@media print { .antrag .q-nav, .antrag .q-progress { display: none !important; } }

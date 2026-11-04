@@ -14,6 +14,7 @@ import { flaechenWahl } from './flaeche.js';
 import { openFlurstueckHistorie } from './historie.js';
 import { openPolterVermessung } from './polter.js';
 import { openZaunPlanung } from './zaun.js';
+import { FOERDER, fragFoerderung, weiterZumAntrag, openFoerderantrag } from './foerderung.js';
 
 export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
@@ -224,6 +225,7 @@ function measureCard(m, byId) {
     m.serie ? vspFelder(m) : m.status === 'fertig' ? h('p', { class: 'muted' }, `Termin ${m.date ? fmtDate(m.date) : 'offen'}`) : datumFeld(m),
     details.length ? h('p', { class: 'measure-details' }, details.join('; ')) : null,
     m.flaeche?.ring ? h('p', { class: 'measure-details' }, `Teilfläche ${formatHa(m.flaeche.ha)}`) : null,
+    m.foerderung?.antragId ? (() => { const fa = store.get().foerderantraege?.find((x) => x.id === m.foerderung.antragId); return fa ? h('p', { class: 'measure-details' }, h('button', { type: 'button', class: 'link-btn', onclick: () => openFoerderantrag({ antragId: fa.id }) }, fa.status === 'fertig' ? 'Förderantrag vorbereitet – ansehen' : 'Förderantrag fortsetzen')) : null; })() : null,
     m.kosten ? h('p', { class: 'measure-details' }, `Kosten: ${Number(m.kosten).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`) : null,
     m.thinning?.plan ? h('p', { class: 'measure-details' }, `${m.thinning.plan.eingriffe?.anzahl > 1 ? `Eingriff ${m.thinning.plan.eingriffe.nr} von ${m.thinning.plan.eingriffe.anzahl}, ` : ''}${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.total} Bäume Entnahme geplant`) : null,
     m.note ? h('p', { class: 'measure-note' }, m.note) : null,
@@ -246,7 +248,7 @@ function measureCard(m, byId) {
   );
 }
 
-async function openNewMeasure({ parcelId } = {}) {
+async function openNewMeasure({ parcelId, antragId = null } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id]);
@@ -254,6 +256,27 @@ async function openNewMeasure({ parcelId } = {}) {
   const neueSeite = (titel, inhalt) => { const pg = openPage(titel, inhalt, { onClose: () => { const k = seiten.indexOf(pg); if (k >= 0) seiten.splice(k, 1); } }); seiten.push(pg); return pg; };
   const alleSchliessen = () => [...seiten].reverse().forEach((pg) => pg.close());
   const kachel = (label, info, onclick, feature = false) => h('button', { class: `type-tile ${feature ? 'type-feature' : ''}`, onclick }, h('strong', {}, label), info ? h('span', {}, info) : null);
+
+  // Förderung: bei förderfähigen Maßnahmen vorher fragen; beim Hinzufügen zu einem Antrag ist sie gesetzt
+  async function starte(k, weiter) {
+    let foerdern = !!antragId;
+    if (!foerdern && FOERDER[k]) { const w = await fragFoerderung(k, MEASURE_TYPES[k].label); if (w == null) return; foerdern = w; }
+    weiter(foerdern);
+  }
+  const nachSpeichern = (foerdern) => (id) => { alleSchliessen(); if (foerdern && id) weiterZumAntrag(id, antragId); };
+  const oeffne = (k) => starte(k, (foerdern) => {
+    if (k === 'zaunbau') openZaunPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
+    else formularSeite(k, foerdern);
+  });
+
+  // Zum Förderantrag hinzufügen: nur förderfähige Maßnahmen
+  if (antragId) {
+    neueSeite('Maßnahme zum Förderantrag', h('div', { class: 'new-measure' },
+      h('h2', { class: 'step-title' }, 'Welche Maßnahme soll in den Förderantrag?'),
+      h('div', { class: 'type-grid einspaltig' }, Object.keys(FOERDER).map((k) => kachel(MEASURE_TYPES[k].label, FOERDER[k].gegenstand, () => oeffne(k)))),
+      h('button', { type: 'button', class: 'btn btn-block', onclick: () => { alleSchliessen(); openFoerderantrag({ antragId, schritt: 'zusammenfassung' }); } }, 'Doch keine – zurück zum Antrag')));
+    return;
+  }
 
   // Seite 1: Art der Maßnahme. Gruppen: Holzernte (Durchforstung mit GPS, Durchforstung, Poltervermessung) und Wildschutz (Zaunbau, Einzelschutz)
   const GRUPPEN = {
@@ -264,23 +287,22 @@ async function openNewMeasure({ parcelId } = {}) {
     h('h2', { class: 'step-title' }, 'Art der Maßnahme'),
     h('div', { class: 'type-grid' },
       Object.entries(GRUPPEN).map(([g, x]) => kachel(x.label, x.info, () => gruppenSeite(g), true)),
-      Object.entries(MEASURE_TYPES).filter(([, t]) => !t.gruppe).map(([k, t]) => kachel(t.label, null, () => formularSeite(k))))));
+      Object.entries(MEASURE_TYPES).filter(([, t]) => !t.gruppe).map(([k, t]) => kachel(t.label, FOERDER[k] ? 'förderfähig' : null, () => oeffne(k))))));
 
   // Seite 2: Maßnahmen einer Gruppe
   function gruppenSeite(g) {
     neueSeite(GRUPPEN[g].label, h('div', { class: 'new-measure' },
       h('h2', { class: 'step-title' }, GRUPPEN[g].frage),
       h('div', { class: 'type-grid einspaltig' },
-        Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe === g).map(([k, t]) => kachel(t.label, t.info, () => {
+        Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe === g).map(([k, t]) => kachel(t.label, FOERDER[k] ? `${t.info} · förderfähig` : t.info, () => {
           if (k === 'durchforstung') { alleSchliessen(); openThinningWizard({ parcelId }); return; }
           if (k === 'polter') { openPolterVermessung({ parcelId, onSaved: alleSchliessen }); return; }
-          if (k === 'zaunbau') { openZaunPlanung({ parcelId, onSaved: alleSchliessen }); return; }
-          formularSeite(k);
+          oeffne(k);
         })))));
   }
 
   // Seite 3: Eingabe der Maßnahme
-  function formularSeite(type) {
+  function formularSeite(type, foerdern = false) {
     const t = MEASURE_TYPES[type];
     const flHost = h('div', { class: 'flaeche-host' });
     let wahl = null;
@@ -293,15 +315,17 @@ async function openNewMeasure({ parcelId } = {}) {
       let kosten = String(fd.get('kosten') || '').trim();
       if (type === 'einzelschutz' && !kosten) { const n = Number(fd.get('count')) || 0, pr = Number(String(fd.get('preis') || '').replace(',', '.')) || 0; if (n && pr) kosten = String(Math.round(n * pr * 100) / 100); }
       const details = Object.fromEntries(t.fields.map(([k]) => [k, String(fd.get(k) || '').trim()]));
+      const neuId = uid();
       store.update((s) => {
-        s.measures.push({ id: uid(), type, parcelId: fd.get('parcel') || null, date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
+        s.measures.push({ id: neuId, type, parcelId: fd.get('parcel') || null, date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
           note: String(fd.get('note') || '').trim(), details, status: 'geplant', createdAt: Date.now(),
           ...(fl?.modus === 'teil' ? { flaeche: { ring: fl.ring, ha: fl.ha } } : {}), kosten: kosten ? Number(kosten.replace(',', '.')) : null,
           ...(type === 'verkehrssicherung' ? { date: null, serie: { termine: VSP_TERMINE.map((x) => ({ ...x })) }, erledigt: {} } : {}) });
       });
-      alleSchliessen();
       toast(`${t.label} gebucht`);
+      nachSpeichern(foerdern)(neuId);
     } },
+      foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Nach dem Buchen geht es direkt mit dem Förderantrag weiter. Die Angaben hier werden übernommen.')) : null,
       h('h2', { class: 'step-title' }, 'Fläche und Angaben'),
       h('label', {}, 'Fläche',
         h('select', { name: 'parcel', onchange: (e) => zeigeWahl(e.target.value) },

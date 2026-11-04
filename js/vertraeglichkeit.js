@@ -111,7 +111,7 @@ export function openVerlauf(measureId) {
       m.anhaenge?.length
         ? h('ul', { class: 'anhang-list' }, m.anhaenge.map((a) => h('li', {},
             h('div', {}, h('strong', {}, a.titel), h('small', {}, `erstellt ${new Date(a.erstellt).toLocaleDateString('de-DE')}${a.daten?.ergebnis === 'offen' ? ' · Behörde einschalten' : ''}`)),
-            h('button', { class: 'btn btn-small', onclick: () => openVertraeglichkeit(measureId, { anhangId: a.id, nurLesen: true }) }, 'Öffnen'))))
+            h('button', { class: 'btn btn-small', onclick: () => (a.typ === 'foerderantrag' ? import('./foerderung.js').then((f) => f.openFoerderantrag({ antragId: a.antragId, nurLesen: true })) : openVertraeglichkeit(measureId, { anhangId: a.id, nurLesen: true })) }, 'Öffnen'))))
         : h('p', { class: 'muted' }, 'Keine Anhänge.'),
       h('h2', { class: 'section-title' }, 'Verlauf'),
       h('ul', { class: 'verlauf-list' }, eintraege.map((e) => h('li', {}, h('span', { class: 'cal-date' }, new Date(e.ts).toLocaleDateString('de-DE')), h('span', {}, e.text)))),

@@ -102,7 +102,7 @@ export function materialListe({ pts, geschlossen, hoehe, abstand = 5, spanndraht
   };
 }
 
-export async function openZaunPlanung({ parcelId = null, onSaved } = {}) {
+export async function openZaunPlanung({ parcelId = null, onSaved, foerdern = false } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id]);
@@ -133,6 +133,7 @@ export async function openZaunPlanung({ parcelId = null, onSaved } = {}) {
   }
 
   fill(body,
+    foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Nach dem Buchen geht es direkt mit dem Förderantrag weiter.')) : null,
     h('h2', { class: 'step-title' }, 'Wo soll der Zaun stehen?'),
     h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; karteNeu(); renderRest(); } },
       h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
@@ -210,8 +211,9 @@ export async function openZaunPlanung({ parcelId = null, onSaved } = {}) {
 
   function speichern(ml, zeilen, summe) {
     const g = ml.geo;
+    const neuId = uid();
     store.update((st) => st.measures.push({
-      id: uid(), type: 'zaunbau', parcelId: s.parcelId, date: s.date ? new Date(s.date).getTime() : null, status: 'geplant', createdAt: Date.now(),
+      id: neuId, type: 'zaunbau', parcelId: s.parcelId, date: s.date ? new Date(s.date).getTime() : null, status: 'geplant', createdAt: Date.now(),
       note: s.note.trim(),
       details: { length: String(Math.round(g.laenge)), zaun: `Knotengeflecht ${ml.H.typ}, ${(ml.H.cm / 100).toLocaleString('de-DE', { minimumFractionDigits: 2 })} m, Z-Profil-Pfähle alle ${String(s.abstand).replace('.', ',')} m`, tore: String(s.tore) },
       ...(s.geschlossen ? { flaeche: { ring: [...s.pts], ha: areaHa(s.pts) } } : {}),
@@ -221,7 +223,7 @@ export async function openZaunPlanung({ parcelId = null, onSaved } = {}) {
     }));
     toast(`Zaunbau gebucht: ${formatDist(g.laenge)}, ${euro(summe)}`);
     page.close();
-    onSaved?.();
+    onSaved?.(neuId);
   }
   renderRest();
   return page;

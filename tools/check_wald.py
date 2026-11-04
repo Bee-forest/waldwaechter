@@ -26,30 +26,22 @@ def main():
     for key, (s, w, n, e) in TESTS.items():
         bb = [mx(w) - 30, my(s) - 30, mx(e) + 30, my(n) + 30]
         W, H = round((bb[2] - bb[0]) / 1.0), round((bb[3] - bb[1]) / 1.0)
-        for layers in ('Wald,Gehoelz', 'Wald', 'Vegetation', 'TatsaechlicheNutzung'):
+        for svc, layers in ((f'{GP}/forst/FORST', 'waldflaeche'), (GP, 'Vegetation')):
             q = dict(SERVICE='WMS', VERSION='1.3.0', REQUEST='GetMap', LAYERS=layers, STYLES='', CRS='EPSG:3857', BBOX=','.join(f'{v:.2f}' for v in bb), WIDTH=W, HEIGHT=H, FORMAT='image/png', TRANSPARENT='true')
             try:
-                h, b = get(f'{GP}?{urllib.parse.urlencode(q)}')
+                h, b = get(f'{svc}?{urllib.parse.urlencode(q)}')
                 fn = f'{key}_{layers.replace(",", "+")}.png'
                 open(os.path.join(OUT, fn), 'wb').write(b)
                 log(f'{key} {layers}: {len(b)} Bytes {h.get("Content-Type")} {W}x{H} -> {fn}')
             except Exception as ex: log(f'{key} {layers}: Fehler {ex}')
         # Sachdaten an der Mitte
-        q = dict(SERVICE='WMS', VERSION='1.3.0', REQUEST='GetFeatureInfo', LAYERS='Wald,Gehoelz', QUERY_LAYERS='Wald,Gehoelz', STYLES='', CRS='EPSG:3857', BBOX=','.join(f'{v:.2f}' for v in bb), WIDTH=W, HEIGHT=H, I=W // 2, J=H // 2, INFO_FORMAT='application/vnd.ogc.gml', FEATURE_COUNT=3)
+        q = dict(SERVICE='WMS', VERSION='1.3.0', REQUEST='GetFeatureInfo', LAYERS='waldflaeche', QUERY_LAYERS='waldflaeche', STYLES='', CRS='EPSG:3857', BBOX=','.join(f'{v:.2f}' for v in bb), WIDTH=W, HEIGHT=H, I=W // 2, J=H // 2, INFO_FORMAT='application/vnd.ogc.gml', FEATURE_COUNT=3)
         try:
-            h, b = get(f'{GP}?{urllib.parse.urlencode(q)}'); log(f'{key} GFI:', re.sub(r'\s+', ' ', b.decode('utf-8', 'replace'))[:1200])
+            h, b = get(f'{GP}/forst/FORST?{urllib.parse.urlencode(q)}'); log(f'{key} GFI:', re.sub(r'\s+', ' ', b.decode('utf-8', 'replace'))[:1200])
         except Exception as ex: log(f'{key} GFI Fehler {ex}')
-    # ALKIS vereinfacht 2.0: gibt es Nutzungsflächen als Vektor?
-    for u in (f'{GP}/adv_alkis_v2_wfs?SERVICE=WFS&REQUEST=GetCapabilities', f'{GP}/adv_alkis_wfs?SERVICE=WFS&REQUEST=GetCapabilities'):
-        try:
-            _, b = get(u); t = b.decode('utf-8', 'replace')
-            log(u, 'FeatureTypes:', re.findall(r'<(?:wfs:)?Name>([^<]+)</(?:wfs:)?Name>', t)[:40])
-        except Exception as ex: log(u, 'Fehler', ex)
-    s, w, n, e = TESTS['gertewitz']
-    for tn in ('ave:Nutzung', 'ave:NutzungFlurstueck', 'Nutzung'):
-        u = f'{GP}/adv_alkis_v2_wfs?' + urllib.parse.urlencode(dict(SERVICE='WFS', VERSION='2.0.0', REQUEST='GetFeature', TYPENAMES=tn, COUNT=5, SRSNAME='EPSG:4326', BBOX=f'{s},{w},{n},{e},urn:ogc:def:crs:EPSG::4326'))
-        try:
-            _, b = get(u); log(f'WFS {tn}:', re.sub(r'\s+', ' ', b.decode('utf-8', 'replace'))[:1500])
-        except Exception as ex: log(f'WFS {tn}: Fehler {ex}')
+    try:
+        _, cap = get(f'{GP}/forst/FORST?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0'); t = cap.decode('utf-8', 'replace'); i = t.find('<Name>waldflaeche</Name>')
+        log('CAP waldflaeche:', re.sub(r'\s+', ' ', t[i:i + 2500]))
+    except Exception as ex: log('CAP forst Fehler', ex)
     open(os.path.join(OUT, 'log.txt'), 'w').write('\n'.join(LOG) + '\n')
 main()

@@ -228,15 +228,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .info-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .info-head h2 { font-size: 21px; }
 .info-kicker { color: var(--signal); font-weight: 700; font-size: 15px; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 14px 0 6px; }
+.facts .wide { grid-column: 1 / -1; }
+.facts dt { font-size: 14px; color: var(--ink-2); }
+.facts dd { margin: 0; font-weight: 700; }
+.facts dd.big { font-size: 24px; }
 /* Angaben untereinander: Überschrift klein darüber, Wert darunter, Trennlinie zwischen den Punkten */
-.facts, .parcel-facts { display: grid; grid-template-columns: 1fr; gap: 0; margin: 12px 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-.facts > div, .parcel-facts > div { display: block; padding: 10px 14px; border-top: 1px solid var(--line); }
-.facts > div:first-child, .parcel-facts > div:first-child { border-top: 0; }
-.facts dt, .parcel-facts dt { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 3px; }
-.facts dd, .parcel-facts dd { margin: 0; font-weight: 600; font-size: 16px; line-height: 1.35; color: var(--ink); }
-.facts dd.big { font-size: 24px; font-weight: 800; }
+.parcel-facts { display: grid; grid-template-columns: 1fr; gap: 0; margin: 12px 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.parcel-facts > div { display: block; padding: 10px 14px; border-top: 1px solid var(--line); }
+.parcel-facts > div:first-child { border-top: 0; }
+.parcel-facts dt { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 3px; }
+.parcel-facts dd { margin: 0; font-weight: 600; font-size: 16px; line-height: 1.35; color: var(--ink); }
 .info-block { padding: 14px 0; border-top: 1px solid var(--line); margin-top: 12px; }
-.info-block h3 { font-size: 18px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid var(--primary); display: inline-block; }
+.info-block h3 { font-size: 17px; margin-bottom: 10px; }
 .add-block { display: grid; gap: 12px; }
 .info-actions { display: flex; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
 .info-actions .btn-primary { flex: 1; }

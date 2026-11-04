@@ -142,7 +142,7 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id]);
   const s = { i: 0, parcelId, polterNr: '', species: 'Fichte', sortiment: null, verfahren: null, pos: null,
-    lab: null, t: null, hv: [], hr: [], rueck: true, c: 0, red: null, u: null, entrindet: false,
+    lab: null, t: null, hv: [], hr: [], rueck: true, c: 0, cLos: false, red: null, u: null, entrindet: false,
     l: null, hs: [], staemme: [], neu: { l: null, d1: null, d2: null, rinde: 'oR', rabzug: null } };
   const body = h('div', { class: 'polter' });
   const page = openPage('Poltervermessung', body);
@@ -223,7 +223,7 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
           h('li', {}, h('b', {}, 'H1, H2 … – Sektionshöhen '), 'zentimetergenau, senkrecht über der markierten Sektionsmitte. Messlatte am Holz ansetzen, nicht am Boden. Abgelesen wird, wo die Senkrechte die Stirnfläche verlässt.'),
           h('li', {}, h('b', {}, 'HB – Höhe der Restsektion '), 'in deren Mitte (LB/2).'),
           h('li', {}, 'Vorder- und Rückseite vom gleichen Ende aus einteilen und messen.'),
-          h('li', {}, h('b', {}, 'C – Unterlagen '), 'gutachterlich in Rm schätzen.'))];
+          h('li', {}, h('b', {}, 'C – Unterlagen: '), 'Gemessen wird nur oberhalb der Unterlagen. Ihr Volumen zählt nur mit, wenn sie zum Los gehören (mitverkauft werden) – dann gutachterlich in Rm schätzen.'))];
         inhalt.push(h('p', { class: 'hint' }, 'Mindestens ca. 20 Rm je Polter, nur eine Bestelllänge je Los, Stirnflächen höchstens 10 cm von der mittleren Ebene abweichend. Du brauchst ein Maßband (20–50 m), Sprühfarbe und eine Messlatte mit cm-Teilung.'));
       }
       nextLabel = 'Messung beginnen';
@@ -260,7 +260,7 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       const mitte = istB ? n * ls + lb / 2 : (i + 0.5) * ls;
       bild = polterSkizze({ mark: istB ? 'hb' : `h${Math.min(i, 4)}`, sektionen: 5 });
       title = istB ? `Restsektion B – Höhe HB (${seite === 'v' ? 'Vorderseite' : 'Rückseite'})` : `Sektion ${i + 1} von ${n} – Höhe H${i + 1} (${seite === 'v' ? 'Vorderseite' : 'Rückseite'})`;
-      help = `Senkrecht über der Sektionsmitte bei ${zahlText(mitte)} m (vom Polteranfang) messen, Latte am Holz ansetzen.`;
+      help = `Senkrecht über der Sektionsmitte bei ${zahlText(mitte)} m (vom Polteranfang) messen. Latte unten am Holz ansetzen – oberhalb der Unterlagen, nicht am Boden.`;
       inhalt = [zahlFeld('Höhe', arr[i], (x) => { arr[i] = x; }, { einheit: 'cm' }),
         h('p', { class: 'muted' }, `Bisher gemessen: ${arr.slice(0, n + (lb > 0 ? 1 : 0)).map((x, k) => (x != null ? `${k === n ? 'HB' : `H${k + 1}`} ${zahlText(x, 0)}` : null)).filter(Boolean).join(' · ') || '–'}`)];
       upd = () => { nextBtn.disabled = !(arr[i] > 0); };
@@ -273,9 +273,15 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
         h('button', { type: 'button', class: `q-option ${!s.rueck ? 'on' : ''}`, onclick: () => { s.rueck = false; render(); } }, h('span', { class: 'q-text' }, h('strong', {}, 'Nein, Rückseite nicht zugänglich'), h('small', {}, 'Es zählen nur die Höhen der Vorderseite'))))];
     } else if (q === 'unterlage') {
       bild = polterSkizze({ mark: 'c' });
-      title = 'Unterlagen C';
-      help = 'Gehören Unterlagen zum Los, ihr Volumen gutachterlich in Rm schätzen. Sonst 0.';
-      inhalt = [zahlFeld('Unterlagen', s.c, (x) => { s.c = x || 0; }, { einheit: 'Rm' })];
+      title = 'Gehören die Unterlagen zum Los?';
+      help = 'Gemessen wurde nur oberhalb der Unterlagen. Ihr Volumen (Polterteil C) zählt nur mit, wenn die Unterlagen aus demselben Sortiment sind und mitverkauft werden.';
+      inhalt = [h('div', { class: 'q-cards' },
+        h('button', { type: 'button', class: `q-option ${!s.cLos ? 'on' : ''}`, onclick: () => { s.cLos = false; s.c = 0; render(); } },
+          h('span', { class: 'q-text' }, h('strong', {}, 'Nein – keine Unterlagen oder sie bleiben liegen'), h('small', {}, 'Fremdholz, Abfallholz oder nicht mitverkauft: Polterteil C = 0'))),
+        h('button', { type: 'button', class: `q-option ${s.cLos ? 'on' : ''}`, onclick: () => { s.cLos = true; render(); } },
+          h('span', { class: 'q-text' }, h('strong', {}, 'Ja – die Unterlagen werden mitverkauft'), h('small', {}, 'Volumen gutachterlich in Rm m.R. schätzen')))),
+        s.cLos ? zahlFeld('Geschätztes Volumen der Unterlagen', s.c || null, (x) => { s.c = x || 0; }, { einheit: 'Rm' }) : null];
+      upd = () => { nextBtn.disabled = !!s.cLos && !(s.c > 0); };
     } else if (q === 'hoehen') {
       bild = polterSkizze({ mark: 'h', schicht: true });
       title = 'Polterhöhen H';
@@ -372,7 +378,7 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       zeilen = [z(`Sektionslänge LS ${r.ls} m, ${r.n} volle Sektionen${r.lb > 0 ? `, Restsektion ${zahlText(r.lb)} m` : ''}; Tiefe T ${zahlText(s.t)} m${s.rueck ? '; Höhen je Sektion aus Vorder- und Rückseite gemittelt' : ''}`, ''),
         z('Polterteil A = LS × Summe der Sektionshöhen × T =', `${zahlText(r.A)} Rm`),
         r.lb > 0 ? z('Polterteil B = LB × HB × T =', `${zahlText(r.B)} Rm`) : null,
-        r.C ? z('Unterlagen C =', `${zahlText(r.C)} Rm`) : null,
+        z('Unterlagen C =', r.C ? `${zahlText(r.C)} Rm (gehören zum Los)` : '0 Rm (nicht im Los)'),
         z('Bruttovolumen A + B + C =', `${zahlText(r.brutto)} Rm m.R.`),
         z(`Nettovolumen × Reduktionsfaktor ${zahlText(s.red, 3)} =`, `${zahlText(r.netto)} Rm m.R.`),
         z(`Holzmenge × Umrechnungsfaktor ${zahlText(s.u)} =`, `${zahlText(r.fm)} Fm o.R.`)];
@@ -394,7 +400,7 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
     const details = {
       polterNr: s.polterNr, species: s.species, sortiment: sort?.label || '', verfahren: VERFAHREN[s.verfahren].label,
       laenge: s.verfahren === 'einzelstamm' ? '' : zahlText(s.t), stueck: r.stueck != null ? String(r.stueck) : '',
-      rm: r.netto != null ? zahlText(r.netto) : '', red: s.red != null && s.verfahren === 'sektion' ? zahlText(s.red, 3) : '',
+      rm: r.netto != null ? zahlText(r.netto) : '', unterlagen: s.verfahren === 'sektion' ? (s.c ? zahlText(s.c) : '0') : '', red: s.red != null && s.verfahren === 'sektion' ? zahlText(s.red, 3) : '',
       faktor: s.u != null && s.verfahren !== 'einzelstamm' ? zahlText(s.u) : '', fm: zahlText(r.fm), pos: s.pos || '',
     };
     const messung = { verfahren: s.verfahren, sortiment: s.sortiment, lab: s.lab, l: s.l, t: s.t, hv: s.hv, hr: s.rueck ? s.hr : [], rueck: s.rueck, c: s.c, red: s.red, u: s.u, entrindet: s.entrindet, hs: s.hs, staemme: s.staemme, ergebnis: r };

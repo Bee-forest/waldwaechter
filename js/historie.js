@@ -109,6 +109,10 @@ function openDetail(p, T) {
       if (pl.stufe) z('Ziel-Entnahme Grundfläche', `${fmt(pl.stufe, 1)} m²/ha`);
       if (t.natura2000?.length) z('Schutzgebiet', t.natura2000.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', '));
     }
+    if (m.zaun?.material?.length) {
+      z('Zaunform', `${m.zaun.geschlossen ? 'Gatter (geschlossen)' : 'Zaunlinie (offen)'}, ${m.zaun.ecken} Ecken`);
+      z('Material', h('ul', { class: 'mat-kurz' }, m.zaun.material.map((x) => h('li', {}, `${x.menge.toLocaleString('de-DE')} ${x.einheit} ${x.name}${x.preis != null ? ` à ${euro(x.preis)} = ${euro(x.preis * x.menge)}` : ' (ohne Preis)'}`))));
+    }
     if (m.serie) {
       const done = Object.entries(m.erledigt || {}).sort((a, b) => b[1] - a[1]);
       z('Kontrollen erledigt', done.length ? done.map(([k, ts]) => `${k.startsWith('winter') ? 'unbelaubt' : 'belaubt'} ${k.split('-').slice(1).join('/')}: ${fmtDate(ts)}`).join('; ') : 'noch keine');

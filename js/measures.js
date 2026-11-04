@@ -13,10 +13,11 @@ import { WANZE_SVG } from './mascot.js';
 import { flaechenWahl } from './flaeche.js';
 import { openFlurstueckHistorie } from './historie.js';
 import { openPolterVermessung } from './polter.js';
+import { openZaunPlanung } from './zaun.js';
 
 export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
-  zaunbau:      { label: 'Zaunbau', fields: [['length', 'Zaunlänge (m)', 'number'], ['zaun', 'Zauntyp (z. B. Knotengeflecht 1,60 m)', 'text']] },
+  zaunbau:      { label: 'Zaunbau', fields: [['length', 'Zaunlänge (m)', 'number'], ['zaun', 'Zauntyp', 'text'], ['tore', 'Tore', 'text']] },
   pflege:       { label: 'Pflege', fields: [['art', 'Art der Pflege', ['Jungwuchspflege', 'Jungbestandspflege', 'Freischneiden', 'Wertastung']], ['area', 'Fläche (ha)', 'decimal']] },
   durchforstung:{ label: 'Durchforstung mit GPS', gruppe: 'holzernte', info: 'Geführt per GPS-Raster', fields: [] },
   holzernte_df: { label: 'Durchforstung', gruppe: 'holzernte', info: 'Ohne GPS-Raster dokumentieren', fields: [['verfahren', 'Verfahren', ['motormanuell', 'Harvester', 'Harvester und motormanuell', 'Seilkran', 'Rückepferd']], ['species', 'Hauptbaumart', 'species'], ['baeume', 'Anzahl entnommener Bäume', 'number'], ['menge', 'Entnahmemenge (Fm)', 'decimal'], ['area', 'Fläche (ha)', 'decimal']] },
@@ -258,7 +259,7 @@ async function openNewMeasure({ parcelId } = {}) {
     h('h2', { class: 'step-title' }, 'Art der Maßnahme'),
     h('div', { class: 'type-grid' },
       kachel('Holzernte', 'Durchforstung mit GPS, Durchforstung, Poltervermessung', holzernteSeite, true),
-      Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe !== 'holzernte').map(([k, t]) => kachel(t.label, null, () => formularSeite(k))))));
+      Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe !== 'holzernte').map(([k, t]) => kachel(t.label, k === 'zaunbau' ? 'Verlauf einzeichnen, Material und Kosten' : null, () => (k === 'zaunbau' ? openZaunPlanung({ parcelId, onSaved: alleSchliessen }) : formularSeite(k)))))));
 
   // Seite 2: Holzernte
   function holzernteSeite() {

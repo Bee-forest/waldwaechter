@@ -765,3 +765,31 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .polter .q-nav { background: var(--bg); padding: 10px 0; }
 .einheit-zeile { display: flex; align-items: center; gap: 10px; font-weight: 600; }
 .einheit-wahl button { min-width: 56px; white-space: nowrap; }
+
+/* Zaunbau */
+.zaun { display: grid; gap: 12px; }
+.zaun-map { height: 300px; }
+.zaun-rest { display: grid; gap: 12px; }
+.zaun-optionen { display: grid; gap: 10px; }
+.zaun-optionen label { display: grid; gap: 4px; font-weight: 600; }
+.zaun-optionen label.check { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.zaun-optionen label.check input { width: 22px; height: 22px; }
+.material-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.material-liste > li { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 4px; }
+.mat-kopf { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.mat-menge { font-weight: 800; white-space: nowrap; }
+.mat-preis { display: flex; justify-content: space-between; align-items: end; gap: 10px; }
+.mat-preis label { display: grid; gap: 2px; font-size: 13px; color: var(--ink-2); }
+.mat-preis .mit-einheit { display: flex; align-items: center; gap: 6px; }
+.mat-preis input { width: 110px; font-weight: 700; }
+.mat-summe { font-size: 17px; white-space: nowrap; }
+.mat-quelle { color: var(--ink-2); }
+.mat-quelle.warn { color: #C2410C; font-weight: 600; }
+.mat-quelle .link-btn { margin-left: 10px; }
+.zaun-summe { display: flex; justify-content: space-between; align-items: baseline; padding: 14px; border-radius: 14px; background: var(--primary-soft); font-size: 17px; }
+.zaun-summe strong { font-size: 22px; }
+.shop-liste { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.shop-liste li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.shop-liste li > div { display: grid; gap: 2px; }
+.shop-liste small { color: var(--ink-2); }
+.mat-kurz { margin: 0; padding-left: 18px; font-weight: 500; font-size: 14px; }

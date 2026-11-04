@@ -3,27 +3,35 @@ import { h, dialog } from './ui.js';
 import { gfiUrl, parseFeatures, SCHUTZ, umlaut } from './map/geoinfo.js';
 import { generateGrid, polysOf, centroid } from './geo.js';
 
-// Brut- und Setzzeit im Wald (ThüringenForst): 1. März bis 30. Juni
-export const BRUTZEIT = { von: [3, 1], bis: [6, 30], text: '1. März bis 30. Juni' };
-export function inBrutzeit(ts) {
+// Brut- und Setzzeit: gesetzlich 1. März bis 30. September (§ 39 Abs. 5 BNatSchG). Weicht die
+// Schutzgebietsverordnung ab, wird der Zeitraum je Maßnahme übernommen (thinning.schutzzeit).
+export const BRUTZEIT_GESETZ = { von: [3, 1], bis: [9, 30], quelle: '§ 39 Abs. 5 BNatSchG' };
+export const BRUTZEIT = { ...BRUTZEIT_GESETZ, text: '1. März bis 30. September' };
+const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+export const schutzzeitText = (sz = BRUTZEIT_GESETZ) => `${sz.von[1]}. ${MONATE[sz.von[0] - 1]} bis ${sz.bis[1]}. ${MONATE[sz.bis[0] - 1]}`;
+export const schutzzeitVon = (m) => m?.thinning?.schutzzeit || m?.schutzzeit || BRUTZEIT_GESETZ;
+export function inBrutzeit(ts, sz = BRUTZEIT_GESETZ) {
   const d = new Date(ts); const m = d.getMonth() + 1, t = d.getDate();
   const nach = (a) => m > a[0] || (m === a[0] && t >= a[1]);
   const vor = (b) => m < b[0] || (m === b[0] && t <= b[1]);
-  return nach(BRUTZEIT.von) && vor(BRUTZEIT.bis);
+  return nach(sz.von) && vor(sz.bis);
 }
-/** Nächster Tag nach der Brut- und Setzzeit (1. Juli) ab dem Datum */
-export function nachBrutzeit(ts = Date.now()) {
+/** Erster Tag nach der Schutzzeit (bei Termin in der Schutzzeit im selben Jahr) */
+export function nachBrutzeit(ts = Date.now(), sz = BRUTZEIT_GESETZ) {
   const d = new Date(ts);
-  return new Date(d.getMonth() >= 6 ? d.getFullYear() + 1 : d.getFullYear(), 6, 1, 9).getTime();
+  let n = new Date(d.getFullYear(), sz.bis[0] - 1, sz.bis[1] + 1, 9);
+  if (n.getTime() < ts) n = new Date(d.getFullYear() + 1, sz.bis[0] - 1, sz.bis[1] + 1, 9);
+  return n.getTime();
 }
+export const datumText = (ts) => new Date(ts).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' });
 
 const GEBIETS_ART = {
   nsg: 'Naturschutzgebiet', lsg: 'Landschaftsschutzgebiet', ffh_geb: 'FFH-Gebiet', spa: 'Vogelschutzgebiet',
   naturpark: 'Naturpark', nationalpark: 'Nationalpark', biosreserv: 'Biosphärenreservat',
 };
 
-/** FFH- (und Vogelschutz-)Gebiete, die eine Fläche berühren – Stichprobe über die Fläche, live */
-export async function natura2000InFlaeche(sel, { layers = ['ffh_geb', 'spa'] } = {}) {
+/** FFH-, Vogelschutz- und Naturschutzgebiete, die eine Fläche berühren – Stichprobe über die Fläche, live */
+export async function natura2000InFlaeche(sel, { layers = ['ffh_geb', 'spa', 'nsg'] } = {}) {
   const polys = polysOf(sel);
   const pts = [centroid(sel.ring), ...generateGrid(sel.ring, 60, { polys }).filter((_, i) => i % 2 === 0).slice(0, 8)];
   const found = new Map();

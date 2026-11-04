@@ -10,7 +10,7 @@ import { computePlanMethode, pointRemaining, pointTotal, zufallsLage } from './p
 import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, MAX_FM_EINGRIFF, EIN_EINGRIFF_BIS, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
 import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
 import { lrtInFlaeche } from '../map/besonderheiten.js';
-import { natura2000InFlaeche, inBrutzeit, nachBrutzeit, BRUTZEIT } from '../schutzgebiete.js';
+import { natura2000InFlaeche, inBrutzeit, nachBrutzeit, BRUTZEIT_GESETZ, schutzzeitText, datumText, zeigeVerordnung } from '../schutzgebiete.js';
 import { openVertraeglichkeit, protokoll } from '../vertraeglichkeit.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
@@ -279,14 +279,14 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const s = st.sel?.stand;
     const art = s?.info?.art || s?.species || '';
     const dim = s ? (s.dg < 25 ? 'duenn' : s.dg < 50 ? 'mittel' : 'dick') : null;
-    return { v: 3, art, gruppe: art ? gruppeVon(art) : null, dim, b: null, hoKlasse: null, alter: null, spacing: null, q: 0 };
+    return { v: 4, art, gruppe: art ? gruppeVon(art) : null, dim, b: null, hoKlasse: null, alter: null, spacing: null, q: 0 };
   }
 
-  const QUESTIONS = ['art', 'dim', 'b', 'hoehe', 'ergebnis'];
+  const QUESTIONS = ['termin', 'art', 'dim', 'b', 'hoehe', 'ergebnis'];
 
   function renderParams() {
     drawSelection();
-    if (!st.params || st.params.main || st.params.v !== 3) st.params = defaultParams(); // alte Angaben (vorherige Version) verwerfen
+    if (!st.params || st.params.main || st.params.v !== 4) st.params = defaultParams(); // alte Angaben (vorherige Version) verwerfen
     const f = st.params;
     // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
     if (!st.auto || st.auto.ring !== st.sel.ring) {
@@ -306,7 +306,37 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       QUESTIONS.map((_, i) => h('span', { class: i < qi ? 'done' : i === qi ? 'now' : '' })));
     let title, help, content, canNext = true, nextLabel = 'Weiter';
 
-    if (q === 'art') {
+    const sz = f.schutzzeit || BRUTZEIT_GESETZ;
+    const ymd = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    if (q === 'termin') {
+      f.termin ??= measure()?.date || Date.now();
+      const a = st.auto || {};
+      const natura = a.natura || [];
+      const drin = natura.length && inBrutzeit(f.termin, sz);
+      title = 'Wann soll die Durchforstung stattfinden?';
+      help = 'Der Termin wird mit der Brut- und Setzzeit abgeglichen, falls die Fläche in einem Schutzgebiet liegt.';
+      const md = (arr) => ymd(new Date(new Date().getFullYear(), arr[0] - 1, arr[1]));
+      content = [
+        h('label', { class: 'date-field' }, 'Geplanter Termin',
+          h('input', { type: 'date', value: ymd(f.termin), onchange: (e) => { if (e.target.value) { f.termin = new Date(`${e.target.value}T09:00`).getTime(); renderParams(); } } })),
+        a.loading ? h('p', { class: 'muted' }, 'Prüfe Schutzgebiete auf der Fläche …')
+        : natura.length ? h('div', { class: `lrt-hinweis brutzeit ${drin ? '' : 'ok'}` },
+            h('strong', {}, `Die Fläche liegt im ${natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}.`),
+            h('p', {}, `Brut- und Setzzeit: ${schutzzeitText(sz)} (${sz.quelle || 'laut Schutzgebietsverordnung'}).`),
+            h('div', { class: 'btn-row' }, natura.map((g) => h('button', { type: 'button', class: 'btn btn-small', onclick: () => zeigeVerordnung({ label: g.art, layer: g.layer, props: g.props, text: '' }) }, `Verordnung: ${g.name || g.art}`))),
+            h('details', {}, h('summary', {}, 'Die Verordnung nennt einen anderen Zeitraum?'),
+              h('div', { class: 'form-row' },
+                h('label', { class: 'date-field' }, 'Schutzzeit von', h('input', { type: 'date', value: md(sz.von), onchange: (e) => { const [, mo, d] = e.target.value.split('-').map(Number); if (mo) { f.schutzzeit = { ...sz, von: [mo, d], quelle: 'laut Schutzgebietsverordnung' }; renderParams(); } } })),
+                h('label', { class: 'date-field' }, 'bis', h('input', { type: 'date', value: md(sz.bis), onchange: (e) => { const [, mo, d] = e.target.value.split('-').map(Number); if (mo) { f.schutzzeit = { ...sz, bis: [mo, d], quelle: 'laut Schutzgebietsverordnung' }; renderParams(); } } }))),
+              f.schutzzeit ? h('button', { type: 'button', class: 'link-btn', onclick: () => { f.schutzzeit = null; renderParams(); } }, 'Zurück zum gesetzlichen Zeitraum (1. März – 30. September)') : null),
+            drin
+              ? [h('p', {}, h('strong', {}, `Der Termin ${datumText(f.termin)} liegt in der Brut- und Setzzeit.`), ' Lege den Einschlag am besten außerhalb. Geht das nicht, ist vor dem Start eine Verträglichkeits-Vorprüfung nötig.'),
+                 h('button', { type: 'button', class: 'btn btn-primary', onclick: () => { f.termin = nachBrutzeit(f.termin, sz); renderParams(); } }, `Auf ${datumText(nachBrutzeit(f.termin, sz))} verschieben`)]
+              : h('p', { class: 'ok-line' }, h('span', { html: icon.check }), `Der Termin liegt außerhalb der Brut- und Setzzeit.`))
+        : h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Kein FFH-, Vogelschutz- oder Naturschutzgebiet auf der Fläche gefunden – der Termin ist frei wählbar.'),
+      ];
+      canNext = !a.loading && !!f.termin;
+    } else if (q === 'art') {
       title = 'Welche Baumart prägt den Bestand?';
       const b = st.auto?.bestand;
       help = b?.art
@@ -391,10 +421,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
           h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),
           h('p', {}, 'Im Wald zählt die Baumzahl je Rasterpunkt. Wie viel Grundfläche dabei tatsächlich herauskommt, hängt von den Bäumen vor Ort ab und liegt meist etwas unter dem Zielwert.')),
-        st.auto?.natura?.length ? h('div', { class: 'lrt-hinweis brutzeit' },
-          h('strong', {}, `Natura 2000: ${st.auto.natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}`),
-          h('ul', {}, h('li', {}, `Brut- und Setzzeit (${BRUTZEIT.text}) beachten: Lege den Einschlag am besten davor oder danach.`),
-            h('li', {}, 'Lässt er sich nicht verschieben, ist eine Verträglichkeits-Vorprüfung nötig – die App führt dich beim Start durch das Formular.'))) : null,
+        st.auto?.natura?.length ? h('div', { class: `lrt-hinweis brutzeit ${inBrutzeit(f.termin, sz) ? '' : 'ok'}` },
+          h('strong', {}, `Schutzgebiet: ${st.auto.natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}`),
+          h('ul', {}, h('li', {}, `Geplanter Termin: ${datumText(f.termin)}${inBrutzeit(f.termin, sz) ? ` – in der Brut- und Setzzeit (${schutzzeitText(sz)})` : ' – außerhalb der Brut- und Setzzeit'}.`),
+            inBrutzeit(f.termin, sz) ? h('li', {}, 'Lässt er sich nicht verschieben, ist eine Verträglichkeits-Vorprüfung nötig – die App führt dich beim Start durch das Formular.') : null)) : null,
         (st.auto?.lrt || []).map((l) => h('div', { class: 'lrt-hinweis' },
           h('strong', {}, `Lebensraumtyp auf der Fläche: ${l.titel}`),
           h('ul', {}, l.punkte.map((t) => h('li', {}, t))))),
@@ -483,7 +513,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         m = { id: st.measureId, type: 'durchforstung', parcelId: st.sel.parcelId, date: Date.now(), note: '', details: {}, status: 'arbeit', createdAt: Date.now() };
         s.measures.push(m);
       }
-      m.thinning = { ...(m.thinning || {}), ...(st.auto?.natura ? { natura2000: st.auto.natura, lrt: st.auto.lrt } : {}), mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
+      if (st.params?.termin && !patch.date) m.date = st.params.termin;
+      m.thinning = { ...(m.thinning || {}), ...(st.auto?.natura ? { natura2000: st.auto.natura, lrt: st.auto.lrt } : {}), schutzzeit: st.params?.schutzzeit || m.thinning?.schutzzeit || null, mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
       Object.assign(m, patch);
     });
   }
@@ -536,17 +567,19 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   // Natura 2000 + Brut- und Setzzeit: verschieben oder Verträglichkeits-Vorprüfung
   async function pruefeBrutzeit() {
     const natura = st.auto?.natura || measure()?.thinning?.natura2000 || [];
-    if (!natura.length || !inBrutzeit(Date.now())) return true;
+    const szm = st.params?.schutzzeit || measure()?.thinning?.schutzzeit || BRUTZEIT_GESETZ;
+    if (!natura.length || !inBrutzeit(Date.now(), szm)) return true;
     if (measure()?.anhaenge?.some((a) => a.typ === 'vertraeglichkeit')) return true;
     const v = await dialog({
-      title: 'Brut- und Setzzeit im Natura 2000-Gebiet',
+      title: 'Brut- und Setzzeit im Schutzgebiet',
       body: h('div', {},
-        h('p', {}, `Die Fläche liegt im ${natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}. Jetzt ist Brut- und Setzzeit (${BRUTZEIT.text}).`),
+        h('p', {}, `Die Fläche liegt im ${natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}. Jetzt ist Brut- und Setzzeit (${schutzzeitText(szm)}).`),
         h('p', {}, 'Lege den Einschlag am besten außerhalb dieser Zeit. Ist das nicht zu umgehen, fülle eine Verträglichkeits-Vorprüfung aus – sie wird an die Maßnahme angehängt.')),
-      actions: [{ label: 'Abbrechen', value: null }, { label: 'Auf 1. Juli verschieben', value: 'verschieben' }, { label: 'Nicht vermeidbar – Vorprüfung ausfüllen', value: 'pruefung', primary: true }],
+      actions: [{ label: 'Abbrechen', value: null }, { label: `Auf ${datumText(nachBrutzeit(Date.now(), szm))} verschieben`, value: 'verschieben' }, { label: 'Nicht vermeidbar – Vorprüfung ausfüllen', value: 'pruefung', primary: true }],
     });
     if (v === 'verschieben') {
-      const d = nachBrutzeit();
+      const d = nachBrutzeit(Date.now(), szm);
+      if (st.params) st.params.termin = d;
       saveMeasure({ status: 'geplant', date: d });
       protokoll(st.measureId, `Wegen Brut- und Setzzeit auf ${new Date(d).toLocaleDateString('de-DE')} verschoben`);
       toast(`Einschlag auf ${new Date(d).toLocaleDateString('de-DE')} verschoben – steht im Maßnahmenkalender`);
@@ -569,14 +602,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const cur = measure();
     if (!ei || !cur || store.get().measures.some((m) => m.thinning?.vorgaenger === cur.id)) return null;
     const abstand = Math.max(1, ei.abstandJahre || Math.round(10 / (ei.anzahl || 1)));
-    let when = new Date(); when.setFullYear(when.getFullYear() + abstand); when.setHours(9, 0, 0, 0);
-    // im Natura 2000-Gebiet nicht in die Brut- und Setzzeit legen
-    if ((cur.thinning?.natura2000 || st.auto?.natura || []).length && inBrutzeit(when.getTime())) when = new Date(nachBrutzeit(when.getTime()));
+    let when = new Date(Math.max(Date.now(), st.params?.termin || 0)); when.setFullYear(when.getFullYear() + abstand); when.setHours(9, 0, 0, 0);
+    // im Schutzgebiet nicht in die Brut- und Setzzeit legen
+    const szF = cur.thinning?.schutzzeit || BRUTZEIT_GESETZ;
+    if ((cur.thinning?.natura2000 || st.auto?.natura || []).length && inBrutzeit(when.getTime(), szF)) when = new Date(nachBrutzeit(when.getTime(), szF));
     const serie = cur.thinning?.serie || cur.id;
-    const base = { natura2000: cur.thinning?.natura2000, lrt: cur.thinning?.lrt, mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, vorgaenger: cur.id, serie };
+    const base = { natura2000: cur.thinning?.natura2000, lrt: cur.thinning?.lrt, schutzzeit: cur.thinning?.schutzzeit || null, mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, vorgaenger: cur.id, serie };
     let thinning, note;
     if (ei.nr < ei.anzahl) {
-      const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0 };
+      const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0, termin: when.getTime() };
       thinning = { ...base, params, plan: computePlanMethode(st.sel, params) };
       note = `Eingriff ${ei.nr + 1} von ${ei.anzahl} – neues, zufällig gelegtes Raster.`;
     } else {

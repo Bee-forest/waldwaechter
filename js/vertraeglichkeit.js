@@ -2,7 +2,7 @@
 // gespeichert als Anhang der Maßnahme und über den Maßnahmenverlauf jederzeit aufrufbar.
 import { h, openPage, toast } from './ui.js';
 import { store, uid } from './store.js';
-import { BRUTZEIT } from './schutzgebiete.js';
+import { schutzzeitText, schutzzeitVon } from './schutzgebiete.js';
 
 export function protokoll(measureId, text) {
   store.update((s) => {
@@ -34,7 +34,7 @@ export function openVertraeglichkeit(measureId, { anhangId = null, nurLesen = fa
   const radio = (key, opt, label) => h('label', { class: 'check-row' }, h('input', { type: 'radio', name: key, value: opt, checked: v[key] === opt, disabled: nurLesen }), h('span', {}, label));
 
   body.append(
-    h('p', { class: 'hint' }, `Der Einschlag liegt in einem Natura 2000-Gebiet und in der Brut- und Setzzeit (${BRUTZEIT.text}). Ist er nicht zu verschieben, halte hier fest, warum und wie Störungen vermieden werden. Ist eine erhebliche Beeinträchtigung nicht auszuschließen, muss die Untere Naturschutzbehörde eine FFH-Verträglichkeitsprüfung durchführen (§ 34 BNatSchG).`),
+    h('p', { class: 'hint' }, `Der Einschlag liegt in einem Schutzgebiet (Natura 2000 bzw. Naturschutzgebiet) und in der Brut- und Setzzeit (${schutzzeitText(schutzzeitVon(m))}). Ist er nicht zu verschieben, halte hier fest, warum und wie Störungen vermieden werden. Ist eine erhebliche Beeinträchtigung nicht auszuschließen, muss die Untere Naturschutzbehörde eine FFH-Verträglichkeitsprüfung durchführen (§ 34 BNatSchG).`),
     h('fieldset', {}, h('legend', {}, '1. Maßnahme'),
       feld('Art der Maßnahme', 'massnahme'), feld('Fläche', 'flaeche'), feld('Größe (ha)', 'ha', { inputmode: 'decimal' }),
       h('div', { class: 'form-row' }, feld('Geplant von', 'von', { type: 'date' }), feld('bis', 'bis', { type: 'date' })),
@@ -73,7 +73,7 @@ export function openVertraeglichkeit(measureId, { anhangId = null, nurLesen = fa
       if (!x) return;
       x.anhaenge ||= [];
       if (alt) { const a = x.anhaenge.find((y) => y.id === alt.id); a.daten = daten; a.geaendert = Date.now(); }
-      else x.anhaenge.push({ id: uid(), typ: 'vertraeglichkeit', titel: 'Verträglichkeits-Vorprüfung (Brut- und Setzzeit, Natura 2000)', erstellt: Date.now(), daten });
+      else x.anhaenge.push({ id: uid(), typ: 'vertraeglichkeit', titel: 'Verträglichkeits-Vorprüfung (Brut- und Setzzeit, Schutzgebiet)', erstellt: Date.now(), daten });
     });
     protokoll(measureId, alt ? 'Verträglichkeits-Vorprüfung geändert' : 'Verträglichkeits-Vorprüfung angehängt');
     toast('Verträglichkeits-Vorprüfung gespeichert');

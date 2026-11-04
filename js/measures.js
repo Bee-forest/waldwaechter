@@ -17,7 +17,8 @@ import { openZaunPlanung } from './zaun.js';
 
 export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
-  zaunbau:      { label: 'Zaunbau', fields: [['length', 'Zaunlänge (m)', 'number'], ['zaun', 'Zauntyp', 'text'], ['tore', 'Tore', 'text']] },
+  zaunbau:      { label: 'Zaunbau', gruppe: 'wildschutz', info: 'Zaunverlauf einzeichnen, Material und Kosten', fields: [['length', 'Zaunlänge (m)', 'number'], ['zaun', 'Zauntyp', 'text'], ['tore', 'Tore', 'text']] },
+  einzelschutz: { label: 'Einzelschutz', gruppe: 'wildschutz', info: 'Wuchshüllen, Drahthosen, Fege- und Verbissschutz', fields: [['art', 'Art des Schutzes', ['Wuchshülle', 'Freiwuchsgitter / Drahthose', 'Fegeschutz (Spirale, Fegestab)', 'Terminaltriebschutz', 'Verbissschutzmittel (Streichmittel)']], ['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen (Stück)', 'number'], ['hoehe', 'Höhe des Schutzes (z. B. 1,20 m)', 'text'], ['stab', 'Befestigung', ['Robinienstab', 'Lärchenstab', 'Tonkinstab', 'ohne Stab']], ['preis', 'Preis je Stück inkl. Stab (€)', 'decimal']] },
   pflege:       { label: 'Pflege', fields: [['art', 'Art der Pflege', ['Jungwuchspflege', 'Jungbestandspflege', 'Freischneiden', 'Wertastung']], ['area', 'Fläche (ha)', 'decimal']] },
   durchforstung:{ label: 'Durchforstung mit GPS', gruppe: 'holzernte', info: 'Geführt per GPS-Raster', fields: [] },
   holzernte_df: { label: 'Durchforstung', gruppe: 'holzernte', info: 'Ohne GPS-Raster dokumentieren', fields: [['verfahren', 'Verfahren', ['motormanuell', 'Harvester', 'Harvester und motormanuell', 'Seilkran', 'Rückepferd']], ['species', 'Hauptbaumart', 'species'], ['baeume', 'Anzahl entnommener Bäume', 'number'], ['menge', 'Entnahmemenge (Fm)', 'decimal'], ['area', 'Fläche (ha)', 'decimal']] },
@@ -254,23 +255,28 @@ async function openNewMeasure({ parcelId } = {}) {
   const alleSchliessen = () => [...seiten].reverse().forEach((pg) => pg.close());
   const kachel = (label, info, onclick, feature = false) => h('button', { class: `type-tile ${feature ? 'type-feature' : ''}`, onclick }, h('strong', {}, label), info ? h('span', {}, info) : null);
 
-  // Seite 1: Art der Maßnahme (Holzernte fasst Durchforstung mit GPS, Durchforstung und Poltervermessung zusammen)
+  // Seite 1: Art der Maßnahme. Gruppen: Holzernte (Durchforstung mit GPS, Durchforstung, Poltervermessung) und Wildschutz (Zaunbau, Einzelschutz)
+  const GRUPPEN = {
+    holzernte: { label: 'Holzernte', info: 'Durchforstung mit GPS, Durchforstung, Poltervermessung', frage: 'Welche Holzernte?' },
+    wildschutz: { label: 'Wildschutz', info: 'Zaunbau, Einzelschutz', frage: 'Welcher Wildschutz?' },
+  };
   neueSeite('Neue Maßnahme', h('div', { class: 'new-measure' },
     h('h2', { class: 'step-title' }, 'Art der Maßnahme'),
     h('div', { class: 'type-grid' },
-      kachel('Holzernte', 'Durchforstung mit GPS, Durchforstung, Poltervermessung', holzernteSeite, true),
-      Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe !== 'holzernte').map(([k, t]) => kachel(t.label, k === 'zaunbau' ? 'Verlauf einzeichnen, Material und Kosten' : null, () => (k === 'zaunbau' ? openZaunPlanung({ parcelId, onSaved: alleSchliessen }) : formularSeite(k)))))));
+      Object.entries(GRUPPEN).map(([g, x]) => kachel(x.label, x.info, () => gruppenSeite(g), true)),
+      Object.entries(MEASURE_TYPES).filter(([, t]) => !t.gruppe).map(([k, t]) => kachel(t.label, null, () => formularSeite(k))))));
 
-  // Seite 2: Holzernte
-  function holzernteSeite() {
-    neueSeite('Holzernte', h('div', { class: 'new-measure' },
-      h('h2', { class: 'step-title' }, 'Welche Holzernte?'),
+  // Seite 2: Maßnahmen einer Gruppe
+  function gruppenSeite(g) {
+    neueSeite(GRUPPEN[g].label, h('div', { class: 'new-measure' },
+      h('h2', { class: 'step-title' }, GRUPPEN[g].frage),
       h('div', { class: 'type-grid einspaltig' },
-        Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe === 'holzernte').map(([k, t]) => kachel(t.label, t.info, () => {
+        Object.entries(MEASURE_TYPES).filter(([, t]) => t.gruppe === g).map(([k, t]) => kachel(t.label, t.info, () => {
           if (k === 'durchforstung') { alleSchliessen(); openThinningWizard({ parcelId }); return; }
           if (k === 'polter') { openPolterVermessung({ parcelId, onSaved: alleSchliessen }); return; }
+          if (k === 'zaunbau') { openZaunPlanung({ parcelId, onSaved: alleSchliessen }); return; }
           formularSeite(k);
-        }, k === 'durchforstung')))));
+        })))));
   }
 
   // Seite 3: Eingabe der Maßnahme
@@ -284,7 +290,8 @@ async function openNewMeasure({ parcelId } = {}) {
       const fd = new FormData(form);
       const fl = wahl ? wahl.wert() : null;
       if (wahl && !fl) { toast('Bitte mindestens 3 Eckpunkte der Teilfläche einzeichnen.'); return; }
-      const kosten = String(fd.get('kosten') || '').trim();
+      let kosten = String(fd.get('kosten') || '').trim();
+      if (type === 'einzelschutz' && !kosten) { const n = Number(fd.get('count')) || 0, pr = Number(String(fd.get('preis') || '').replace(',', '.')) || 0; if (n && pr) kosten = String(Math.round(n * pr * 100) / 100); }
       const details = Object.fromEntries(t.fields.map(([k]) => [k, String(fd.get(k) || '').trim()]));
       store.update((s) => {
         s.measures.push({ id: uid(), type, parcelId: fd.get('parcel') || null, date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,

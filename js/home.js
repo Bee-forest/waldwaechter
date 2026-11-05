@@ -13,7 +13,7 @@ import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
 import { zeigeVerordnung } from './schutzgebiete.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
-import { bestandAt } from './map/bestand.js';
+import { bestandAt, KORREKTUR_ARTEN, SCHICHTEN, korrAlter } from './map/bestand.js';
 import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
@@ -417,15 +417,56 @@ function renderGeoInfo(info) {
   return g;
 }
 
-function bestandCard(b) {
+function bestandCard(b, parcelId = null) {
+  const k = parcelId ? store.get().bestandKorrektur?.[parcelId] : null;
+  const korrBtn = parcelId ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => bestandKorrigieren(parcelId, b) }, k ? 'Angaben ändern' : 'Angaben falsch? Korrigieren') : null;
+  if (k?.haupt?.art) {
+    return h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, 'Bestand – deine Angaben'),
+      h('dl', { class: 'bestand-schichten' }, SCHICHTEN.filter(([key]) => k[key]?.art).map(([key, label]) => h('div', {},
+        h('dt', {}, label), h('dd', {}, `${k[key].art}${korrAlter(k[key], k.jahr) != null ? `, etwa ${korrAlter(k[key], k.jahr)} Jahre` : ''}`)))),
+      h('p', { class: 'muted' }, `Von dir erfasst ${k.jahr}${k.jahr !== new Date().getFullYear() ? ', Alter auf heute hochgerechnet' : ''}.${b ? ` Waldverzeichnis (Stand ${b.stichtag || '?'}): „${b.text}“${b.alterStichtag != null ? `, ${b.alterStichtag} Jahre` : ''}.` : ''}`),
+      h('div', { class: 'btn-row' }, korrBtn,
+        h('button', { type: 'button', class: 'btn btn-small', onclick: () => { store.update((s) => { delete s.bestandKorrektur[parcelId]; }); toast('Wieder Angaben aus dem Waldverzeichnis'); if (selected?.parcel.id === parcelId) renderInfo(); } }, 'Zurücksetzen')));
+  }
+  if (!b) return parcelId ? h('div', { class: 'geo-card muted-card' }, h('p', { class: 'geo-kicker' }, 'Bestand'), h('p', {}, 'Im Waldverzeichnis ist hier kein Bestand verzeichnet.'), h('div', { class: 'btn-row' }, korrBtn)) : null;
   return h('div', { class: 'geo-card' },
-    h('p', { class: 'geo-kicker' }, 'Bestand'),
+    h('p', { class: 'geo-kicker' }, `Bestand${b.stichtag ? ` · Stand ${b.stichtag}` : ''}`),
     h('h4', {}, `${b.art || b.text}${b.alter != null ? `, etwa ${b.alter} Jahre` : ''}`),
-    h('p', { class: 'muted' }, `Waldverzeichnis ThüringenForst: „${b.text}“${b.alterStichtag != null ? `, ${b.alterStichtag} Jahre zum Stand ${b.stichtag}, auf heute hochgerechnet` : ''}.`),
-  );
+    h('p', { class: 'muted' }, `Waldverzeichnis ThüringenForst: „${b.text}“${b.alterStichtag != null ? `, ${b.alterStichtag} Jahre zum Stand ${b.stichtag}, auf heute hochgerechnet` : ''}.${b.stichtag ? ` Seit ${b.stichtag} kann sich viel geändert haben (Käfer, Sturm, Einschlag).` : ''}`),
+    korrBtn ? h('div', { class: 'btn-row' }, korrBtn) : null);
 }
 
-function geoInfoBlock(latlng) {
+/** Eigene Angaben zum Bestand: Haupt-, Misch- und Nebenbaumart mit Alter */
+function bestandKorrigieren(parcelId, b) {
+  const alt = store.get().bestandKorrektur?.[parcelId];
+  const jahr = new Date().getFullYear();
+  const w = {};
+  for (const [key] of SCHICHTEN) w[key] = { art: alt?.[key]?.art || (key === 'haupt' && b?.art ? b.art : ''), alter: alt?.[key] ? korrAlter(alt[key], alt.jahr) ?? '' : key === 'haupt' && b?.alter != null ? b.alter : '' };
+  const zeile = (key, label) => h('div', { class: 'korr-zeile' },
+    h('label', {}, label, h('select', { onchange: (e) => { w[key].art = e.target.value; } },
+      h('option', { value: '' }, key === 'haupt' ? 'bitte wählen' : 'keine'),
+      KORREKTUR_ARTEN.map((a) => h('option', { value: a, selected: w[key].art === a }, a)))),
+    h('label', {}, 'Alter (Jahre)', h('input', { type: 'number', inputmode: 'numeric', min: 1, max: 300, value: w[key].alter, oninput: (e) => { w[key].alter = e.target.value; } })));
+  dialog({
+    title: 'Bestand korrigieren',
+    body: h('div', { class: 'form korr-form' },
+      h('p', { class: 'muted' }, b ? `Waldverzeichnis (Stand ${b.stichtag || '?'}): „${b.text}“${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Trage ein, was heute tatsächlich auf der Fläche steht.` : 'Trage ein, was auf der Fläche steht.'),
+      SCHICHTEN.map(([key, label]) => zeile(key, label)),
+      h('p', { class: 'hint' }, 'Hauptbaumart = häufigste Baumart, Mischbaumart = zweithäufigste, Nebenbaumart = weitere Baumart (z. B. im Unter- oder Zwischenstand). Deine Angaben gelten für dieses Flurstück und werden auch bei der Durchforstung verwendet.')),
+    actions: [{ label: 'Abbrechen', value: null }, { label: 'Speichern', value: true, primary: true }],
+  }).then((ok) => {
+    if (!ok) return;
+    if (!w.haupt.art) { toast('Bitte mindestens die Hauptbaumart angeben'); return; }
+    const k = { jahr, erfasst: Date.now() };
+    for (const [key] of SCHICHTEN) if (w[key].art) k[key] = { art: w[key].art, alter: w[key].alter === '' ? null : Math.round(Number(w[key].alter)) };
+    store.update((s) => { (s.bestandKorrektur ||= {})[parcelId] = k; });
+    toast('Bestand gespeichert');
+    if (selected?.parcel.id === parcelId) renderInfo();
+  });
+}
+
+function geoInfoBlock(latlng, parcelId = null) {
   const lade = (t) => h('p', { class: 'muted' }, t);
   const B = { standort: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Standort und Bestand …')),
     schutz: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Schutzstatus und Waldfunktionen …')),
@@ -441,10 +482,11 @@ function geoInfoBlock(latlng) {
     if (info.failed) throw new Error('offline');
     const b = await bestandP;
     const g = renderGeoInfo(info);
-    fill(B.standort, b ? bestandCard(b) : null, ...g.standort);
+    fill(B.standort, bestandCard(b, parcelId), ...g.standort);
     fill(B.schutz, ...g.schutz);
     fill(B.zust, ...g.zust);
-    K.standort.setKurz(`${b ? `${b.art || b.text} · ` : ''}${g.vorschau.standort}`);
+    const kb = parcelId ? store.get().bestandKorrektur?.[parcelId]?.haupt?.art : null;
+    K.standort.setKurz(`${kb || b ? `${kb || b.art || b.text} · ` : ''}${g.vorschau.standort}`);
     K.schutz.setKurz(g.vorschau.schutz);
     K.zust.setKurz(g.vorschau.zust);
   }).catch(() => {
@@ -548,8 +590,7 @@ async function renderInfo() {
     ),
     catSection,
     isAlkis ? rescueBlock(latlng) : null,
-    isAlkis ? geoInfoBlock(latlng) : null,
-    isAlkis ? h('p', { class: 'hint' }, 'Flurstücksdaten: ALKIS, © GDI-Th. Standort, Waldfunktionen, Rettungspunkte: © GDI-Th / ThüringenForst. Keine amtliche Auskunft.') : null,
+    isAlkis ? geoInfoBlock(latlng, p.id) : null,
     isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Nächste Rettungspunkte'),
       h('ul', { class: 'rescue-list' }, rescue.map((rp) => h('li', { class: 'rescue' },
@@ -580,6 +621,9 @@ async function renderInfo() {
       h('button', { class: 'btn btn-primary', onclick: () => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId: p.id } })) }, 'Maßnahme planen'),
       h('button', { class: 'btn btn-danger-ghost', onclick: () => removeParcel(p.id) }, h('span', { html: icon.trash }), 'Entfernen'),
     ) : null,
+    h('p', { class: 'info-quellen' }, isAlkis
+      ? 'Flurstücksdaten: ALKIS, © GDI-Th. Standort, Bestand, Waldfunktionen, Rettungspunkte: © GDI-Th / ThüringenForst. Keine amtliche Auskunft.'
+      : 'Demo-Daten. Keine amtliche Auskunft.'),
   );
   const wasHidden = box.hidden;
   box.hidden = false;

@@ -6,7 +6,8 @@ const KEY = 'waldwaechter.v1';
 const defaults = () => ({
   parcels: [],      // { id, gemarkung, flur, nr, category, addedAt, ring, … } – ALKIS-Flurstücke mit Geometrie
   measures: [],     // siehe measures.js
-  foerderantraege: [], // siehe foerderung.js – Entwürfe für Förderanträge (ThüringenForst)
+  foerderantraege: [],
+  bestandKorrektur: {}, // eigene Angaben zum Bestand je Flurstück: { haupt, misch, neben: { art, alter }, jahr } // siehe foerderung.js – Entwürfe für Förderanträge (ThüringenForst)
   profile: { name: '', email: '', fbg: '', accountHolder: '', iban: '', strasse: '', ort: '', telefon: '', pi: '' },
   settings: {
     theme: 'auto',          // auto | light | dark

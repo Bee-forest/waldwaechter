@@ -9,7 +9,7 @@ import { parcelExact, amtlicheFlaecheHa, nutzungAnteile } from '../map/thueringe
 import { computePlanMethode, pointRemaining, pointTotal, zufallsLage } from './plan.js';
 import { waldbereich } from './wald.js';
 import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, MAX_FM_EINGRIFF, EIN_EINGRIFF_BIS, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
-import { bestandInFlaeche, oberhoeheFlaeche } from '../map/bestand.js';
+import { bestandInFlaeche, oberhoeheFlaeche, mitKorrektur } from '../map/bestand.js';
 import { lrtInFlaeche } from '../map/besonderheiten.js';
 import { natura2000InFlaeche, inBrutzeit, nachBrutzeit, BRUTZEIT_GESETZ, schutzzeitText, datumText, zeigeVerordnung } from '../schutzgebiete.js';
 import { openVertraeglichkeit, protokoll } from '../vertraeglichkeit.js';
@@ -325,8 +325,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     if (!st.auto || st.auto.ring !== st.sel.ring) {
       st.auto = { ring: st.sel.ring, loading: true };
       Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null), lrtInFlaeche(st.sel).catch(() => []), natura2000InFlaeche(st.sel).catch(() => []), waldbereich(st.sel, st.mode).catch(() => ({ status: 'fehler' }))]).then(([bestand, oberhoehe, lrt, natura, wald]) => {
+        const korr = st.sel.parcelId ? store.get().bestandKorrektur?.[st.sel.parcelId] : null;
+        if (korr?.haupt?.art) bestand = mitKorrektur(bestand, korr);
         st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe, lrt, natura, wald };
-        if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = 'waldverzeichnis'; }
+        if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = bestand.quelle === 'eigen' ? 'eigen' : 'waldverzeichnis'; }
         if (st.step === 1) renderParams();
       });
     }
@@ -374,7 +376,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       title = 'Welche Baumart prägt den Bestand?';
       const b = st.auto?.bestand;
       help = b?.art
-        ? `Laut Waldverzeichnis von ThüringenForst: ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.`
+        ? (b.quelle === 'eigen' ? `Laut deinen Angaben zum Flurstück: ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.` : `Laut Waldverzeichnis von ThüringenForst (Stand ${b.stichtag || '?'}): ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.`)
         : st.auto?.loading ? 'Suche Baumart im Waldverzeichnis …' : 'Wähle die Hauptbaumart. Daraus ergibt sich die Baumartengruppe der Methode.';
       content = Object.entries(GRUPPEN).map(([g, grp]) => h('div', { class: 'q-group' },
         h('p', { class: 'sheet-label' }, grp.label),
@@ -411,7 +413,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
             h('small', {}, lidar != null ? `gemessen: Laserscanning (${a.oberhoehe.zellen} Höhenzellen)` : geschaetzt != null ? `geschätzt aus dem Alter (${alter} J.) mit der Ertragstafel, mittlere Bonität` : loading ? 'wird ermittelt' : 'kein Höhenmodell und kein Alter')),
           h('div', { class: 'auto-card' }, h('span', {}, 'Alter'),
             h('strong', {}, alter != null ? `${alter} Jahre` : loading ? '…' : 'unbekannt'),
-            h('small', {}, f.alter != null ? 'von dir angegeben' : a.bestand?.alter != null ? `Waldverzeichnis, Stand ${a.bestand.stichtag}, hochgerechnet` : 'nicht im Waldverzeichnis')),
+            h('small', {}, f.alter != null ? 'von dir angegeben' : a.bestand?.alter != null ? (a.bestand.quelle === 'eigen' ? `deine Angabe von ${a.bestand.stichtag}${a.bestand.stichtag !== new Date().getFullYear() ? ', hochgerechnet' : ''}` : `Waldverzeichnis, Stand ${a.bestand.stichtag}, hochgerechnet`) : 'nicht im Waldverzeichnis')),
         ),
         lidar == null && !loading ? h('label', { class: 'q-own' }, alter == null ? 'Kein Alter hinterlegt. Wie alt ist der Bestand ungefähr? (Jahre)' : 'Alter weicht ab? Hier anpassen (Jahre)',
           h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: alter ?? '', onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; f.hoKlasseManuell = false; renderParams(); } })) : null,

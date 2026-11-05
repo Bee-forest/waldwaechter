@@ -134,3 +134,15 @@ export async function bestaendeImFlurstueck(p) {
     };
   });
 }
+
+// ---------- Eigene Angaben zum Bestand (wenn das Waldverzeichnis veraltet oder falsch ist) ----------
+export const KORREKTUR_ARTEN = ['Fichte', 'Kiefer', 'Lärche', 'Douglasie', 'Tanne', 'Buche', 'Eiche', 'Ahorn', 'Esche', 'Birke', 'Erle', 'Hainbuche', 'Linde', 'Kirsche', 'Roteiche', 'sonstiges Laubholz', 'sonstiges Nadelholz'];
+export const SCHICHTEN = [['haupt', 'Hauptbaumart'], ['misch', 'Mischbaumart'], ['neben', 'Nebenbaumart']];
+/** Alter einer eigenen Angabe auf heute hochgerechnet */
+export const korrAlter = (x, jahr) => (x?.alter != null && x.alter !== '' ? Number(x.alter) + (heute() - (jahr || heute())) : null);
+/** Bestand mit eigenen Angaben überschreiben (Hauptbaumart und ihr Alter zählen) */
+export function mitKorrektur(bestand, k) {
+  if (!k?.haupt?.art) return bestand;
+  return { ...(bestand || {}), art: k.haupt.art, text: k.haupt.art, alter: korrAlter(k.haupt, k.jahr), alterStichtag: k.haupt.alter != null && k.haupt.alter !== '' ? Number(k.haupt.alter) : null,
+    stichtag: k.jahr, quelle: 'eigen', korrektur: k, original: bestand || null };
+}

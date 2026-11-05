@@ -121,6 +121,12 @@ export function weiterZumAntrag(measureId, antragId = null) {
   else openFoerderantrag({ antragId: neuerAntrag([measureId]) });
 }
 
+/** Mehrere Maßnahmen (z. B. Pflanzung und Zaun) in einen Antrag übernehmen */
+export function antragFuer(measureIds, antragId = null) {
+  if (antragId && antragVon(antragId)) { measureIds.forEach((id) => zumAntragHinzufuegen(antragId, id)); openFoerderantrag({ antragId, schritt: 'massnahmen' }); }
+  else openFoerderantrag({ antragId: neuerAntrag(measureIds) });
+}
+
 const SCHRITTE = ['programm', 'antragsteller', 'flaeche', 'massnahmen', 'erklaerungen', 'weitere', 'zusammenfassung'];
 const TITEL = { programm: 'Welches Förderprogramm passt?', antragsteller: 'Antragsteller', flaeche: 'Waldfläche, Forstamt und Schutzgebiete', massnahmen: 'Angaben zu den Maßnahmen', erklaerungen: 'Beginn und Erklärungen', weitere: 'Noch eine Maßnahme?', zusammenfassung: 'Antrag prüfen und herunterladen' };
 const monat = (t) => { if (!t) return ''; const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -148,6 +154,14 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
     if (!x.beginn && m.date) x.beginn = monat(m.date);
     if (!x.ende && x.beginn) x.ende = x.beginn;
     if (!x.abrechnung) x.abrechnung = (x.ende || x.beginn || monat(Date.now())).slice(0, 4);
+    if (m.type === 'pflanzung' && !x.baumarten && m.pflanzplan?.arten?.length) {
+      const pp = m.pflanzplan;
+      x.baumarten = pp.arten.map((a) => ({ art: a.name, stueck: a.stueck, hsn: '' }));
+      x.art ??= pp.art === 'voranbau' ? 'voranbau' : 'wiederaufforstung';
+      if (x.pflanzgutKosten == null && m.kosten) x.pflanzgutKosten = String(m.kosten).replace('.', ',');
+      x.sortiment ??= [...new Set(pp.arten.map((a) => a.sortiment).filter(Boolean))].join('; ');
+      x.standortheimisch ??= pp.arten.every((a) => baumart(a.name)?.heimisch) ? 'ja' : 'nein';
+    }
     if (m.type === 'pflanzung' && !x.baumarten) x.baumarten = pflanzen(m, x).map((b) => ({ ...b, stueck: num(b.stueck) || '' }));
     if (m.type === 'pflege' && !x.pflegeArt) x.pflegeArt = kategorie(m, x) || 'wertastung';
   }

@@ -13,7 +13,7 @@ import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
 import { zeigeVerordnung } from './schutzgebiete.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
-import { bestandAt, KORREKTUR_ARTEN, SCHICHTEN, korrAlter } from './map/bestand.js';
+import { bestandAt, KORREKTUR_ARTEN, SCHICHTEN, korrAlter, pflanzungAm } from './map/bestand.js';
 import { empfehlung, bztName, GRUPPEN, BAUMARTEN_KURZ, eichenHinweis } from './bzt.js';
 import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
@@ -417,8 +417,16 @@ function renderGeoInfo(info) {
   return g;
 }
 
-function bestandCard(b, parcelId = null) {
+function bestandCard(b, parcelId = null, pf = null) {
   const k = parcelId ? store.get().bestandKorrektur?.[parcelId] : null;
+  if (pf && !(k?.haupt?.art && (k.erfasst || 0) > pf.ts)) {
+    return h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, `Bestand – deine Pflanzung ${pf.jahr}`),
+      h('h4', {}, `${pf.text}${pf.alter != null ? `, etwa ${pf.alter} Jahre` : ''}`),
+      h('dl', { class: 'bestand-schichten' }, pf.arten.map((a) => h('div', {}, h('dt', {}, `${a.name}${a.anteil ? ` (${Math.round(a.anteil)} %)` : ''}`), h('dd', {}, `etwa ${a.alter} Jahre${a.sortiment ? ` · ${a.sortiment}` : ''}`)))),
+      h('p', { class: 'muted' }, `Aus der abgeschlossenen Pflanzung (Pflanzjahr ${pf.jahr}). Alter = Jahre seit der Pflanzung + Alter des Sortiments${pf.arten.some((a) => !a.sortiment) ? ' (ohne Sortimentsangabe: + 2 Jahre)' : ''}.${b ? ` Waldverzeichnis (Stand ${b.stichtag || '?'}): „${b.text}“.` : ''}`),
+      parcelId ? h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn btn-small', onclick: () => bestandKorrigieren(parcelId, b) }, 'Angaben falsch? Korrigieren')) : null);
+  }
   const korrBtn = parcelId ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => bestandKorrigieren(parcelId, b) }, k ? 'Angaben ändern' : 'Angaben falsch? Korrigieren') : null;
   if (k?.haupt?.art) {
     return h('div', { class: 'geo-card' },
@@ -531,10 +539,11 @@ function geoInfoBlock(latlng, parcelId = null) {
     if (info.failed) throw new Error('offline');
     const b = await bestandP;
     const g = renderGeoInfo(info);
-    fill(B.standort, bestandCard(b, parcelId), ...g.standort);
+    const pf = pflanzungAm([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]]);
+    fill(B.standort, bestandCard(b, parcelId, pf), ...g.standort);
     fill(B.schutz, ...g.schutz);
     fill(B.zust, ...g.zust);
-    const kb = parcelId ? store.get().bestandKorrektur?.[parcelId]?.haupt?.art : null;
+    const kb = (pf ? pf.text : null) || (parcelId ? store.get().bestandKorrektur?.[parcelId]?.haupt?.art : null);
     K.standort.setKurz(`${kb || b ? `${kb || b.art || b.text} · ` : ''}${g.vorschau.standort}`);
     K.schutz.setKurz(g.vorschau.schutz);
     K.zust.setKurz(g.vorschau.zust);

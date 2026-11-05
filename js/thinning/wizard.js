@@ -4,12 +4,12 @@ import { h, fill, icon, dialog, confirmDialog, toast } from '../ui.js';
 import { store, uid } from '../store.js';
 import { source } from '../data/source.js';
 import { createBaseMap, tileUrls, BASEMAP_LABELS } from '../map/basemap.js';
-import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox, polysOf, areaM2Polys, generateGrid, inPolys } from '../geo.js';
+import { areaHa, formatHa, formatDist, distance, bearing, compassLabel, destination, bbox, polysOf, areaM2Polys, generateGrid, inPolys, centroid } from '../geo.js';
 import { parcelExact, amtlicheFlaecheHa, nutzungAnteile } from '../map/thueringen.js';
 import { computePlanMethode, pointRemaining, pointTotal, zufallsLage } from './plan.js';
 import { waldbereich } from './wald.js';
 import { GRUPPEN, DIMENSION, KRONENSCHLUSS, SZENARIO, HOEHENKLASSEN, RASTER_M, KREIS_M, AUSWEICHEN_M, hoeheKlasse, bLabel, AUSWEICH_TEXT, MAX_FM_EINGRIFF, EIN_EINGRIFF_BIS, anteilSatz, anteilText, oberhoeheAusAlter, gruppeVon, fmt } from './methode.js';
-import { bestandInFlaeche, oberhoeheFlaeche, mitKorrektur } from '../map/bestand.js';
+import { bestandInFlaeche, oberhoeheFlaeche, mitKorrektur, pflanzungAm } from '../map/bestand.js';
 import { lrtInFlaeche } from '../map/besonderheiten.js';
 import { natura2000InFlaeche, inBrutzeit, nachBrutzeit, BRUTZEIT_GESETZ, schutzzeitText, datumText, zeigeVerordnung } from '../schutzgebiete.js';
 import { openVertraeglichkeit, protokoll } from '../vertraeglichkeit.js';
@@ -326,7 +326,9 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       st.auto = { ring: st.sel.ring, loading: true };
       Promise.all([bestandInFlaeche(st.sel.ring, selPolys()).catch(() => null), oberhoeheFlaeche(st.sel.ring, selPolys()).catch(() => null), lrtInFlaeche(st.sel).catch(() => []), natura2000InFlaeche(st.sel).catch(() => []), waldbereich(st.sel, st.mode).catch(() => ({ status: 'fehler' }))]).then(([bestand, oberhoehe, lrt, natura, wald]) => {
         const korr = st.sel.parcelId ? store.get().bestandKorrektur?.[st.sel.parcelId] : null;
-        if (korr?.haupt?.art) bestand = mitKorrektur(bestand, korr);
+        const pf = pflanzungAm(centroid(st.sel.ring));
+        if (pf && !(korr?.haupt?.art && (korr.erfasst || 0) > pf.ts)) bestand = { ...(bestand || {}), art: pf.art, text: pf.text, alter: pf.alter, alterStichtag: pf.alterStichtag, stichtag: pf.jahr, quelle: 'eigen' };
+        else if (korr?.haupt?.art) bestand = mitKorrektur(bestand, korr);
         st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe, lrt, natura, wald };
         if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = bestand.quelle === 'eigen' ? 'eigen' : 'waldverzeichnis'; }
         if (st.step === 1) renderParams();

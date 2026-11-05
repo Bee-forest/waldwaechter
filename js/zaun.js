@@ -1,11 +1,12 @@
 // Zaunbau: Zaunverlauf in der Karte zeichnen → Länge, Material (Knotengeflecht, Z-Profile, Streben …) und Kosten.
-// Bauregeln: Pfostenabstand je nach Gelände 4–7 m, Eck- und Endpfosten mit Strebe, Mittelabstrebung alle 30–50 m,
+// Bauregeln: Pfostenabstand 2,5–4 m (Standard 3,5 m), Eck- und Endpfosten mit Strebe, Mittelabstrebung alle 30–50 m,
 // je waagerechtem Draht ein Drahtspanner am Zaunanfang, -ende und an jeder Rollenverbindung (Grube / Drahtwaren Driller).
 import { h, fill, openPage, toast, dialog } from './ui.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { distance, bearing, formatDist, formatHa, areaHa } from './geo.js';
 import { miniKarte } from './flaeche.js';
+import { umlaufSteuerung, vereinfachen } from './umlauf.js';
 
 const STAND = 'Stand 11/2026, brutto inkl. 19 % MwSt., ohne Versand; ab-Preise je nach Menge';
 const MWST = 1.19;
@@ -73,7 +74,7 @@ export function zaunGeometrie(pts, geschlossen) {
 }
 
 /** Materialliste nach den Bauregeln */
-export function materialListe({ pts, geschlossen, hoehe, abstand = 5, spanndraht = false, erdanker = false, ankerAbstand = 3, tore = 0, mittelStrebeAlle = 40, einschlaghilfe = false }) {
+export function materialListe({ pts, geschlossen, hoehe, abstand = 3.5, spanndraht = false, erdanker = false, ankerAbstand = 3, tore = 0, mittelStrebeAlle = 40, einschlaghilfe = false }) {
   const g = zaunGeometrie(pts, geschlossen);
   const H = HOEHEN.find((x) => x.cm === hoehe) || HOEHEN[0];
   const L = g.laenge;
@@ -102,13 +103,16 @@ export function materialListe({ pts, geschlossen, hoehe, abstand = 5, spanndraht
   };
 }
 
-export async function openZaunPlanung({ parcelId = null, onSaved, foerdern = false } = {}) {
+export async function openZaunPlanung({ parcelId = null, onSaved, onAbbruch = null, foerdern = false, pts = null, quelle = null } = {}) {
+  let gespeichert = false;
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id]);
-  const s = { parcelId: parcelId || mine[0]?.id || null, pts: [], geschlossen: true, hoehe: 160, einschlaghilfe: false, abstand: 5, spanndraht: false, erdanker: false, ankerAbstand: 3, tore: 1, eigen: {}, quelle: {}, date: '', note: '' };
+  const s = { parcelId: parcelId || mine[0]?.id || null, pts: pts ? [...pts] : [], geschlossen: true, hoehe: 160, einschlaghilfe: false, abstand: 3.5, spanndraht: false, erdanker: false, ankerAbstand: 3, tore: 1, eigen: {}, quelle: {}, date: '', note: '' };
   const body = h('div', { class: 'zaun' });
-  const page = openPage('Zaunbau', body, { onClose: () => karte?.remove() });
+  const page = openPage('Zaunbau', body, { onClose: () => { umlauf?.stop(); karte?.remove(); if (!gespeichert) onAbbruch?.(); } });
+  let umlauf = null;
+  const umlaufHost = h('div');
   const mapEl = h('div', { class: 'mini-map zaun-map' });
   const status = h('p', { class: 'draw-status', 'aria-live': 'polite' });
   const rest = h('div', { class: 'zaun-rest' });
@@ -121,6 +125,12 @@ export async function openZaunPlanung({ parcelId = null, onSaved, foerdern = fal
     karte.map.doubleClickZoom.disable();
     lyr.addTo(karte.map);
     karte.map.on('click', (e) => { s.pts.push([e.latlng.lat, e.latlng.lng]); zeichne(); renderRest(); });
+    umlauf?.stop();
+    umlauf = umlaufSteuerung({ map: karte.map, text: 'Zaunverlauf ablaufen',
+      onPunkt: (ll) => { s.pts.push(ll); zeichne(); },
+      onEnde: () => { s.pts = vereinfachen(s.pts, 1.5); zeichne(); renderRest(); } });
+    fill(umlaufHost, umlauf.el);
+    if (s.pts.length >= 3) setTimeout(() => { const b = L.latLngBounds(s.pts); karte.map.fitBounds(b, { padding: [20, 20], maxZoom: 18 }); }, 120);
     zeichne();
   }
   function zeichne() {
@@ -128,7 +138,7 @@ export async function openZaunPlanung({ parcelId = null, onSaved, foerdern = fal
     if (s.pts.length >= 2) (s.geschlossen && s.pts.length >= 3 ? L.polygon(s.pts, { color: '#F26B1D', weight: 4, fillOpacity: 0.12, interactive: false }) : L.polyline(s.pts, { color: '#F26B1D', weight: 4, interactive: false })).addTo(lyr);
     s.pts.forEach((ll) => L.circleMarker(ll, { radius: 6, color: '#fff', weight: 2, fillColor: '#F26B1D', fillOpacity: 1, interactive: false }).addTo(lyr));
     const min = s.geschlossen ? 3 : 2;
-    if (s.pts.length < min) status.textContent = `${s.pts.length} von mindestens ${min} Punkten – tippe den Zaunverlauf Punkt für Punkt in die Karte.`;
+    if (s.pts.length < min) status.textContent = `${s.pts.length} von mindestens ${min} Punkten – tippe den Zaunverlauf Punkt für Punkt in die Karte oder lauf ihn mit dem GPS ab.`;
     else { const g = zaunGeometrie(s.pts, s.geschlossen); status.textContent = `Zaunlänge ${formatDist(g.laenge)}${s.geschlossen ? `, eingezäunte Fläche ${formatHa(areaHa(s.pts))}` : ''} · ${s.pts.length} Punkte, ${g.ecken} Ecken`; }
   }
 
@@ -140,7 +150,8 @@ export async function openZaunPlanung({ parcelId = null, onSaved, foerdern = fal
     h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Zaunform' },
       [[true, 'Gatter (geschlossen)'], [false, 'Zaunlinie (offen)']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.geschlossen === k),
         onclick: (e) => { s.geschlossen = k; e.currentTarget.parentElement.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-checked', String(i === (k ? 0 : 1)))); zeichne(); renderRest(); } }, l))),
-    mapEl, status,
+    quelle ? h('p', { class: 'hint' }, quelle) : null,
+    mapEl, status, umlaufHost,
     h('div', { class: 'btn-row' },
       h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts.pop(); zeichne(); renderRest(); } }, 'Letzten Punkt entfernen'),
       h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts = []; zeichne(); renderRest(); } }, 'Neu beginnen')),
@@ -167,7 +178,7 @@ export async function openZaunPlanung({ parcelId = null, onSaved, foerdern = fal
       h('h2', { class: 'step-title' }, 'Bauweise'),
       h('div', { class: 'zaun-optionen' },
         h('label', {}, 'Pfostenabstand (m)', h('input', { type: 'text', inputmode: 'decimal', value: String(s.abstand).replace('.', ','), onchange: (e) => { const v = zahl(e.target.value); if (v >= 2 && v <= 10) s.abstand = v; else toast('Pfostenabstand zwischen 2 und 10 m'); renderRest(); } }),
-          h('small', { class: 'hint' }, 'Je nach Gelände 4–7 m; in unebenem Gelände enger.')),
+          h('small', { class: 'hint' }, 'Empfohlen 2,5–4 m (voreingestellt 3,5 m); in unebenem Gelände und an Senken enger.')),
         h('label', {}, 'Tore / Durchlässe', h('input', { type: 'number', min: 0, max: 10, value: s.tore, onchange: (e) => { s.tore = Math.max(0, Math.round(Number(e.target.value) || 0)); renderRest(); } })),
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.spanndraht, onchange: (e) => { s.spanndraht = e.target.checked; renderRest(); } }), 'Spanndraht oben und unten'),
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.einschlaghilfe, onchange: (e) => { s.einschlaghilfe = e.target.checked; renderRest(); } }), 'Einschlaghilfe für Z-Profile mitbestellen'),
@@ -222,6 +233,7 @@ export async function openZaunPlanung({ parcelId = null, onSaved, foerdern = fal
       kosten: Math.round(summe * 100) / 100,
     }));
     toast(`Zaunbau gebucht: ${formatDist(g.laenge)}, ${euro(summe)}`);
+    gespeichert = true;
     page.close();
     onSaved?.(neuId);
   }

@@ -4,6 +4,7 @@ import { store } from './store.js';
 import { createBaseMap } from './map/basemap.js';
 import { areaHa, formatHa, polysOf, inPolys, centroid } from './geo.js';
 import { amtlicheFlaecheHa } from './map/thueringen.js';
+import { umlaufSteuerung, vereinfachen } from './umlauf.js';
 
 const STIL_FLURSTUECK = { color: '#F2C94C', weight: 3, fillOpacity: 0.06, interactive: false };
 const STIL_MASSNAHME = { color: '#F26B1D', weight: 3, fillColor: '#F26B1D', fillOpacity: 0.28, interactive: false };
@@ -35,7 +36,8 @@ export function miniKarte(el, parcel, { zoom = 17 } = {}) {
  * Gibt { el, wert() } zurück; wert() liefert { modus, ring?, ha } oder null, wenn die Zeichnung unvollständig ist.
  */
 export function flaechenWahl(parcel) {
-  let modus = 'ganz', draft = [], karte = null;
+  let modus = 'ganz', draft = [], karte = null, umlauf = null;
+  const umlaufHost = h('div');
   const host = h('div', { class: 'flaeche-wahl' });
   const status = h('p', { class: 'draw-status', 'aria-live': 'polite' });
   const mapEl = h('div', { class: 'mini-map' });
@@ -46,7 +48,7 @@ export function flaechenWahl(parcel) {
     if (modus !== 'teil') return;
     if (draft.length >= 2) L.polygon(draft, STIL_MASSNAHME).addTo(lyr);
     draft.forEach((ll) => L.circleMarker(ll, { radius: 6, color: '#fff', weight: 2, fillColor: '#F26B1D', fillOpacity: 1, interactive: false }).addTo(lyr));
-    status.textContent = draft.length >= 3 ? `${draft.length} Eckpunkte, ${formatHa(areaHa(draft))}` : `${draft.length} von mindestens 3 Eckpunkten – tippe in der Karte auf die Ecken der Fläche.`;
+    status.textContent = draft.length >= 3 ? `${draft.length} Eckpunkte, ${formatHa(areaHa(draft))}` : `${draft.length} von mindestens 3 Eckpunkten – tippe in der Karte auf die Ecken der Fläche oder lauf sie mit dem GPS ab.`;
   }
   function render() {
     fill(host,
@@ -57,7 +59,7 @@ export function flaechenWahl(parcel) {
         }, l))),
       modus === 'ganz'
         ? h('p', { class: 'muted' }, `Die Maßnahme gilt für das ganze Flurstück (${formatHa(amtlicheFlaecheHa(parcel))}).`)
-        : [mapEl, status, h('div', { class: 'btn-row' },
+        : [mapEl, status, umlaufHost, h('div', { class: 'btn-row' },
             h('button', { type: 'button', class: 'btn btn-small', onclick: () => { draft.pop(); zeichne(); } }, 'Letzten Punkt entfernen'),
             h('button', { type: 'button', class: 'btn btn-small', onclick: () => { draft = []; zeichne(); } }, 'Neu beginnen'))],
     );
@@ -66,6 +68,8 @@ export function flaechenWahl(parcel) {
       lyr.addTo(karte.map);
       karte.map.doubleClickZoom.disable(); // schnelles Tippen setzt Punkte statt zu zoomen
       karte.map.on('click', (e) => { draft.push([e.latlng.lat, e.latlng.lng]); zeichne(); });
+      umlauf = umlaufSteuerung({ map: karte.map, onPunkt: (ll) => { draft.push(ll); zeichne(); }, onEnde: () => { draft = vereinfachen(draft, 1.5); zeichne(); } });
+      fill(umlaufHost, umlauf.el);
     } else if (karte) setTimeout(() => karte.map.invalidateSize(), 60);
     zeichne();
   }
@@ -77,7 +81,7 @@ export function flaechenWahl(parcel) {
       if (draft.length < 3) return null;
       return { modus: 'teil', ring: [...draft], ha: areaHa(draft) };
     },
-    entferne() { karte?.remove(); },
+    entferne() { umlauf?.stop(); karte?.remove(); },
   };
 }
 

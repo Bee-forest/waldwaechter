@@ -14,11 +14,12 @@ import { flaechenWahl } from './flaeche.js';
 import { openFlurstueckHistorie } from './historie.js';
 import { openPolterVermessung } from './polter.js';
 import { openZaunPlanung } from './zaun.js';
-import { FOERDER, fragFoerderung, weiterZumAntrag, openFoerderantrag } from './foerderung.js';
+import { openPflanzPlanung } from './pflanzung.js';
+import { FOERDER, fragFoerderung, weiterZumAntrag, openFoerderantrag, antragFuer } from './foerderung.js';
 import { kopfInhalt } from './home.js';
 
 export const MEASURE_TYPES = {
-  pflanzung:    { label: 'Pflanzung', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
+  pflanzung:    { label: 'Pflanzung', info: 'Pflanzfläche planen, Baumarten verteilen, Pflanzenzahl und Kosten', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
   zaunbau:      { label: 'Zaunbau', gruppe: 'wildschutz', info: 'Zaunverlauf einzeichnen, Material und Kosten', fields: [['length', 'Zaunlänge (m)', 'number'], ['zaun', 'Zauntyp', 'text'], ['tore', 'Tore', 'text']] },
   einzelschutz: { label: 'Einzelschutz', gruppe: 'wildschutz', info: 'Wuchshüllen, Drahthosen, Fege- und Verbissschutz', fields: [['art', 'Art des Schutzes', ['Wuchshülle', 'Freiwuchsgitter / Drahthose', 'Fegeschutz (Spirale, Fegestab)', 'Terminaltriebschutz', 'Verbissschutzmittel (Streichmittel)']], ['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen (Stück)', 'number'], ['hoehe', 'Höhe des Schutzes (z. B. 1,20 m)', 'text'], ['stab', 'Befestigung', ['Robinienstab', 'Lärchenstab', 'Tonkinstab', 'ohne Stab']], ['preis', 'Preis je Stück inkl. Stab (€)', 'decimal']] },
   pflege:       { label: 'Pflege', fields: [['art', 'Art der Pflege', ['Jungwuchspflege', 'Jungbestandspflege', 'Freischneiden', 'Wertastung']], ['area', 'Fläche (ha)', 'decimal']] },
@@ -307,9 +308,14 @@ async function openNewMeasure({ parcelId, antragId = null } = {}) {
     if (!foerdern && FOERDER[k]) { const w = await fragFoerderung(k, MEASURE_TYPES[k].label); if (w == null) return; foerdern = w; }
     weiter(foerdern);
   }
-  const nachSpeichern = (foerdern) => (id) => { alleSchliessen(); if (foerdern && id) weiterZumAntrag(id, antragId); };
+  const nachSpeichern = (foerdern) => (id) => {
+    alleSchliessen();
+    if (!foerdern || !id) return;
+    if (Array.isArray(id)) antragFuer(id, antragId); else weiterZumAntrag(id, antragId);
+  };
   const oeffne = (k) => starte(k, (foerdern) => {
     if (k === 'zaunbau') openZaunPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
+    else if (k === 'pflanzung') openPflanzPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
     else formularSeite(k, foerdern);
   });
 

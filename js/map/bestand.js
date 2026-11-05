@@ -2,6 +2,7 @@
 // sowie Oberhöhe aus LiDAR-Höhenmodellen (DOM1 − DGM1, TLBG), beides als
 // vorbereitete Kacheln im Repository (data/baumarten, data/oberhoehe).
 import { pointInPolygon, inPolys, generateGrid, toUTM32, fromUTM32, bbox } from '../geo.js';
+import { store } from '../store.js';
 
 const Z = 14;
 const tX = (lon) => Math.floor(((lon + 180) / 360) * 2 ** Z);
@@ -145,4 +146,27 @@ export function mitKorrektur(bestand, k) {
   if (!k?.haupt?.art) return bestand;
   return { ...(bestand || {}), art: k.haupt.art, text: k.haupt.art, alter: korrAlter(k.haupt, k.jahr), alterStichtag: k.haupt.alter != null && k.haupt.alter !== '' ? Number(k.haupt.alter) : null,
     stichtag: k.jahr, quelle: 'eigen', korrektur: k, original: bestand || null };
+}
+
+// ---------- Eigene, abgeschlossene Pflanzungen als Bestand ----------
+const KURZ = { Rotbuche: 'Buche', Traubeneiche: 'Eiche', Stieleiche: 'Eiche', Roteiche: 'Eiche', Bergahorn: 'Ahorn', Spitzahorn: 'Ahorn', Feldahorn: 'Ahorn',
+  Sandbirke: 'Birke', Schwarzerle: 'Erle', 'Gemeine Fichte': 'Fichte', 'Gemeine Kiefer': 'Kiefer', 'Europäische Lärche': 'Lärche', Weißtanne: 'Tanne' };
+export const kurzArt = (name) => KURZ[name] || name;
+const sortAlter = (s) => { const m = /(\d)\s*[+/]\s*(\d)/.exec(String(s || '')); return m ? Number(m[1]) + Number(m[2]) : 2; };
+/** Pflanzjahr einer abgeschlossenen Pflanzung: geplanter Termin, sonst Tag des Abschlusses */
+export const pflanzZeit = (m) => (m.date && (!m.finishedAt || m.date <= m.finishedAt + 864e5) ? m.date : m.finishedAt || m.createdAt);
+export function eigenePflanzungen() {
+  return (store.get().measures || []).filter((m) => m.type === 'pflanzung' && m.status === 'fertig' && m.flaeche?.ring?.length >= 3);
+}
+/** Bestand aus der jüngsten abgeschlossenen Pflanzung am Punkt (Alter = Jahre seit der Pflanzung + Alter des Sortiments, sonst + 2) */
+export function pflanzungAm(pt) {
+  const treffer = eigenePflanzungen().filter((m) => pointInPolygon(pt, m.flaeche.ring)).sort((a, b) => pflanzZeit(b) - pflanzZeit(a))[0];
+  if (!treffer) return null;
+  const pp = treffer.pflanzplan || {};
+  const ts = pflanzZeit(treffer);
+  const jahr = new Date(ts).getFullYear();
+  const arten = (pp.arten?.length ? pp.arten : [{ name: treffer.details?.species || '', anteil: 100, sortiment: '' }]).map((a) => ({ ...a, alter: heute() - jahr + sortAlter(a.sortiment) }));
+  const zone = (pp.zonen || []).slice().reverse().find((z) => pointInPolygon(pt, z.ring));
+  const hier = arten.find((a) => a.name === (zone?.name || pp.grund)) || [...arten].sort((a, b) => (b.anteil || 0) - (a.anteil || 0))[0];
+  return { quelle: 'pflanzung', measureId: treffer.id, ts, jahr, arten, art: kurzArt(hier?.name), text: hier?.name, alter: hier?.alter ?? null, stichtag: jahr, alterStichtag: hier ? hier.alter - (heute() - jahr) : null };
 }

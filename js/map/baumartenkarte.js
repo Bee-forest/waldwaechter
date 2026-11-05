@@ -1,7 +1,8 @@
 // Baumarten- und Altersklassenkarte (ThüringenForst, Thüringer Waldverzeichnis) als Vektorlayer
 // aus den mitgelieferten Kacheln (data/baumarten). Farben und Beschriftung nach dem QGIS-Stil
 // BAUMARTEN.qml von ThüringenForst: Kategorie = KLARTEXT, Beschriftung = ABT UABT TFL.
-import { bestandsKachel, artVonKurz } from './bestand.js';
+import { bestandsKachel, artVonKurz, eigenePflanzungen, pflanzungAm, kurzArt, pflanzZeit } from './bestand.js';
+import { centroid } from '../geo.js';
 
 export const BAUMARTEN_FARBEN = {
   "Buche > 120 Jahre": "#26FF26",
@@ -46,6 +47,7 @@ export function createBaumartenLayer({ minZoom = 13 } = {}) {
     const b = map.getBounds();
     const x0 = tX(b.getWest()), x1 = tX(b.getEast()), y0 = tY(b.getNorth()), y1 = tY(b.getSouth());
     if ((x1 - x0 + 1) * (y1 - y0 + 1) > 36) return; // zu großer Ausschnitt
+    eigeneZeichnen(group);
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
       const list = await bestandsKachel(x, y);
       if (!group._m) return;
@@ -61,5 +63,29 @@ export function createBaumartenLayer({ minZoom = 13 } = {}) {
       }
     }
   }
+  // Eigene, abgeschlossene Pflanzungen über dem Waldverzeichnis (Farbe der Altersklasse 1–40 Jahre)
+  function eigeneZeichnen(group) {
+    for (const m of eigenePflanzungen()) {
+      const key = `eigen|${m.id}|${m.finishedAt || ''}`;
+      if (drawn.has(key)) continue;
+      const pp = m.pflanzplan || {};
+      const pf = pflanzungAm(centroid(m.flaeche.ring));
+      const teile = [{ ring: m.flaeche.ring, name: pp.grund || pf?.text }, ...(pp.zonen || [])];
+      const tip = `<b>Eigene Pflanzung ${new Date(pflanzZeit(m)).getFullYear()}</b> · ${(pf?.arten || []).map((a) => `${a.name} ${Math.round(a.anteil || 0)} %`).join(', ')}${pf?.alter != null ? ` · ca. ${pf.alter} J.` : ''}`;
+      for (const t of teile) {
+        const poly = L.polygon(t.ring, { color: '#1B5E20', weight: 1.6, dashArray: '4 3', fillColor: farbeVon(`${gruppeFarbe(t.name)} 1-40 Jahre`), fillOpacity: 0.7, interactive: true, bubblingMouseEvents: true });
+        poly.bindTooltip(tip, { sticky: true, className: 'stand-tip' });
+        group.addLayer(poly);
+      }
+      drawn.set(key, true);
+    }
+  }
   return new Layer();
 }
+const gruppeFarbe = (name) => {
+  const k = kurzArt(name || '');
+  if (['Buche', 'Eiche', 'Fichte', 'Kiefer', 'Lärche'].includes(k)) return k;
+  if (['Birke', 'Erle', 'Aspe', 'Eberesche', 'Winterlinde', 'Sommerlinde'].includes(k)) return 'Weichlaubholz';
+  if (['Douglasie', 'Tanne'].includes(k)) return 'Fichte';
+  return 'sonstiges Hartlaubholz';
+};

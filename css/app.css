@@ -895,3 +895,34 @@ label.check input[type=checkbox] { width: 22px; height: 22px; flex: none; margin
 .bzt-code { padding: 2px 8px; border-radius: 8px; background: var(--surface-2); font-weight: 700; font-size: 14px; }
 .bzt-nachbar summary { cursor: pointer; font-weight: 700; }
 .bzt-nachbar p { margin: 6px 0 0; }
+
+/* Fläche mit dem GPS umlaufen */
+.umlauf { display: grid; gap: 6px; margin: 6px 0; }
+.umlauf-start { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.umlauf-icon { font-size: 18px; color: #1A73E8; }
+.umlauf-live { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 14px; background: #E8F0FE; }
+.umlauf-live > div { display: grid; gap: 2px; }
+.umlauf-live small.warn { color: var(--signal); font-weight: 700; }
+.umlauf-punkt { width: 14px; height: 14px; border-radius: 50%; background: #1A73E8; box-shadow: 0 0 0 0 rgba(26,115,232,.6); animation: umlauf-puls 1.6s infinite; }
+@keyframes umlauf-puls { 0% { box-shadow: 0 0 0 0 rgba(26,115,232,.6); } 70% { box-shadow: 0 0 0 12px rgba(26,115,232,0); } 100% { box-shadow: 0 0 0 0 rgba(26,115,232,0); } }
+
+/* Pflanzplanung */
+.pflanzung { display: grid; gap: 10px; }
+.art-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.art-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border-radius: 20px; border: 2px solid var(--line); background: var(--surface); font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; }
+.art-chip .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); }
+.art-chip small { font-weight: 400; color: var(--ink-2); font-size: 12px; }
+.art-chip.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, var(--surface)); }
+.art-chip.warn small { color: var(--signal); }
+.weitere-arten summary { cursor: pointer; font-weight: 700; margin: 6px 0; }
+.anteile { display: grid; gap: 10px; }
+.anteil-zeile { display: grid; grid-template-columns: auto 1fr 80px; gap: 4px 8px; align-items: center; padding: 10px; border-radius: 12px; background: var(--surface-2); }
+.anteil-zeile small { grid-column: 1 / -1; }
+.anteil-zeile .dot, .pflanz-liste .dot, .zonen-liste .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.pflanz-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pflanz-liste li { display: grid; gap: 6px; padding: 12px; border-radius: 14px; background: var(--surface-2); }
+.zonen-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.zonen-liste li { display: flex; align-items: center; gap: 8px; }
+.pflanzplan-karte .legende { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+.pflanzplan-karte .legende li { display: flex; align-items: center; gap: 6px; }
+.swatch.gasse { background: repeating-linear-gradient(90deg, #8D6E63 0 6px, transparent 6px 10px); }

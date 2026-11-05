@@ -1,11 +1,12 @@
 {
  "quelle": "ThüringenForst, Thüringer Waldverzeichnis (© GDI-Th, dl-de/by-2-0)",
- "bestaende": 86623,
- "kacheln": 1518,
+ "bestaende": 113070,
+ "kacheln": 2224,
  "regionen": [
   "Landkreis Greiz",
   "Saale-Orla-Kreis",
-  "Ilmenau und Umgebung"
+  "Ilmenau und Umgebung",
+  "Landkreis Gotha"
  ],
- "stand": "2026-11-03"
+ "stand": "2026-11-05"
 }

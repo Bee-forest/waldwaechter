@@ -68,8 +68,9 @@ function termine(m, von, bis) {
     }
     return out;
   }
-  if (!m.date) return [];
-  const d = new Date(m.date);
+  const t0 = m.date || (m.status === 'fertig' ? m.finishedAt : null); // erledigt ohne Termin: am Tag des Abschlusses
+  if (!t0) return [];
+  const d = new Date(t0);
   return d >= von && d < bis ? [{ date: d, key: 'einmal', label: MEASURE_TYPES[m.type]?.label || m.type, done: m.status === 'fertig' }] : [];
 }
 function naechsterTermin(m) {
@@ -96,18 +97,21 @@ async function render() {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const list = [...store.get().measures].sort((a, b) => (a.status === 'fertig') - (b.status === 'fertig') || ((naechsterTermin(a)?.date ?? Infinity) - (naechsterTermin(b)?.date ?? Infinity)) || b.createdAt - a.createdAt);
+  // Unter „Offene Maßnahmen“ nur, was noch nicht abgeschlossen ist; Erledigtes bleibt im Kalender und in der Flurstückhistorie
+  const offen = list.filter((m) => m.status !== 'fertig');
 
   fill(root, 
     h('header', { class: 'view-head' },
       h('h1', {}, 'Maßnahmen'),
-      h('p', { class: 'muted' }, list.length ? `${list.length} ${list.length === 1 ? 'Maßnahme' : 'Maßnahmen'} gebucht` : 'Plane und dokumentiere Maßnahmen auf deinen Flächen.'),
+      h('p', { class: 'muted' }, list.length ? `${offen.length} offen · ${list.length - offen.length} abgeschlossen` : 'Plane und dokumentiere Maßnahmen auf deinen Flächen.'),
     ),
     h('button', { class: 'btn btn-primary btn-block btn-large', onclick: () => openNewMeasure() }, h('span', { html: icon.plus }), 'Neue Maßnahme beginnen'),
     kalender(list, byId),
     h('button', { class: 'btn btn-block historie-btn', onclick: () => openFlurstueckHistorie() }, h('span', { html: icon.map || icon.list || '' }), 'Flurstückhistorie'),
-    list.length ? h('h2', { class: 'section-title' }, 'Alle Maßnahmen') : null,
-    list.length
-      ? h('ul', { class: 'measure-list' }, list.map((m) => measureCard(m, byId)))
+    list.length ? h('h2', { class: 'section-title' }, 'Offene Maßnahmen') : null,
+    offen.length
+      ? h('ul', { class: 'measure-list' }, offen.map((m) => measureCard(m, byId)))
+      : list.length ? h('p', { class: 'muted' }, 'Alle Maßnahmen sind abgeschlossen. Erledigte Maßnahmen findest du im Maßnahmenplan und in der Flurstückhistorie.')
       : h('div', { class: 'empty with-bug' }, h('div', { class: 'empty-bug', html: WANZE_SVG }),
           h('p', {}, 'Noch keine Maßnahmen. Starte mit einer Pflanzung, einem Zaunbau oder der geführten Durchforstung.')),
   );

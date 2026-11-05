@@ -4,7 +4,7 @@ const W = [[278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333
 const CP = { '€': 0x80, '‚': 0x82, '„': 0x84, '…': 0x85, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97, '×': 0xD7 };
 const code = (ch) => { const c = ch.codePointAt(0); if (CP[ch] != null) return CP[ch]; return c >= 32 && c <= 255 && !(c >= 0x80 && c < 0xA0) ? c : 0x3F; };
 export const breite = (s, bold, size) => [...String(s)].reduce((a, ch) => a + (W[bold ? 1 : 0][code(ch) - 32] || 556), 0) * size / 1000;
-const esc = (s) => [...String(s)].map((ch) => { const c = code(ch); const t = String.fromCharCode(c); return t === '(' || t === ')' || t === '\\' ? '\\' + t : c > 126 ? '\\' + c.toString(8).padStart(3, '0') : t; }).join('');
+export const esc = (s) => [...String(s)].map((ch) => { const c = code(ch); const t = String.fromCharCode(c); return t === '(' || t === ')' || t === '\\' ? '\\' + t : c > 126 ? '\\' + c.toString(8).padStart(3, '0') : t; }).join('');
 const n = (v) => (Math.round(v * 100) / 100).toString();
 
 export class Pdf {

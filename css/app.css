@@ -807,3 +807,12 @@ label.check input[type=checkbox] { width: 22px; height: 22px; flex: none; margin
 .antrag-zusammen { display: grid; gap: 10px; }
 .foerder-frage ul { margin: 4px 0 0; }
 @media print { .antrag .q-nav, .antrag .q-progress { display: none !important; } }
+
+/* Förderantrag: Baumarten, Zeiträume, erwartete Förderung */
+.baumarten { margin: 10px 0; }
+.baumart-zeile { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; margin-bottom: 6px; }
+.baumart-zeile select, .baumart-zeile input { min-width: 0; }
+.zwei-spalten { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.foerder-posten { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #EEF5EC; }
+.foerder-posten .mat-kurz { margin: 4px 0; }
+.q-option[disabled] { opacity: .5; cursor: not-allowed; }

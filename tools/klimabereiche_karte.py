@@ -86,14 +86,46 @@ def modus(v):
 grid = ndimage.generic_filter(grid, modus, size=3).astype(np.uint8)
 grid[~inside] = 0
 Image.fromarray(grid, 'L').save(os.path.join(OUT, 'klimabereiche.png'), optimize=True)
-# Wuchseinheiten im selben Raster (Grauwert = laufende Nummer in der Liste „wuchseinheiten“)
-we_liste = sorted({w['we'] for w in we}, key=lambda t: [int(x) for x in t.split('.')])
+# Wuchseinheiten im selben Raster (Grauwert = laufende Nummer in der Liste „wuchseinheiten“).
+# Maßgeblich ist die Nummerierung der Karte im Anhang A (= Tabellenwerk). Die Open-Data-Polygone liefern nur
+# die Geometrie; ihre Nummern folgen teils einer anderen Gliederung (z. B. Vogtland, Ronneburger Schieferplatte).
+# Deshalb wird jedes Polygon über die Beschriftung der Karte benannt (tools/wuchseinheiten_anhang_a.json).
+from collections import defaultdict
+Mi = np.linalg.inv(np.array([[a[1], a[2]], [a[4], a[5]]]))
+def utm(x, y):
+    dx, dy = Mi @ np.array([x - a[0], y - a[3]]); return E0 + dx * 1000, N0 - dy * 1000
+def im_poly(p, rings):
+    x, y = p; c = False
+    for r in rings:
+        for i in range(len(r)):
+            x1, y1 = r[i]; x2, y2 = r[i - 1]
+            if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1: c = not c
+    return c
+labels = json.load(open(os.path.join(HIER, 'wuchseinheiten_anhang_a.json'), encoding='utf-8'))['labels']
+kandidat = defaultdict(list)  # Polygon-Index -> [(Stimmen, Kartenbeschriftung)]
+for lab, lx, ly in labels:
+    votes = defaultdict(int)
+    for dx in range(-30, 31, 6):
+        for dy in range(-14, 15, 7):
+            P_ = utm(lx + dx, ly + dy)
+            for i, w in enumerate(we):
+                if im_poly(P_, w['rings']): votes[i] += 1
+    if votes:
+        i = max(votes, key=votes.get); kandidat[i].append((votes[i], lab))
+nummer = {}
+for i, w in enumerate(we):
+    labs = {l for _, l in kandidat.get(i, [])}
+    nummer[i] = w['we'] if (not labs or w['we'] in labs) else max(kandidat[i])[1]
+umbenannt = {w['we']: nummer[i] for i, w in enumerate(we) if nummer[i] != w['we']}
+print('Nummern nach Karte Anhang A geändert:', umbenannt)
+assert len(set(nummer.values())) == len(we), 'Wuchseinheit doppelt vergeben'
+we_liste = sorted(set(nummer.values()), key=lambda t: [int(x) for x in t.split('.')])
 we_img = Image.new('L', (W, H), 0); dw = ImageDraw.Draw(we_img)
-for w in we:
+for i, w in enumerate(we):
     for r in w['rings']:
-        dw.polygon([((e - E0) / CELL, (N0 - n) / CELL) for e, n in r], fill=we_liste.index(w['we']) + 1)
+        dw.polygon([((e - E0) / CELL, (N0 - n) / CELL) for e, n in r], fill=we_liste.index(nummer[i]) + 1)
 we_img.save(os.path.join(OUT, 'wuchseinheiten.png'), optimize=True)
 json.dump({'quelle_wuchseinheiten': 'Wuchseinheiten Thüringen, Open Data ThüringenForst (dl-de/by-2-0)', 'quelle': 'Forstliche Klimabereiche 2041–2070, Anhang A im Tabellenwerk Baumarten- und Bestandeszieltypenwahl (ThüringenForst 2015), georeferenziert',
-           'E0': E0, 'N0': N0, 'zelle': CELL, 'breite': W, 'hoehe': H, 'genauigkeit_m': 150, 'wuchseinheiten': we_liste,
+           'E0': E0, 'N0': N0, 'zelle': CELL, 'breite': W, 'hoehe': H, 'genauigkeit_m': 150, 'wuchseinheiten': we_liste, 'umbenannt_gegenueber_open_data': umbenannt,
            'werte': {str(k): int((grid == k).sum()) for k in LEGENDE}}, open(os.path.join(OUT, 'klimabereiche.json'), 'w', encoding='utf-8'), ensure_ascii=False)
 print('Zellen je Klimabereich:', {k: int((grid == k).sum()) for k in LEGENDE})

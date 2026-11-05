@@ -57,22 +57,8 @@ export async function openProfile() {
           h('span', { class: 'summary-v' }, formatHa(v.ha)),
         ))),
         h('p', { class: 'hint' }, 'Aufteilung nach tatsächlicher Nutzung laut ALKIS. Die Summe entspricht der amtlichen Fläche deiner Flurstücke.'),
-      ),
-
-      h('section', { class: 'card' },
-        h('h2', {}, 'Meine Flurstücke'),
-        list.length
-          ? h('ul', { class: 'parcel-list' }, list.map((p) => {
-              const full = byId[p.id];
-              return h('li', { class: 'parcel-item' },
-                h('span', { class: 'swatch tall', style: `background:${CATEGORIES[p.category].color}` }),
-                h('div', { class: 'parcel-text' }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}`), h('span', { class: 'muted' }, `${CATEGORIES[p.category].label}, ${formatHa(amtlicheFlaecheHa(full))}${full.flaecheAmtlich ? ' (amtlich)' : ''}`), full.nutzungText ? h('span', { class: 'muted small' }, full.nutzungText) : null),
-                h('button', { class: 'icon-btn', 'aria-label': `Auf ${parcelTitle(full)} zoomen`, html: icon.zoom, onclick: () => { page.close(); focusParcel(p.id); } }),
-                h('button', { class: 'icon-btn danger', 'aria-label': `${parcelTitle(full)} löschen`, html: icon.trash, onclick: async () => { if (await removeParcel(p.id)) render(); } }),
-              );
-            }))
-          : h('div', { class: 'empty' }, h('p', {}, 'Noch keine Flächen. Tippe in der Karte auf ein Flurstück oder suche es über die Lupe.'),
-              h('button', { class: 'btn btn-primary', onclick: () => page.close() }, 'Zur Karte')),
+        h('button', { class: 'btn btn-block flaechen-btn', onclick: () => meineFlaechen() },
+          h('span', {}, `Meine Flächen${list.length ? ` (${list.length})` : ''}`), h('span', { class: 'chev', html: icon.chevron })),
       ),
 
       h('section', { class: 'card' },
@@ -104,8 +90,6 @@ export async function openProfile() {
           h('label', {}, 'Ankunftsradius an Rasterpunkten (Meter)',
             h('input', { type: 'number', min: 3, max: 30, step: 1, value: s.settings.arrivalRadius, inputmode: 'numeric',
               onchange: (e) => store.update((st) => { st.settings.arrivalRadius = Math.min(30, Math.max(3, Number(e.target.value) || 8)); }) })),
-          h('label', { class: 'switch-row' }, h('span', { class: 'switch-label' }, 'GPS simulieren (zum Testen am Schreibtisch)'),
-            h('input', { type: 'checkbox', role: 'switch', checked: s.settings.simulateGps, onchange: (e) => store.update((st) => { st.settings.simulateGps = e.target.checked; }) })),
           h('button', { class: 'btn', onclick: () => { const ok = buzz('arrive'); toast(ok ? 'Vibration ausgelöst' : 'Keine Vibration verfügbar, stattdessen Signalton'); } }, 'Vibration testen'),
           h('button', { class: 'btn', onclick: () => { page.close(); startTour(); } }, 'Einführung noch einmal zeigen'),
           canInstall() ? h('button', { class: 'btn btn-primary', onclick: installApp }, h('span', { html: icon.download }), 'App installieren') : null,
@@ -117,6 +101,32 @@ export async function openProfile() {
       ),
       h('p', { class: 'hint center' }, 'Karten und Flurstücke: Geoportal Thüringen (© GDI-Th, dl-de/by-2-0), TopPlusOpen (© BKG), OpenStreetMap.'),
     );
+  }
+
+  /** Eigene Seite mit allen Flächen einzeln */
+  function meineFlaechen() {
+    const inhalt = h('div', { class: 'meine-flaechen' });
+    const seite = openPage('Meine Flächen', inhalt);
+    const zeichne = () => {
+      const list = store.get().parcels.filter((p) => byId[p.id])
+        .sort((a, b) => String(a.gemarkung).localeCompare(String(b.gemarkung), 'de') || String(a.flur).localeCompare(String(b.flur), 'de', { numeric: true }) || String(a.nr).localeCompare(String(b.nr), 'de', { numeric: true }));
+      fill(inhalt,
+        h('p', { class: 'muted' }, list.length ? `${list.length} ${list.length === 1 ? 'Fläche' : 'Flächen'}, zusammen ${formatHa(list.reduce((t, p) => t + amtlicheFlaecheHa(byId[p.id]), 0))}` : ''),
+        list.length
+          ? h('ul', { class: 'parcel-list' }, list.map((p) => {
+              const full = byId[p.id];
+              const kat = CATEGORIES[p.category] || CATEGORIES.Wald;
+              return h('li', { class: 'parcel-item' },
+                h('span', { class: 'swatch tall', style: `background:${kat.color}` }),
+                h('div', { class: 'parcel-text' }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${full.gemeinde && full.gemeinde !== '–' ? `${full.gemeinde}, ` : ''}${p.gemarkung}, Flur ${p.flur}`), h('span', { class: 'muted' }, `${kat.label}, ${formatHa(amtlicheFlaecheHa(full))}${full.flaecheAmtlich ? ' (amtlich)' : ''}`), full.nutzungText ? h('span', { class: 'muted small' }, full.nutzungText) : null),
+                h('button', { class: 'icon-btn', 'aria-label': `Auf ${parcelTitle(full)} zoomen`, html: icon.zoom, onclick: () => { seite.close(); page.close(); focusParcel(p.id); } }),
+                h('button', { class: 'icon-btn danger', 'aria-label': `${parcelTitle(full)} löschen`, html: icon.trash, onclick: async () => { if (await removeParcel(p.id)) { zeichne(); render(); } } }),
+              );
+            }))
+          : h('div', { class: 'empty' }, h('p', {}, 'Noch keine Flächen. Tippe in der Karte auf ein Flurstück oder suche es über die Lupe.'),
+              h('button', { class: 'btn btn-primary', onclick: () => { seite.close(); page.close(); } }, 'Zur Karte')));
+    };
+    zeichne();
   }
   render();
 }

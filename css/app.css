@@ -816,3 +816,42 @@ label.check input[type=checkbox] { width: 22px; height: 22px; flex: none; margin
 .foerder-posten { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #EEF5EC; }
 .foerder-posten .mat-kurz { margin: 4px 0; }
 .q-option[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* ---------- Kacheln: Themenbereiche als abgerundete, farbig abgesetzte Abschnitte ---------- */
+.kachel { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
+.kachel-titel { font-size: 19px; margin: 0 0 10px; }
+.kachel .measure-list { margin-top: 0; }
+.kachel .measure { background: var(--surface-2); border-color: transparent; }
+.massn-kopf { display: grid; gap: 10px; }
+.massn-kopf .view-head { margin: 0 0 4px; }
+.massn-kopf .historie-btn { margin-top: 0; }
+#view-massnahmen .app-head, .view .app-head { margin-bottom: 14px; }
+.cal-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cal-top h2 { font-size: 19px; margin: 0; }
+.cal-ansicht { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 6px 10px; border-radius: 12px; background: var(--surface-2); color: var(--ink); }
+.cal-ansicht svg { width: 20px; height: 20px; }
+.cal-ansicht small { font-size: 13px; font-weight: 700; }
+.cal-ansicht.on { background: var(--primary); color: #fff; }
+.cal-wahl { justify-self: end; }
+.cal-titel { flex: 1; border: 0; background: none; font: inherit; font-weight: 700; font-size: 16px; color: var(--ink); cursor: pointer; text-align: center; padding: 6px; border-radius: 10px; }
+.cal-titel:hover { background: var(--surface-2); }
+
+/* Infobox: jeder Themenbereich als eigene Kachel */
+.infobox .facts { background: var(--surface-2); border-radius: 18px; padding: 14px 16px; margin: 14px 0 0; }
+.infobox .info-block { border-top: 0; margin-top: 12px; padding: 14px 16px; border-radius: 18px; background: var(--surface-2); }
+.infobox .info-block .geo-card, .infobox .info-block .rescue { background: var(--surface); }
+.infobox .info-block.add-block { background: var(--primary-soft); }
+.infobox .info-actions { border-top: 0; margin-top: 12px; }
+.infobox > .hint { margin-top: 10px; }
+
+/* Profil: Meine Flächen */
+.flaechen-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.flaechen-btn .chev svg { width: 16px; height: 16px; }
+
+/* Flurstücksuche: Vorschläge zur Gemarkung */
+.vorschlag-wrap { position: relative; }
+.vorschlaege { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; list-style: none; margin: 0; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); max-height: 260px; overflow: auto; }
+.vorschlaege button { display: block; width: 100%; text-align: left; border: 0; background: none; font: inherit; color: var(--ink); padding: 10px 12px; border-radius: 10px; cursor: pointer; min-height: 44px; }
+.vorschlaege button:hover, .vorschlaege li.aktiv button { background: var(--surface-2); }
+.summary .hint { color: rgba(255,255,255,.75); margin: 12px 0 0; }
+.summary .flaechen-btn { background: #fff; color: var(--primary); border: 0; }

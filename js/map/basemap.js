@@ -25,12 +25,21 @@ export const BASEMAPS = {
   }),
 };
 
+/** Ortsnamen und Straßennamen über dem Luftbild (CARTO, Daten © OpenStreetMap) */
+export const BESCHRIFTUNG_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png';
+function beschriftungLayer() {
+  return L.tileLayer(BESCHRIFTUNG_URL, {
+    pane: 'beschriftung', subdomains: 'abcd', maxZoom: 21, maxNativeZoom: 20, detectRetina: false,
+    attribution: '© <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  });
+}
+
 /** Kachel-URL für das Offline-Speichern (WMS: GetMap mit BBOX in EPSG:3857). */
 export function tileUrls(key, z, x, y, { alkis = true } = {}) {
   const out = [];
   if (key === 'osm') out.push(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
   if (key === 'topo') out.push(`https://sgx.geodatenzentrum.de/wmts_topplus_open/tile/1.0.0/web/default/WEBMERCATOR/${z}/${y}/${x}.png`);
-  if (key === 'dop') out.push(wmsTileUrl(TH.dop, z >= 14 ? 'th_dop' : 'th_dop200rgb', 'image/jpeg', false, z, x, y));
+  if (key === 'dop') out.push(wmsTileUrl(TH.dop, z >= 14 ? 'th_dop' : 'th_dop200rgb', 'image/jpeg', false, z, x, y), `https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/${z}/${x}/${y}.png`);
   if (alkis && z >= 16) out.push(wmsTileUrl(key === 'dop' ? TH.alkisGelb : TH.alkis, 'adv_alkis_flurstuecke', 'image/png', true, z, x, y));
   return out;
 }
@@ -47,6 +56,15 @@ export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = 
   const map = L.map(el, { zoomControl: false, attributionControl: true, tap: true, maxZoom: 21, zoomSnap: 0.5 })
     .setView(center, zoom);
   map.attributionControl.setPrefix(false);
+  // Beschriftung über den Fachebenen, aber unter Markern; fängt keine Klicks ab
+  map.createPane('beschriftung');
+  map.getPane('beschriftung').style.zIndex = 450;
+  map.getPane('beschriftung').style.pointerEvents = 'none';
+  let labels = null;
+  const refreshLabels = () => {
+    if (current === 'dop' && !labels) labels = beschriftungLayer().addTo(map);
+    if (current !== 'dop' && labels) { map.removeLayer(labels); labels = null; }
+  };
   let base = BASEMAPS[basemap]().addTo(map);
   let current = basemap;
   let alkisOn = alkis, alkisLyr = null;
@@ -57,6 +75,7 @@ export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = 
     if (alkisOn) { alkisLyr = alkisLayer(current === 'dop').addTo(map); alkisLyr.bringToFront?.(); }
   }
   refreshAlkis();
+  refreshLabels();
 
   return {
     map,
@@ -70,6 +89,7 @@ export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = 
       current = key;
       el.dataset.basemap = key;
       refreshAlkis();
+      refreshLabels();
     },
     setAlkis(on) { alkisOn = on; refreshAlkis(); },
   };

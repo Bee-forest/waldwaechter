@@ -6,7 +6,7 @@ import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, formatDist, centroid, compassLabel, polysOf } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
-import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa } from './map/thueringen.js';
+import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa, localIndexInfo } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 import { besonderheiten } from './map/besonderheiten.js';
 import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
@@ -38,6 +38,27 @@ const featuresOf = (p) => FEAT.get(p.id) || p.features || [];
 
 const mine = (id) => store.get().parcels.find((p) => p.id === id);
 export const parcelTitle = (p) => `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}`;
+
+/** Inhalt des WaldWächter-Kopfs (Logo, Titel, Profil) – auch auf der Maßnahmen-Seite */
+export function kopfInhalt() {
+  const pr = store.get().profile;
+  const initials = (pr.name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+  return [
+    h('img', { class: 'app-logo', src: 'img/logo.svg', alt: 'WaldWächter-Logo' }),
+    h('div', { class: 'app-title' },
+      h('h1', {}, 'WaldWächter'),
+      h('p', {}, 'Digitale Wald- und Flächenbewirtschaftung für morgen.'),
+    ),
+    h('button', { class: 'profile-chip', 'aria-label': 'Mein Profil öffnen', onclick: () => openProfile() },
+      h('span', { class: 'avatar' }, initials),
+      h('span', { class: 'who' },
+        h('strong', {}, pr.name || 'Profil anlegen'),
+        h('span', {}, pr.fbg || 'Flächen, Konto, Einstellungen'),
+      ),
+      h('span', { class: 'chev', html: icon.chevron }),
+    ),
+  ];
+}
 
 export async function initHome(root) {
   const s = store.get().settings;
@@ -72,25 +93,7 @@ export async function initHome(root) {
   );
 
   // Kopf: Logo, Titel, Profil
-  const renderHead = () => {
-    const pr = store.get().profile;
-    const initials = (pr.name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
-    fill(head,
-      h('img', { class: 'app-logo', src: 'img/logo.svg', alt: 'WaldWächter-Logo' }),
-      h('div', { class: 'app-title' },
-        h('h1', {}, 'WaldWächter'),
-        h('p', {}, 'Digitale Wald- und Flächenbewirtschaftung für morgen.'),
-      ),
-      h('button', { class: 'profile-chip', id: 'btn-profile', 'aria-label': 'Mein Profil öffnen', onclick: () => openProfile() },
-        h('span', { class: 'avatar' }, initials),
-        h('span', { class: 'who' },
-          h('strong', {}, pr.name || 'Profil anlegen'),
-          h('span', {}, pr.fbg || 'Flächen, Konto, Einstellungen'),
-        ),
-        h('span', { class: 'chev', html: icon.chevron }),
-      ),
-    );
-  };
+  const renderHead = () => fill(head, ...kopfInhalt());
   // Kategorie-Chips wie im Entwurf: gefüllt = sichtbar
   const renderChips = () => {
     const { layers } = store.get().settings;
@@ -564,6 +567,48 @@ export async function removeParcel(id) {
   return true;
 }
 
+// Gemarkungsnamen aus den mitgelieferten ALKIS-Daten (data/alkis/index.json) für Vorschläge
+let GEMARKUNGEN = null;
+const gemNorm = (t) => String(t || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
+async function gemarkungsListe() {
+  if (!GEMARKUNGEN) {
+    const idx = await localIndexInfo().catch(() => null);
+    GEMARKUNGEN = [...new Set([...Object.keys(idx?.gemarkungen || {}), ...source.gemarkungen()])].sort((a, b) => a.localeCompare(b, 'de'));
+  }
+  return GEMARKUNGEN;
+}
+export function gemarkungVorschlaege(eingabe, alle, max = 8) {
+  const q = gemNorm(eingabe);
+  if (!q) return [];
+  const rang = (g) => { const n = gemNorm(g); if (n === q) return 0; if (n.startsWith(q)) return 1; if (n.split(' ').some((w) => w.startsWith(q))) return 2; if (n.includes(q)) return 3; return 9; };
+  return alle.map((g) => [rang(g), g]).filter(([r]) => r < 9).sort((a, b) => a[0] - b[0] || a[1].length - b[1].length || a[1].localeCompare(b[1], 'de')).slice(0, max).map(([, g]) => g);
+}
+/** Eingabefeld Gemarkung mit Vorschlagsliste */
+function gemarkungFeld() {
+  const liste = h('ul', { class: 'vorschlaege', role: 'listbox', hidden: true });
+  let aktiv = -1, treffer = [];
+  const waehle = (g) => { input.value = g; liste.hidden = true; input.setAttribute('aria-expanded', 'false'); input.closest('form')?.querySelector('[name=flur]')?.focus(); };
+  const zeige = async () => {
+    treffer = gemarkungVorschlaege(input.value, await gemarkungsListe());
+    aktiv = -1;
+    const exakt = treffer.length === 1 && gemNorm(treffer[0]) === gemNorm(input.value);
+    liste.hidden = !treffer.length || exakt;
+    input.setAttribute('aria-expanded', String(!liste.hidden));
+    fill(liste, treffer.map((g, i) => h('li', { role: 'option', id: `gem-v-${i}` },
+      h('button', { type: 'button', tabindex: -1, onmousedown: (e) => e.preventDefault(), onclick: () => waehle(g) }, g))));
+  };
+  const input = h('input', { name: 'gemarkung', autocomplete: 'off', placeholder: 'z. B. Manebach', required: true, role: 'combobox', 'aria-autocomplete': 'list', 'aria-expanded': 'false',
+    oninput: zeige, onfocus: () => { if (input.value) zeige(); }, onblur: () => setTimeout(() => { liste.hidden = true; }, 150),
+    onkeydown: (e) => {
+      if (liste.hidden || !treffer.length) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); aktiv = (aktiv + (e.key === 'ArrowDown' ? 1 : -1) + treffer.length) % treffer.length; [...liste.children].forEach((li, i) => li.classList.toggle('aktiv', i === aktiv)); input.setAttribute('aria-activedescendant', `gem-v-${aktiv}`); }
+      else if (e.key === 'Enter' && aktiv >= 0) { e.preventDefault(); waehle(treffer[aktiv]); }
+      else if (e.key === 'Escape') { liste.hidden = true; }
+    } });
+  gemarkungsListe();
+  return h('label', { class: 'gem-feld' }, 'Gemarkung', h('div', { class: 'vorschlag-wrap' }, input, liste));
+}
+
 function openSearch() {
   dialog({
     title: 'Flurstück suchen',
@@ -585,8 +630,7 @@ function openSearch() {
               h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(amtlicheFlaecheHa(p))}${p.lage ? `, ${p.lage}` : ''}`))))
           : [h('li', { class: 'muted' }, 'Kein Flurstück gefunden. Prüfe Gemarkung, Flur und Nummer.')]));
       } },
-        h('label', {}, 'Gemarkung', h('input', { name: 'gemarkung', list: 'gemarkungen', autocomplete: 'off', placeholder: 'z. B. Manebach', required: true })),
-        h('datalist', { id: 'gemarkungen' }, source.gemarkungen().map((g) => h('option', { value: g }))),
+        gemarkungFeld(),
         h('div', { class: 'form-row' },
           h('label', {}, 'Flur', h('input', { name: 'flur', inputmode: 'numeric', placeholder: '4' })),
           h('label', {}, 'Flurstück', h('input', { name: 'nr', placeholder: '112 oder 112/2' })),

@@ -28,7 +28,7 @@ function load() {
     if (!raw) return defaults();
     const d = defaults();
     const s = JSON.parse(raw);
-    return { ...d, ...s, profile: { ...d.profile, ...s.profile }, settings: { ...d.settings, ...s.settings, layers: { ...d.settings.layers, ...(s.settings?.layers || {}) } } };
+    return { ...d, ...s, profile: { ...d.profile, ...s.profile }, settings: { ...d.settings, ...s.settings, simulateGps: false /* Testschalter im Profil entfernt */, layers: { ...d.settings.layers, ...(s.settings?.layers || {}) } } };
   } catch {
     return defaults();
   }

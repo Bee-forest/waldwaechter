@@ -15,6 +15,7 @@ import { openFlurstueckHistorie } from './historie.js';
 import { openPolterVermessung } from './polter.js';
 import { openZaunPlanung } from './zaun.js';
 import { FOERDER, fragFoerderung, weiterZumAntrag, openFoerderantrag } from './foerderung.js';
+import { kopfInhalt } from './home.js';
 
 export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
@@ -78,7 +79,6 @@ function naechsterTermin(m) {
   const bis = new Date(jetzt.getFullYear() + 2, 0, 1);
   return termine(m, new Date(jetzt.getFullYear() - 1, 0, 1), bis).filter((t) => !t.done).sort((a, b) => a.date - b.date)[0] || null;
 }
-let monat = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
 let tagWahl = null;
 
 let root;
@@ -100,58 +100,98 @@ async function render() {
   // Unter „Offene Maßnahmen“ nur, was noch nicht abgeschlossen ist; Erledigtes bleibt im Kalender und in der Flurstückhistorie
   const offen = list.filter((m) => m.status !== 'fertig');
 
-  fill(root, 
-    h('header', { class: 'view-head' },
-      h('h1', {}, 'Maßnahmen'),
-      h('p', { class: 'muted' }, list.length ? `${offen.length} offen · ${list.length - offen.length} abgeschlossen` : 'Plane und dokumentiere Maßnahmen auf deinen Flächen.'),
-    ),
-    h('button', { class: 'btn btn-primary btn-block btn-large', onclick: () => openNewMeasure() }, h('span', { html: icon.plus }), 'Neue Maßnahme beginnen'),
+  fill(root,
+    h('header', { class: 'card app-head' }, kopfInhalt()),
+    h('section', { class: 'kachel massn-kopf' },
+      h('div', { class: 'view-head' },
+        h('h1', {}, 'Maßnahmen'),
+        h('p', { class: 'muted' }, list.length ? `${offen.length} offen · ${list.length - offen.length} abgeschlossen` : 'Plane und dokumentiere Maßnahmen auf deinen Flächen.')),
+      h('button', { class: 'btn btn-primary btn-block btn-large', onclick: () => openNewMeasure() }, h('span', { html: icon.plus }), 'Neue Maßnahme beginnen'),
+      h('button', { class: 'btn btn-block historie-btn', onclick: () => openFlurstueckHistorie() }, h('span', { html: icon.map || icon.list || '' }), 'Flurstückhistorie')),
     kalender(list, byId),
-    h('button', { class: 'btn btn-block historie-btn', onclick: () => openFlurstueckHistorie() }, h('span', { html: icon.map || icon.list || '' }), 'Flurstückhistorie'),
-    list.length ? h('h2', { class: 'section-title' }, 'Offene Maßnahmen') : null,
-    offen.length
-      ? h('ul', { class: 'measure-list' }, offen.map((m) => measureCard(m, byId)))
-      : list.length ? h('p', { class: 'muted' }, 'Alle Maßnahmen sind abgeschlossen. Erledigte Maßnahmen findest du im Maßnahmenplan und in der Flurstückhistorie.')
-      : h('div', { class: 'empty with-bug' }, h('div', { class: 'empty-bug', html: WANZE_SVG }),
-          h('p', {}, 'Noch keine Maßnahmen. Starte mit einer Pflanzung, einem Zaunbau oder der geführten Durchforstung.')),
+    h('section', { class: 'kachel' },
+      h('h2', { class: 'kachel-titel' }, 'Offene Maßnahmen'),
+      offen.length
+        ? h('ul', { class: 'measure-list' }, offen.map((m) => measureCard(m, byId)))
+        : list.length ? h('p', { class: 'muted' }, 'Alle Maßnahmen sind abgeschlossen. Erledigte Maßnahmen findest du im Maßnahmenplan und in der Flurstückhistorie.')
+        : h('div', { class: 'empty with-bug' }, h('div', { class: 'empty-bug', html: WANZE_SVG }),
+            h('p', {}, 'Noch keine Maßnahmen. Starte mit einer Pflanzung, einem Zaunbau oder der geführten Durchforstung.'))),
   );
 }
 
-// ---------- Maßnahmenplan als Monatskalender ----------
+// ---------- Maßnahmenplan: Tages-, Wochen- oder Monatsansicht ----------
+const ANSICHTEN = { tag: 'Tag', woche: 'Woche', monat: 'Monat' };
+let ansicht = (() => { try { return ANSICHTEN[localStorage.getItem('waldwaechter.planAnsicht')] ? localStorage.getItem('waldwaechter.planAnsicht') : 'woche'; } catch { return 'woche'; } })();
+let bezug = new Date(new Date().setHours(0, 0, 0, 0));
+let ansichtWahl = false;
+const montag = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+function zeitraum() {
+  if (ansicht === 'tag') { const v = new Date(bezug); return [v, new Date(v.getFullYear(), v.getMonth(), v.getDate() + 1)]; }
+  if (ansicht === 'woche') { const v = montag(bezug); return [v, new Date(v.getFullYear(), v.getMonth(), v.getDate() + 7)]; }
+  const v = new Date(bezug.getFullYear(), bezug.getMonth(), 1); return [v, new Date(v.getFullYear(), v.getMonth() + 1, 1)];
+}
+function blaettern(r) {
+  const d = new Date(bezug);
+  if (ansicht === 'tag') d.setDate(d.getDate() + r);
+  else if (ansicht === 'woche') d.setDate(d.getDate() + 7 * r);
+  else { d.setDate(1); d.setMonth(d.getMonth() + r); }
+  bezug = d; tagWahl = null; render();
+}
+const kw = (d) => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const n = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - n + 3); const j = new Date(Date.UTC(t.getUTCFullYear(), 0, 4)); return 1 + Math.round(((t - j) / 864e5 - 3 + ((j.getUTCDay() + 6) % 7)) / 7); };
+
 function kalender(list, byId) {
-  const von = new Date(monat), bis = new Date(monat.getFullYear(), monat.getMonth() + 1, 1);
+  const [von, bis] = zeitraum();
   const ev = list.flatMap((m) => termine(m, von, bis).map((t) => ({ ...t, m })));
   const byDay = new Map();
   for (const e of ev) { const k = ymd(e.date); (byDay.get(k) || byDay.set(k, []).get(k)).push(e); }
   const heute = ymd(new Date());
-  const start = (von.getDay() + 6) % 7; // Montag = 0
-  const tage = new Date(bis - 1).getDate();
-  const zellen = [];
-  for (let i = 0; i < start; i++) zellen.push(h('span', { class: 'cal-cell empty' }));
-  for (let d = 1; d <= tage; d++) {
-    const k = ymd(new Date(von.getFullYear(), von.getMonth(), d));
+  const zelle = (dt) => {
+    const k = ymd(dt);
     const es = byDay.get(k) || [];
-    zellen.push(h('button', { class: `cal-cell ${k === heute ? 'today' : ''} ${tagWahl === k ? 'sel' : ''} ${es.length ? 'has' : ''}`, 'aria-label': `${d}. ${es.length ? `${es.length} Termin(e)` : 'kein Termin'}`,
+    return h('button', { class: `cal-cell ${k === heute ? 'today' : ''} ${tagWahl === k ? 'sel' : ''} ${es.length ? 'has' : ''}`, 'aria-label': `${dt.getDate()}. ${es.length ? `${es.length} Termin(e)` : 'kein Termin'}`,
       onclick: () => { tagWahl = tagWahl === k ? null : k; render(); } },
-      h('span', { class: 'cal-d' }, d),
-      es.length ? h('span', { class: 'cal-dots' }, es.slice(0, 3).map((e) => h('i', { class: `dot dot-${e.m.type} ${e.done ? 'done' : ''}` }))) : null));
+      h('span', { class: 'cal-d' }, dt.getDate()),
+      es.length ? h('span', { class: 'cal-dots' }, es.slice(0, 3).map((e) => h('i', { class: `dot dot-${e.m.type} ${e.done ? 'done' : ''}` }))) : null);
+  };
+  let raster = null;
+  if (ansicht === 'monat') {
+    const zellen = [];
+    for (let i = 0; i < (von.getDay() + 6) % 7; i++) zellen.push(h('span', { class: 'cal-cell empty' }));
+    for (let d = 1; d <= new Date(bis - 1).getDate(); d++) zellen.push(zelle(new Date(von.getFullYear(), von.getMonth(), d)));
+    raster = h('div', { class: 'cal-grid' }, ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((t) => h('span', { class: 'cal-wd' }, t)), zellen);
+  } else if (ansicht === 'woche') {
+    raster = h('div', { class: 'cal-grid' }, ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((t) => h('span', { class: 'cal-wd' }, t)),
+      Array.from({ length: 7 }, (_, i) => zelle(new Date(von.getFullYear(), von.getMonth(), von.getDate() + i))));
   }
-  const zeigen = tagWahl && tagWahl.startsWith(ymd(von).slice(0, 7)) ? (byDay.get(tagWahl) || []) : ev;
-  const titel = monat.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
-  return h('section', { class: 'card calendar', 'aria-label': 'Maßnahmenplan' },
+  const zeigen = tagWahl && tagWahl >= ymd(von) && tagWahl < ymd(bis) ? (byDay.get(tagWahl) || []) : ev;
+  const fmt = (d, o) => d.toLocaleDateString('de-DE', o);
+  const titel = ansicht === 'monat' ? fmt(von, { month: 'long', year: 'numeric' })
+    : ansicht === 'woche' ? `KW ${kw(von)} · ${fmt(von, { day: '2-digit', month: '2-digit' })}–${fmt(new Date(bis - 864e5), { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+    : fmt(von, { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const leer = { tag: 'An diesem Tag ist nichts geplant.', woche: 'In dieser Woche ist nichts geplant.', monat: 'In diesem Monat ist nichts geplant.' }[ansicht];
+  const einheit = { tag: 'Tag', woche: 'Woche', monat: 'Monat' }[ansicht];
+  return h('section', { class: 'kachel calendar', 'aria-label': 'Maßnahmenplan' },
+    h('div', { class: 'cal-top' },
+      h('h2', {}, 'Maßnahmenplan'),
+      h('button', { class: `icon-btn cal-ansicht ${ansichtWahl ? 'on' : ''}`, 'aria-label': `Ansicht wechseln (jetzt: ${ANSICHTEN[ansicht]})`, 'aria-expanded': String(ansichtWahl), title: 'Tag, Woche oder Monat', onclick: () => { ansichtWahl = !ansichtWahl; render(); } },
+        h('span', { html: icon.calendar }), h('small', {}, ANSICHTEN[ansicht]))),
+    ansichtWahl ? h('div', { class: 'segmented compact cal-wahl', role: 'radiogroup', 'aria-label': 'Ansicht' },
+      Object.entries(ANSICHTEN).map(([k, l]) => h('button', { role: 'radio', 'aria-checked': String(ansicht === k), onclick: () => {
+        ansicht = k; ansichtWahl = false; tagWahl = null; try { localStorage.setItem('waldwaechter.planAnsicht', k); } catch {} render();
+      } }, l))) : null,
     h('div', { class: 'cal-head' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Vorheriger Monat', onclick: () => { monat = new Date(monat.getFullYear(), monat.getMonth() - 1, 1); tagWahl = null; render(); } }, '‹'),
-      h('h2', {}, `Maßnahmenplan ${titel}`),
-      h('button', { class: 'icon-btn', 'aria-label': 'Nächster Monat', onclick: () => { monat = new Date(monat.getFullYear(), monat.getMonth() + 1, 1); tagWahl = null; render(); } }, '›')),
-    h('div', { class: 'cal-grid' }, ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((t) => h('span', { class: 'cal-wd' }, t)), zellen),
+      h('button', { class: 'icon-btn', 'aria-label': `${einheit} zurück`, onclick: () => blaettern(-1) }, '‹'),
+      h('button', { class: 'cal-titel', title: 'Zu heute springen', onclick: () => { bezug = new Date(new Date().setHours(0, 0, 0, 0)); tagWahl = null; render(); } }, titel),
+      h('button', { class: 'icon-btn', 'aria-label': `${einheit} weiter`, onclick: () => blaettern(1) }, '›')),
+    raster,
     h('ul', { class: 'cal-list' }, zeigen.length
       ? zeigen.sort((a, b) => a.date - b.date).map((e) => h('li', { class: `cal-item ${e.done ? 'done' : ''}` },
           h('i', { class: `dot dot-${e.m.type}` }),
-          h('span', { class: 'cal-date' }, e.date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })),
+          h('span', { class: 'cal-date' }, e.date.toLocaleDateString('de-DE', { weekday: ansicht === 'monat' ? undefined : 'short', day: '2-digit', month: '2-digit' })),
           h('span', { class: 'cal-text' }, h('strong', {}, e.m.type === 'verkehrssicherung' ? `Verkehrssicherung: ${e.label}` : e.label), h('small', {}, wo(e.m, byId))),
           e.m.serie && !e.done ? h('button', { class: 'btn btn-small', onclick: () => { store.update((s) => { const x = s.measures.find((y) => y.id === e.m.id); x.erledigt = { ...(x.erledigt || {}), [e.key]: Date.now() }; }); toast('Kontrolle als erledigt vermerkt'); } }, 'Erledigt') : null,
           e.done ? h('span', { class: 'badge badge-fertig' }, 'Erledigt') : null))
-      : h('li', { class: 'muted' }, tagWahl ? 'An diesem Tag ist nichts geplant.' : 'In diesem Monat ist nichts geplant. Gib deinen Maßnahmen unten ein Datum, dann erscheinen sie hier.')),
+      : h('li', { class: 'muted' }, tagWahl ? 'An diesem Tag ist nichts geplant.' : leer)),
   );
 }
 const wo = (m, byId) => { const p = byId[m.parcelId]; return m.thinning?.label || (p ? `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}` : m.ort || 'Ohne Flächenzuordnung'); };
@@ -176,7 +216,7 @@ function datumFeld(m) {
       }
       store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.date = ts; });
       protokoll(m.id, ts ? `Termin auf ${new Date(ts).toLocaleDateString('de-DE')} gelegt` : 'Termin entfernt');
-      if (ts) { const d = new Date(ts); monat = new Date(d.getFullYear(), d.getMonth(), 1); }
+      if (ts) { const d = new Date(ts); bezug = new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
     } }));
 }
 

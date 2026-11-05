@@ -47,6 +47,7 @@ export const icon = {
   check: svg('<path d="m5 12 5 5 9-10"/>'),
   draw: svg('<path d="M4 19 9 5l6 9 5-6"/><circle cx="4" cy="19" r="1.5"/><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="14" r="1.5"/><circle cx="20" cy="8" r="1.5"/>'),
   download: svg('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+  calendar: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>'),
 };
 

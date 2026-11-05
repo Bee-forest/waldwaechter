@@ -1,0 +1,27 @@
+name: Open-Data Forst prüfen
+
+on:
+  push:
+    paths: ['tools/opendata_probe.py', '.github/workflows/opendata.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyshp pyproj
+      - name: Downloads prüfen
+        continue-on-error: true
+        run: python3 tools/opendata_probe.py
+      - name: Ergebnis speichern
+        run: |
+          git config user.name "Waldwächter-Daten"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/geodienste
+          git commit -m "Open-Data Forst geprüft" || exit 0
+          for i in 1 2 3 4 5; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 10; done

@@ -1,0 +1,60 @@
+LISTE https://www.geoproxy.geoportal-th.de/download-service/opendata/forst/ Fehler HTTP Error 404: Not Found
+LISTE https://www.geoproxy.geoportal-th.de/download-service/opendata/ Fehler HTTP Error 404: Not Found
+KLIMASTUFEN OK 5154502 Bytes
+  Dateien: ['KLIMASTUFEN.dbf', 'KLIMASTUFEN.prj', 'KLIMASTUFEN.shp', 'KLIMASTUFEN.shx']
+  KLIMASTUFEN.shp 18 Objekte POLYGON BBox(xmin=561998.8317000009, ymin=5562765.8608, xmax=756806.8260000013, ymax=5723500.0151) PROJCS["ETRS_1989_UTM_Zone_32N",GEOGCS["GCS_ETRS_1989",DATUM["D_ETRS_1989",SPHEROID["GRS_1980",6378137.0,298.257222101]]
+  Felder: ['SIGNIER_Z', 'KF', 'KLIMASTUFE', 'AREA']
+   SIGNIER_Z: 18 Werte, z. B. ['11', '12', '13', '15', '16', '17', '21', '22', '23', '25', '26', '31', '32', '34', '41', '42', '44', '51']
+   KF: 18 Werte, z. B. ['Hf', 'Hff', 'Hm', 'Kff', 'Mf', 'Mff', 'Mm', 'Uf', 'Uff', 'Uk', 'Um', 'Ut', 'Vf', 'Vff', 'Vk', 'Vm', 'Vt', 'Vtt']
+   KLIMASTUFE: 18 Werte, z. B. ['Höhere Berglagen mit feuchtem Klima', 'Höhere Berglagen mit mäßig feuchtem Klima', 'Höhere Berglagen mit sehr feuchtem Klima', 'Hügelland mit feuchtem Klima', 'Hügelland mit kühlem mäßig feuchtem Klima', 'Hügelland mit mäßig trockenem Klima', 'Hügelland mit sehr feuchtem Klima', 'Hügelland mit sehr trockenem Klima', 'Hügelland mit trockenem Klima', 'Kammlagen mit sehr feuchtem Klima', 'Mittlere Berglagen mit feuchtem Klima', 'Mittlere Berglagen mit mäßig feuchtem Klima', 'Mittlere Berglagen mit sehr feuchtem Klima', 'Untere Berglagen mit feuchtem Klima', 'Untere Berglagen mit kühlem mäßig feuchtem Klima', 'Untere Berglagen mit mäßig trockenem Klima', 'Untere Berglagen mit sehr feuchtem Klima', 'Untere Berglagen mit trockenem Klima']
+   AREA: 18 Werte, z. B. ['130594727.28', '14821352.92', '164044418.46', '189490481.99', '277815329.73', '280314030.69', '2958316970.07', '3104803392.46', '3144915.65', '4076909791.25', '542023154.95', '562158634.45', '618697144.67', '703464223.05', '777976054.46', '788442668.2', '90886029.67', '915232743.44']
+KLIMABEREICHE nicht vorhanden HTTP Error 404: Not Found
+KLIMABEREICH nicht vorhanden HTTP Error 404: Not Found
+KLIMABEREICHE_2041_2070 nicht vorhanden HTTP Error 404: Not Found
+KLIMABEREICHE_2070 nicht vorhanden HTTP Error 404: Not Found
+KLIMABEREICHE_1971_2000 nicht vorhanden HTTP Error 404: Not Found
+WUCHSGEBIETE nicht vorhanden HTTP Error 404: Not Found
+WUCHSBEZIRKE nicht vorhanden HTTP Error 404: Not Found
+WUCHSEINHEITEN OK 1569533 Bytes
+  Dateien: ['WUCHSEINHEITEN.dbf', 'WUCHSEINHEITEN.prj', 'WUCHSEINHEITEN.shp', 'WUCHSEINHEITEN.shx']
+  WUCHSEINHEITEN.shp 59 Objekte POLYGON BBox(xmin=561998.8317, ymin=5562765.8608, xmax=756798.6909999996, ymax=5723500.0151) PROJCS["ETRS_1989_UTM_Zone_32N",GEOGCS["GCS_ETRS_1989",DATUM["D_ETRS_1989",SPHEROID["GRS_1980",6378137.0,298.257222101]]
+  Felder: ['WG_NR', 'W_GEBIET', 'WE_NR', 'W_EINHEIT', 'AREA']
+   WG_NR: 14 Werte, z. B. ['1', '10', '11', '12', '13', '14', '2', '3', '4', '5', '6', '7', '8', '9']
+   W_GEBIET: 14 Werte, z. B. ['Frankenwald, Fichtelgebirge, Steinwald', 'Fränkische Platte', 'Fränkischer Keuper und Albvorland', 'Harz', 'Leipziger Sandlöss-Ebene', 'Mitteldeutsches Trias-Berg- und Hügelland', 'Nordthüringsches Trias-Hügelland', 'Ostthüringisches Trias-Hügelland', 'Rhön', 'Sächsisch-Thüringisches Löss-Hügelland', 'Südthüringisches-Oberfränkisches Trias-Hügelland', 'Thüringer Becken', 'Thüringer Gebirge', 'Vogtland']
+   WE_NR: 59 Werte, z. B. [' 1.1.0', ' 1.2.0', ' 10.1.0', ' 10.2.0', ' 11.1.0', ' 11.2.0', ' 11.3.0', ' 11.4.0', ' 11.5.0', ' 11.5.1', ' 11.5.2', ' 12.1.0', ' 12.2.0', ' 13.1.1', ' 13.1.2', ' 14.1.0', ' 2.1.0', ' 2.1.1', ' 2.2.0', ' 2.3.0', ' 2.4.0', ' 2.5.0', ' 2.6.0', ' 2.7.0', ' 2.8.0']
+   W_EINHEIT: 59 Werte, z. B. [' 1.1.0 Mittleres Unterharz - Plateau', ' 1.2.0 Südharz', ' 10.1.0 Unteres Vogtland', ' 10.2.0 Oberes Vogtland', ' 11.1.0 Westhüringischer Buntsandstein', ' 11.2.0 Südthüringischer Buntsandstein', ' 11.3.0 Meininger Muschelkalk', ' 11.4.0 Stedtlinger Gebiet', ' 11.5.0 Bruchschollenland', ' 11.5.1 Schalkauer Platte', ' 11.5.2 Sonneberg - Neustädter Becken', ' 12.1.0 Vorderrhön', ' 12.2.0 Hohe Rhön', ' 13.1.1 Grabfeld', ' 13.1.2 Gleichberge', ' 14.1.0 Itz - Baunach - Hügelland', ' 2.1.0 Unstrut - Saale - Platten', ' 2.1.1 Kösener Mittleres Saaletal', ' 2.2.0 Finne, Schrecke , Schmücke', ' 2.3.0 Ziegelrodaer Platte', ' 2.4.0 Helme - Unstrut - Niederung', ' 2.5.0 Kyffhäuser', ' 2.6.0 Hainleite', ' 2.7.0 Nordthüringischer Buntsandstein', ' 2.8.0 Südliches Harzvorland']
+   AREA: 59 Werte, z. B. ['103962769.96', '104416188.62', '116589566.62', '121416084.9', '151215144.76', '166855896.67', '167243340.89', '167567319.99', '172907899.1', '17594139.89', '179435551.14', '191322954.15', '193557009.79', '196633616.4', '1978558059.19', '20368491.85', '247898241.87', '252082077.41', '257441545.33', '27063623.94', '274112942.51', '27705076.88', '279774722.25', '283173820.6', '313125342.07']
+TEILWUCHSBEZIRKE nicht vorhanden HTTP Error 404: Not Found
+WUCHSRAUM nicht vorhanden HTTP Error 404: Not Found
+STANDORT OK 73443229 Bytes
+  Dateien: ['STANDORT_FL.dbf', 'STANDORT_FL.prj', 'STANDORT_FL.shp', 'STANDORT_FL.shp.xml', 'STANDORT_FL.shx']
+  STANDORT_FL.shp 135614 Objekte POLYGON BBox(xmin=562291.7033000002, ymin=5562900.6428, xmax=755996.9742, ymax=5723500.0151) PROJCS["ETRS_1989_UTM_Zone_32N",GEOGCS["GCS_ETRS_1989",DATUM["D_ETRS_1989",SPHEROID["GRS_1980",6378137.0,298.257222101]]
+  Felder: ['STD_EINH', 'STD_GRUPPE', 'BOD_FORM', 'W_STUFE', 'ZUSATZ', 'MESOKLIMA', 'NWSK', 'DATUM', 'KLARTEXT', 'AREA', 'LEG']
+   STD_EINH: 278 Werte, z. B. ['AMGg2', 'ARGg1', 'ARGg2', 'ARL1', 'ARL2', 'BMG1', 'BMG2', 'BML1', 'BML3', 'BMS1', 'BMS2', 'BMS3', 'BRG1', 'BRG2', 'BRG3', 'BRGg3', 'BRL1', 'BRL2', 'BRL3', 'BRS1', 'BRS2', 'K0', 'M2w', 'MG1', 'MG1w']
+   STD_GRUPPE: 170 Werte, z. B. ['', '0', 'A1', 'A2', 'A3', 'A3-', 'BK1', 'BK2', 'BM1', 'BM2', 'BR1', 'BR1n', 'BR2', 'BR3', 'FK', 'FM', 'FR', 'K1', 'K1n', 'K1w', 'K2', 'K2n', 'K2w', 'K3', 'K3-']
+   BOD_FORM: 1262 Werte, z. B. ['Ab.GM', 'Ad.L', 'Ad.Sf', 'Ag.LL', 'Ag.T', 'Ah.GK', 'Ah.L', 'Al.GG', 'Al.Sf', 'Al.T', 'Al.TB', 'Al.TK', 'Al.TU', 'An.Nd', 'Ap.L', 'Ap.LB', 'Ap.LG', 'Ap.SA', 'Ar.K', 'Ar.P', 'At.L', 'At.LB', 'At.LU', 'Au.GK', 'Au.M']
+   W_STUFE: 17 Werte, z. B. ['0', '1', '2', '3', '3+', '4', '4+', '5', '5+', '6', '6+', '7', '8', '9', 'I', 'II', 'III']
+   ZUSATZ: 15 Werte, z. B. ['', '+', '0', 'H', 'a', 'ah', 'b', 'h', 's', 'sh', 'u', 'uh', 'v', 'vh', 'z']
+   MESOKLIMA: 17 Werte, z. B. ['', '+', '-', '0', 'V', 'a', 'au', 'b', 'h', 'k', 'm', 's', 'u', 'ua', 'v', 'va', 'w']
+   NWSK: 3 Werte, z. B. ['', '+', '-']
+   DATUM: 1740 Werte, z. B. ['1998-11-04', '1998-11-06', '1998-11-09', '1998-11-10', '1998-11-18', '1998-11-19', '1998-11-20', '1998-11-21', '1998-11-22', '1998-11-23', '1998-11-24', '1998-11-25', '1998-11-27', '1998-11-30', '1998-12-01', '1998-12-02', '1998-12-03', '1998-12-08', '1998-12-09', '1999-01-04', '1999-01-05', '1999-01-06', '1999-01-07', '1999-01-08', '1999-01-13']
+   KLARTEXT: 27 Werte, z. B. ['Moore', 'feuchte Bachtaelchen-Standorte', 'feuchte Quellmulden-Standorte', 'feuchte reichere auenartige Standorte', 'frische Bachtaelchen-Standorte', 'frische Tal-Standorte', 'frische aermere Standorte', 'frische luftfeuchte Standorte', 'frische mittlere Standorte', 'frische reichere Standorte', 'frische reichere auenartige Standorte', 'maessig frische aermere Standorte', 'maessig frische mittlere Standorte', 'maessig frische reichere Standorte', 'maessig trockene aermere Standorte', 'maessig trockene mittlere Standorte', 'maessig trockene reichere Standorte', 'nicht kartiert', 'sehr trockene Standorte', 'staufeuchte Standorte', 'staunasse Standorte', 'trockene aermere Standorte', 'trockene mittlere Standorte', 'trockene reichere Standorte', 'wechselfeuchte Standorte']
+   AREA: 132960 Werte, z. B. ['100.02', '100.08', '100.09', '100.6', '100.65', '1000.64', '1000.7', '10000.18', '10000.81', '10000.92', '100003.14', '100003.95', '100007.1', '10001.16', '10001.6', '10001.76', '10001.8', '100012.44', '100016.48', '10002.01', '10002.04', '10002.17', '10002.19', '10002.34', '10002.68']
+   LEG: 27 Werte, z. B. ['fe_bs', 'fe_qs', 'fe_ras', 'fr_as', 'fr_bs', 'fr_ls', 'fr_ms', 'fr_ras', 'fr_rs', 'fr_ts', 'm', 'mf_as', 'mf_ms', 'mf_rs', 'mt_as', 'mt_ms', 'mt_rs', 'nk', 'sf_s', 'sn_s', 'st_s', 't_as', 't_ms', 't_rs', 'wfe_s']
+STANDORTE nicht vorhanden HTTP Error 404: Not Found
+FORSTAEMTER nicht vorhanden HTTP Error 404: Not Found
+BAUMARTEN OK 90619923 Bytes
+  Dateien: ['BAUMARTEN.dbf', 'BAUMARTEN.prj', 'BAUMARTEN.shp', 'BAUMARTEN.shx']
+  BAUMARTEN.shp 275795 Objekte POLYGON BBox(xmin=562011.0750000002, ymin=5562765.5962000005, xmax=755996.9742, ymax=5723500.0151) PROJCS["ETRS_1989_UTM_Zone_32N",GEOGCS["GCS_ETRS_1989",DATUM["D_ETRS_1989",SPHEROID["GRS_1980",6378137.0,298.257222101]]
+  Felder: ['FOA', 'REV', 'ABT', 'UABT', 'TFL', 'DTAKBA', 'KLARTEXT', 'BA_KURZ', 'ALTER', 'STICHTAG', 'AREA']
+   FOA: 25 Werte, z. B. ['14', '16', '19', '21', '22', '27', '28', '29', '34', '35', '38', '40', '42', '44', '45', '49', '5', '53', '55', '57', '58', '6', '75', '8', '9']
+   REV: 17 Werte, z. B. ['1', '10', '11', '12', '13', '14', '15', '16', '2', '3', '4', '5', '6', '7', '8', '9', '99']
+   ABT: 5152 Werte, z. B. ['1', '10', '100', '1000', '1001', '1002', '1003', '1004', '1005', '1006', '1007', '1008', '1009', '101', '1010', '1011', '1012', '1013', '1014', '1015', '1016', '1017', '1018', '1019', '102']
+   UABT: 21 Werte, z. B. ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u']
+   TFL: 104 Werte, z. B. ['1', '10', '100', '101', '102', '103', '104', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '23', '24', '25', '26', '27']
+   DTAKBA: 21 Werte, z. B. ['1,1', '1,2', '1,3', '1,4', '1,5', '1,6', '1,7', '2,1', '2,2', '2,3', '2,4', '2,5', '2,6', '2,7', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7']
+   KLARTEXT: 21 Werte, z. B. ['Buche 1-40 Jahre', 'Buche 41-120 Jahre', 'Buche > 120 Jahre', 'Eiche 1-40 Jahre', 'Eiche 41-120 Jahre', 'Eiche > 120 Jahre', 'Fichte 1-40 Jahre', 'Fichte 41-100 Jahre', 'Fichte > 100 Jahre', 'Kiefer 1-40 Jahre', 'Kiefer 41-100 Jahre', 'Kiefer > 100 Jahre', 'Lärche 1-40 Jahre', 'Lärche 41-100 Jahre', 'Lärche > 100 Jahre', 'Weichlaubholz 1-40 Jahre', 'Weichlaubholz 41-60 Jahre', 'Weichlaubholz > 60 Jahre', 'sonstiges Hartlaubholz 1-40 Jahre', 'sonstiges Hartlaubholz 41-100 Jahre', 'sonstiges Hartlaubholz > 100 Jahre']
+   BA_KURZ: 73 Werte, z. B. ['AH', 'AHS', 'AP', 'AS', 'BAH', 'BFI', 'BHA', 'BI', 'BIR', 'BU', 'BUL', 'CTA', 'DGL', 'EB', 'EI', 'EIB', 'EIS', 'EK', 'EL', 'ELA', 'ER', 'ES', 'ETA', 'FAH', 'FI']
+   ALTER: 252 Werte, z. B. ['0.0', '1.0', '10.0', '100.0', '101.0', '102.0', '103.0', '104.0', '105.0', '106.0', '107.0', '108.0', '109.0', '11.0', '110.0', '111.0', '112.0', '113.0', '114.0', '115.0', '116.0', '117.0', '118.0', '119.0', '12.0']
+   STICHTAG: 40 Werte, z. B. ['1989-01-01', '1991-01-01', '1993-01-01', '1996-10-01', '1999-10-01', '2000-01-01', '2000-01-02', '2000-10-01', '2001-01-01', '2001-10-01', '2002-01-01', '2002-10-01', '2003-01-01', '2004-01-01', '2004-05-25', '2005-08-09', '2005-10-01', '2007-01-01', '2007-01-02', '2008-01-01', '2009-01-01', '2009-10-01', '2010-01-01', '2010-02-01', '2011-01-01']
+   AREA: 263289 Werte, z. B. ['0.95', '1.96', '1.97', '10.26', '10.91', '100.12', '100.29', '100.6', '100.97', '1000.02', '1000.05', '1000.06', '1000.15', '1000.26', '1000.31', '1000.54', '1000.56', '1000.61', '1000.65', '1000.69', '1000.75', '1000.8', '1000.83', '1000.84', '1000.88']

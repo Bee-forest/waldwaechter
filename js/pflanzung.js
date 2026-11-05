@@ -143,7 +143,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   let schritt = 0;
   const SCHRITTE = ['Pflanzfläche', 'Baumarten', 'Pflanzenzahl und Verband', 'Baumarten verteilen', 'Pflanzplan und Kosten'];
   const body = h('div', { class: 'pflanzung' });
-  let karte = null, umlauf = null, zeichnenModus = 'flaeche', zone = null;
+  let karte = null, umlauf = null, zeichnenModus = 'flaeche', zone = null, weiterBtn = null;
   const page = openPage('Pflanzung planen', body, { onClose: () => { umlauf?.stop(); karte?.remove(); } });
   const mapEl = h('div', { class: 'mini-map zaun-map' });
   const status = h('p', { class: 'draw-status', 'aria-live': 'polite' });
@@ -182,6 +182,8 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   }
   const farbe = (name) => artInfo(name)?.farbe || '#2E7D32';
   function renderStatus() {
+    // „Weiter“ freigeben, sobald die Fläche drei Punkte hat (ohne die Seite neu aufzubauen)
+    if (schritt === 0 && weiterBtn) weiterBtn.disabled = s.ring.length < 3;
     if (schritt === 0) status.textContent = s.ring.length >= 3 ? `Pflanzfläche ${formatHa(areaHa(s.ring))} · ${s.ring.length} Eckpunkte` : `${s.ring.length} von mindestens 3 Eckpunkten – tippe die Ecken in die Karte oder lauf die Fläche mit dem GPS ab.`;
     else if (schritt === 3 && zone) status.textContent = `${zone.name}: ${zone.ring.length} Punkte${zone.ring.length >= 3 ? `, ${formatHa(areaHa(zone.ring))}` : ''} – tippe die Gruppe in die Karte.`;
     else if (s.ring.length >= 3) status.textContent = `Pflanzfläche ${formatHa(areaHa(s.ring))}`;
@@ -244,7 +246,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
       h('h2', { class: 'step-title' }, SCHRITTE[schritt])];
     const nav = (weiterOk = true, weiterText = 'Weiter') => h('div', { class: 'q-nav' },
       h('button', { type: 'button', class: 'btn', onclick: () => { if (schritt === 0) page.close(); else { schritt--; zone = null; render(); } } }, schritt === 0 ? 'Abbrechen' : 'Zurück'),
-      h('button', { type: 'button', class: 'btn btn-primary btn-large', disabled: !weiterOk, onclick: () => { schritt++; zone = null; render(); } }, weiterText));
+      (weiterBtn = h('button', { type: 'button', class: 'btn btn-primary btn-large', disabled: !weiterOk, onclick: () => { schritt++; zone = null; render(); } }, weiterText)));
     let inhalt = [];
     if (schritt === 0) {
       inhalt = [

@@ -52,7 +52,7 @@ export function erinnereVerkehrssicherung(p) {
 }
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 /** Termine einer Maßnahme im Zeitraum [von, bis) als { date, key, label, done } */
-function termine(m, von, bis) {
+export function termine(m, von, bis) {
   if (m.serie) {
     const out = [];
     const ab = new Date(new Date(m.createdAt).setHours(0, 0, 0, 0));

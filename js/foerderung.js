@@ -8,7 +8,8 @@ import { source } from './data/source.js';
 import { centroid, formatHa, polysOf } from './geo.js';
 import { amtlicheFlaecheHa } from './map/thueringen.js';
 import { Pdf, herunterladen } from './pdf.js';
-import { BAUMARTEN, baumart, normBaumart, num, euro, kategorie, KAT_TEXT, KAT_TEXT_LABE, LABE_KATS, berechne, bagatelle, pruefeMischung,
+import { angebot } from './pflanzpreise.js';
+import { BAUMARTEN, alleBaumarten, baumart, normBaumart, num, euro, kategorie, KAT_TEXT, KAT_TEXT_LABE, LABE_KATS, berechne, bagatelle, pruefeMischung,
   pflanzen, hoeheCm, zaunArt, zaunLaenge, haVon, werteGANW, werteLABE, seitenHinweis, SAETZE, datum } from './foerder-formular.js';
 
 export const LINKS = {
@@ -156,7 +157,8 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
     if (!x.abrechnung) x.abrechnung = (x.ende || x.beginn || monat(Date.now())).slice(0, 4);
     if (m.type === 'pflanzung' && !x.baumarten && m.pflanzplan?.arten?.length) {
       const pp = m.pflanzplan;
-      x.baumarten = pp.arten.map((a) => ({ art: a.name, stueck: a.stueck, hsn: '' }));
+      x.baumarten = pp.arten.map((a) => ({ art: normBaumart(a.name), stueck: a.stueck, hsn: angebot(a.wbsNr)?.hkg || '' }));
+      if (!x.firma && pp.arten.some((a) => angebot(a.wbsNr))) x.firma = 'Waldbesitzer Service GmbH';
       x.art ??= pp.art === 'voranbau' ? 'voranbau' : 'wiederaufforstung';
       if (x.pflanzgutKosten == null && m.kosten) x.pflanzgutKosten = String(m.kosten).replace('.', ',');
       x.sortiment ??= [...new Set(pp.arten.map((a) => a.sortiment).filter(Boolean))].join('; ');
@@ -356,7 +358,7 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
       h('p', { class: 'sheet-label' }, 'Pflanzen je Baumart'),
       x.baumarten.map((b, k) => h('div', { class: 'baumart-zeile' },
         h('select', { 'aria-label': 'Baumart', onchange: (e) => { b.art = e.target.value; speichere(); } },
-          h('option', { value: '' }, 'Baumart'), BAUMARTEN.map((a) => h('option', { value: a.name, selected: normBaumart(b.art) === a.name }, `${a.name}${a.laub ? '' : ' (Nadel)'}`)),
+          h('option', { value: '' }, 'Baumart'), alleBaumarten().map((a) => h('option', { value: a.name, selected: normBaumart(b.art) === a.name }, `${a.name}${a.laub ? '' : ' (Nadel)'}`)),
           b.art && !baumart(b.art) ? h('option', { value: b.art, selected: true }, b.art) : null),
         h('input', { inputmode: 'numeric', placeholder: 'Stück', 'aria-label': 'Stückzahl', value: b.stueck ?? '', oninput: (e) => { b.stueck = e.target.value; speichere(); } }),
         h('input', { placeholder: 'HSN', 'aria-label': 'Herkunft (HSN)', value: b.hsn || '', oninput: (e) => { b.hsn = e.target.value; speichere(); } }),

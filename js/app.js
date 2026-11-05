@@ -3,6 +3,7 @@ import { h, icon } from './ui.js';
 import { store } from './store.js';
 import { initHome, invalidateMap } from './home.js';
 import { initMeasures } from './measures.js';
+import { initErinnerungen } from './erinnerung.js';
 import { renderPlaceholder } from './placeholders.js';
 import { startTour, say } from './mascot.js';
 
@@ -68,6 +69,7 @@ async function main() {
 
   if (!store.get().onboardingDone) setTimeout(() => startTour(), 600);
   registerSW();
+  initErinnerungen();
 }
 
 function registerSW() {

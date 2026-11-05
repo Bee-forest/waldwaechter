@@ -9,6 +9,7 @@ import { focusParcel, removeParcel, parcelTitle } from './home.js';
 import { startTour } from './mascot.js';
 import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.js';
 import { buzz } from './thinning/feedback.js';
+import * as erinnerung from './erinnerung.js';
 
 export async function openProfile() {
   const all = await source.allParcels();
@@ -79,6 +80,8 @@ export async function openProfile() {
         ),
       ),
 
+      erinnerungKarte(),
+
       h('section', { class: 'card' },
         h('h2', {}, 'Einstellungen'),
         h('div', { class: 'form' },
@@ -101,6 +104,37 @@ export async function openProfile() {
       ),
       h('p', { class: 'hint center' }, 'Karten und Flurstücke: Geoportal Thüringen (© GDI-Th, dl-de/by-2-0), TopPlusOpen (© BKG), OpenStreetMap.'),
     );
+  }
+
+  /** Erinnerungen an anstehende Maßnahmen */
+  function erinnerungKarte() {
+    const e = erinnerung.einstellung();
+    const perm = erinnerung.erlaubnis();
+    const naechste = erinnerung.anstehend(60).filter((x) => x.ts >= new Date().setHours(0, 0, 0, 0)).slice(0, 3);
+    const aktiv = e.an && perm === 'granted';
+    return h('section', { class: 'card erinnerung' },
+      h('h2', {}, 'Erinnerungen an Maßnahmen'),
+      h('div', { class: 'form' },
+        perm === 'unsupported' ? h('p', { class: 'hint' }, 'Dieser Browser kann keine Benachrichtigungen anzeigen. Nutze die Kalenderdatei unten – dein Kalender erinnert dich dann.')
+          : aktiv ? h('div', { class: 'erinnerung-status an' }, h('strong', {}, 'Benachrichtigungen sind an'),
+            h('button', { class: 'btn btn-small', onclick: async () => { await erinnerung.ausschalten(); render(); toast('Benachrichtigungen ausgeschaltet'); } }, 'Ausschalten'))
+          : h('button', { class: 'btn btn-primary', onclick: async () => {
+            const r = await erinnerung.einschalten(); render();
+            toast(r === 'granted' ? 'Benachrichtigungen eingeschaltet' : r === 'denied' ? 'Benachrichtigungen sind im Browser blockiert' : 'Benachrichtigungen nicht verfügbar');
+          } }, 'Benachrichtigungen einschalten'),
+        perm === 'denied' ? h('p', { class: 'warn-line' }, 'Der Browser blockiert Benachrichtigungen für diese Seite. Erlaube sie in den Website-Einstellungen (Schloss-Symbol neben der Adresse) und tippe dann erneut auf „Einschalten“.') : null,
+        h('label', {}, 'Erinnern', h('select', { onchange: (ev) => { store.update((st) => { st.settings.erinnerung = { ...erinnerung.einstellung(), vorlauf: Number(ev.target.value) }; }); render(); } },
+          erinnerung.VORLAUF.map(([v, l]) => h('option', { value: v, selected: e.vorlauf === v }, l)))),
+        aktiv ? h('button', { class: 'btn', onclick: async () => { toast(await erinnerung.testNachricht() ? 'Testbenachrichtigung gesendet' : 'Senden nicht möglich'); } }, 'Testbenachrichtigung senden') : null,
+        h('p', { class: 'hint' }, isIOS()
+          ? 'iPhone: Benachrichtigungen gibt es nur, wenn die App über „Zum Home-Bildschirm“ installiert ist, und sie erscheinen beim Öffnen der App. Zuverlässig im Hintergrund erinnert dich die Kalenderdatei.'
+          : erinnerung.hintergrundMoeglich()
+            ? 'Fällige Termine meldet die App beim Öffnen. Ist die App installiert, prüft sie auch im Hintergrund etwa alle paar Stunden – wie oft, entscheidet der Browser. Ganz sicher geht es mit der Kalenderdatei.'
+            : 'Fällige Termine meldet die App, sobald du sie öffnest. Im Hintergrund – auch wenn die App geschlossen ist – erinnert dich zuverlässig die Kalenderdatei.'),
+        h('button', { class: 'btn', onclick: () => { const n = erinnerung.kalenderDatei(); toast(n ? `${n} Termine als Kalenderdatei gespeichert` : 'Keine offenen Termine mit Datum'); } }, h('span', { html: icon.calendar }), 'Termine in den Kalender übernehmen (.ics)'),
+        h('p', { class: 'hint' }, 'Die Datei mit dem Kalender öffnen (Google Kalender, Apple Kalender, Outlook). Jeder Termin hat einen Alarm um 8 Uhr – passend zur Einstellung oben.'),
+        naechste.length ? h('div', {}, h('p', { class: 'sheet-label' }, 'Nächste Termine'), h('ul', { class: 'mat-kurz' }, naechste.map((x) => h('li', {}, `${new Date(x.ts).toLocaleDateString('de-DE')}: ${x.titel}${x.ort ? ` · ${x.ort}` : ''}`))))
+          : h('p', { class: 'muted' }, 'Zurzeit keine offenen Termine mit Datum. Setze bei einer Maßnahme einen Termin, dann wird erinnert.')));
   }
 
   /** Eigene Seite mit allen Flächen einzeln */

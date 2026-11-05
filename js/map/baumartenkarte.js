@@ -2,6 +2,7 @@
 // aus den mitgelieferten Kacheln (data/baumarten). Farben und Beschriftung nach dem QGIS-Stil
 // BAUMARTEN.qml von ThüringenForst: Kategorie = KLARTEXT, Beschriftung = ABT UABT TFL.
 import { bestandsKachel, artVonKurz, eigenePflanzungen, pflanzungAm, kurzArt, pflanzZeit } from './bestand.js';
+import { gespeichertesLayout, streifen } from '../pflanzlayout.js';
 import { centroid } from '../geo.js';
 
 export const BAUMARTEN_FARBEN = {
@@ -77,6 +78,9 @@ export function createBaumartenLayer({ minZoom = 13 } = {}) {
         poly.bindTooltip(tip, { sticky: true, className: 'stand-tip' });
         group.addLayer(poly);
       }
+      // Gruppen, Trupps und Reihen der Pflanzplanung
+      const lay = gespeichertesLayout(m);
+      if (lay) for (const st of streifen(lay)) if (st.art && st.art !== 'mix' && st.art !== pp.grund) group.addLayer(L.polygon(st.ring, { stroke: false, fillColor: farbeVon(`${gruppeFarbe(st.art)} 1-40 Jahre`), fillOpacity: 0.85, interactive: false }));
       drawn.set(key, true);
     }
   }

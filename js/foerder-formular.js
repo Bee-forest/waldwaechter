@@ -25,11 +25,15 @@ export const BAUMARTEN = [
   ['Wildbirne', 'L', 1], ['Wildapfel', 'L', 1], ['Bergulme', 'L', 1], ['Flatterulme', 'L', 1], ['Esche', 'L', 1], ['Schwarzerle', 'L', 1],
   ['Sandbirke', 'L', 1], ['Aspe', 'L', 1], ['Eberesche', 'L', 1], ['Edelkastanie', 'L', 0], ['Roteiche', 'L', 0], ['Baumhasel', 'L', 0],
   ['Weißtanne', 'N', 1], ['Gemeine Kiefer', 'N', 1], ['Europäische Lärche', 'N', 0], ['Japanische Lärche', 'N', 0], ['Gemeine Fichte', 'N', 1],
-  ['Douglasie', 'N', 0], ['Küstentanne', 'N', 0], ['Eibe', 'N', 1],
+  ['Douglasie', 'N', 0], ['Küstentanne', 'N', 0], ['Eibe', 'N', 1], ['Robinie', 'L', 0], ['Nordmannstanne', 'N', 0], ['Colorado-Tanne', 'N', 0],
+  ['Hemlocktanne', 'N', 0], ['Schwarzkiefer', 'N', 0], ['Atlaszeder', 'N', 0], ['Libanonzeder', 'N', 0], ['Blaufichte', 'N', 0], ['Mammutbaum', 'N', 0],
 ].map(([name, typ, heimisch]) => ({ name, laub: typ === 'L', heimisch: !!heimisch }));
-const ALIAS = { Buche: 'Rotbuche', Eiche: 'Traubeneiche', Tanne: 'Weißtanne', Kiefer: 'Gemeine Kiefer', Fichte: 'Gemeine Fichte', Lärche: 'Europäische Lärche', Erle: 'Schwarzerle', Birke: 'Sandbirke', Ahorn: 'Bergahorn', Linde: 'Winterlinde' };
+const ALIAS = { Buche: 'Rotbuche', Eiche: 'Traubeneiche', Tanne: 'Weißtanne', Kiefer: 'Gemeine Kiefer', Fichte: 'Gemeine Fichte', Lärche: 'Europäische Lärche', Erle: 'Schwarzerle', Birke: 'Sandbirke', Ahorn: 'Bergahorn', Linde: 'Winterlinde', Esskastanie: 'Edelkastanie', Roterle: 'Schwarzerle', 'Wald-Kiefer': 'Gemeine Kiefer' };
 export const normBaumart = (n = '') => ALIAS[n] || n;
-export const baumart = (n) => BAUMARTEN.find((b) => b.name === normBaumart(n)) || null;
+// Eigene Baumarten aus der Pflanzplanung (im Gerät gespeichert)
+const eigene = (n) => { try { const e = JSON.parse(localStorage.getItem('waldwaechter.eigeneBaumarten') || '[]').find((x) => x.name === n); return e ? { name: e.name, laub: !e.nadel, heimisch: !!e.heimisch } : null; } catch { return null; } };
+export const alleBaumarten = () => { try { return [...BAUMARTEN, ...JSON.parse(localStorage.getItem('waldwaechter.eigeneBaumarten') || '[]').filter((e) => !BAUMARTEN.some((b) => b.name === e.name)).map((e) => ({ name: e.name, laub: !e.nadel, heimisch: !!e.heimisch }))]; } catch { return BAUMARTEN; } };
+export const baumart = (n) => BAUMARTEN.find((b) => b.name === normBaumart(n)) || eigene(n) || null;
 
 /** Zahl aus deutscher Eingabe („1.234,5“ oder „1234.5“) */
 export function num(v) {

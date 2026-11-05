@@ -2,6 +2,7 @@
 // sowie Oberhöhe aus LiDAR-Höhenmodellen (DOM1 − DGM1, TLBG), beides als
 // vorbereitete Kacheln im Repository (data/baumarten, data/oberhoehe).
 import { pointInPolygon, inPolys, generateGrid, toUTM32, fromUTM32, bbox } from '../geo.js';
+import { gespeichertesLayout, artAm } from '../pflanzlayout.js';
 import { store } from '../store.js';
 
 const Z = 14;
@@ -166,7 +167,9 @@ export function pflanzungAm(pt) {
   const ts = pflanzZeit(treffer);
   const jahr = new Date(ts).getFullYear();
   const arten = (pp.arten?.length ? pp.arten : [{ name: treffer.details?.species || '', anteil: 100, sortiment: '' }]).map((a) => ({ ...a, alter: heute() - jahr + sortAlter(a.sortiment) }));
-  const zone = (pp.zonen || []).slice().reverse().find((z) => pointInPolygon(pt, z.ring));
-  const hier = arten.find((a) => a.name === (zone?.name || pp.grund)) || [...arten].sort((a, b) => (b.anteil || 0) - (a.anteil || 0))[0];
+  const lay = gespeichertesLayout(treffer);
+  const amPunkt = lay ? artAm(lay, pt) : null;
+  const zone = lay ? null : (pp.zonen || []).slice().reverse().find((z) => pointInPolygon(pt, z.ring));
+  const hier = arten.find((a) => a.name === (amPunkt && amPunkt !== 'mix' ? amPunkt : zone?.name || pp.grund)) || [...arten].sort((a, b) => (b.anteil || 0) - (a.anteil || 0))[0];
   return { quelle: 'pflanzung', measureId: treffer.id, ts, jahr, arten, art: kurzArt(hier?.name), text: hier?.name, alter: hier?.alter ?? null, stichtag: jahr, alterStichtag: hier ? hier.alter - (heute() - jahr) : null };
 }

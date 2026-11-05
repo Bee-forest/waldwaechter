@@ -35,7 +35,8 @@ for sr in r.shapeRecords():
     rings = []
     for i in range(len(parts) - 1):
         ring = [(round(x), round(y)) for x, y in pts[parts[i]:parts[i + 1]]]
-        ring = dp(ring, 10)
+        mid = len(ring) // 2
+        ring = dp(ring[:mid + 1], 10) + dp(ring[mid:], 10)[1:]  # geschlossener Ring: in zwei Hälften vereinfachen
         if len(ring) >= 4:
             rings.append([list(p) for p in ring])
     out.append({'we': str(rec['WE_NR']).strip(), 'name': str(rec['W_EINHEIT']).strip(), 'gebiet': str(rec['W_GEBIET']).strip(), 'rings': rings})

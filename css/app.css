@@ -855,3 +855,17 @@ label.check input[type=checkbox] { width: 22px; height: 22px; flex: none; margin
 .vorschlaege button:hover, .vorschlaege li.aktiv button { background: var(--surface-2); }
 .summary .hint { color: rgba(255,255,255,.75); margin: 12px 0 0; }
 .summary .flaechen-btn { background: #fff; color: var(--primary); border: 0; }
+
+/* Infobox: aufklappbare Themen-Kacheln */
+.infobox details.klapp { padding: 0; }
+.klapp > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; min-height: 56px; border-radius: 18px; }
+.klapp > summary::-webkit-details-marker { display: none; }
+.klapp > summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.klapp-titel { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.klapp-titel strong { font-size: 17px; }
+.klapp-kurz { font-size: 14px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.klapp[open] .klapp-kurz { display: none; }
+.klapp-pfeil { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--surface); color: var(--ink); transition: transform .18s ease; flex: none; }
+.klapp-pfeil svg { width: 16px; height: 16px; transform: rotate(90deg); }
+.klapp[open] .klapp-pfeil { transform: rotate(180deg); }
+.klapp-inhalt { padding: 0 16px 16px; display: grid; gap: 10px; }

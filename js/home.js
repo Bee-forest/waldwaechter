@@ -271,10 +271,22 @@ function clearSelection() {
 /** Amtliche Auskunft des Geoportals als iframe (zeigt Daten an, ohne dass die App sie speichert) */
 const geoFrame = (title, src, height = 200) => h('iframe', { class: 'wms-info', src, title, loading: 'lazy', referrerpolicy: 'no-referrer', style: `height:${height}px` });
 
+/** Aufklappbare Themen-Kachel in der Infobox; die Kurzinfo steht auch im zugeklappten Zustand da */
+const KLAPP = new Set(); // aufgeklappte Kacheln bleiben beim Wechsel des Flurstücks offen
+function klapp(key, titel, inhalt, vorschau = null) {
+  const kurz = h('span', { class: 'klapp-kurz' }, vorschau || '');
+  const el = h('details', { class: 'info-block klapp', open: KLAPP.has(key) || undefined, ontoggle: (e) => { if (e.target.open) KLAPP.add(key); else KLAPP.delete(key); } },
+    h('summary', {}, h('span', { class: 'klapp-titel' }, h('strong', {}, titel), kurz), h('span', { class: 'klapp-pfeil', 'aria-hidden': 'true', html: icon.chevron })),
+    h('div', { class: 'klapp-inhalt' }, inhalt));
+  el.setKurz = (t) => { kurz.textContent = t || ''; };
+  return el;
+}
+
 function rescueBlock(latlng) {
   const list = h('div', { class: 'rescue-live', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Suche die nächsten Rettungspunkte …'));
   nearestRescue(latlng, 2).then((pts) => {
-    if (!pts.length) { fill(list, h('p', { class: 'muted' }, 'Im Umkreis von 8 km ist kein Rettungspunkt verzeichnet.')); return; }
+    if (!pts.length) { fill(list, h('p', { class: 'muted' }, 'Im Umkreis von 8 km ist kein Rettungspunkt verzeichnet.')); block.setKurz('keiner im Umkreis von 8 km'); return; }
+    block.setKurz(`${pts[0].id} · ${formatDist(pts[0].dist)} ${compassLabel(pts[0].brg)}`);
     fill(list, h('ul', { class: 'rescue-list' }, pts.map((rp) => h('li', { class: 'rescue' },
       h('div', { class: 'rescue-head' },
         h('span', { class: 'rescue-badge', 'aria-hidden': 'true' }, '+'),
@@ -290,15 +302,14 @@ function rescueBlock(latlng) {
       ),
     ))));
   }).catch(() => {
+    block.setKurz('nicht erreichbar');
     fill(list,
       h('p', { class: 'hint' }, 'Die Rettungspunkte konnten gerade nicht abgefragt werden (keine Verbindung zum Geoportal). Blende die Ebene „Rettungspunkte“ ein oder nutze den ThüringenViewer.'),
       h('a', { class: 'btn btn-small', href: 'https://www.thueringenforst.de/aktuelles-service/info-karten/rettungspunkte', target: '_blank', rel: 'noopener' }, 'Rettungspunkte bei ThüringenForst'));
   });
-  return h('div', { class: 'info-block' },
-    h('h3', {}, 'Nächste Rettungspunkte'),
-    list,
-    h('p', { class: 'hint' }, 'Entfernung in Luftlinie vom angetippten Punkt. Im Notfall: 112 wählen und die Rettungspunkt-Nummer nennen. Daten: © GDI-Th / ThüringenForst.'),
-  );
+  const block = klapp('rettung', 'Rettungspunkte', [list,
+    h('p', { class: 'hint' }, 'Entfernung in Luftlinie vom angetippten Punkt. Im Notfall: 112 wählen und die Rettungspunkt-Nummer nennen. Daten: © GDI-Th / ThüringenForst.')], 'Suche …');
+  return block;
 }
 
 function showRescueOnMap(rp, from) {
@@ -321,13 +332,13 @@ function meter(steps, active, label, colors) {
 }
 
 function renderGeoInfo(info) {
-  const blocks = [];
+  const g = { standort: [], schutz: [], zust: [], vorschau: {} };
   // Standort
   if (info.standort) {
     const st = explainStandort(info.standort);
     const d = st.d;
     const decoded = [d.stufe, d.nk >= 0 ? NAEHRKRAFT[d.nk].label : null, d.carbonat ? 'carbonatisch (kalkhaltig)' : null].filter(Boolean).join(', ');
-    blocks.push(h('div', { class: 'geo-card' },
+    g.standort.push(h('div', { class: 'geo-card' },
       h('p', { class: 'geo-kicker' }, 'Standort'),
       h('h4', {}, st.desc ? st.desc[0].toUpperCase() + st.desc.slice(1) : decoded || `Standortsgruppe ${st.gruppe}`),
       st.gruppe ? h('p', { class: 'code-line' }, h('span', { class: 'code' }, st.gruppe), decoded ? ` = ${decoded}` : '', h('small', {}, d.bereichLabel)) : null,
@@ -337,11 +348,11 @@ function renderGeoInfo(info) {
       h('p', { class: 'geo-facts' }, [st.einheit && `Standortseinheit ${st.einheit}`, st.bodenform && `Bodenform ${st.bodenform}`, st.wasserStufe && `Wasserhaushaltsstufe ${st.wasserStufe}`].filter(Boolean).join(' · ')),
     ));
   } else {
-    blocks.push(h('div', { class: 'geo-card muted-card' }, h('p', { class: 'geo-kicker' }, 'Standort'), h('p', {}, 'Für diesen Punkt ist keine forstliche Standortskartierung hinterlegt (meist außerhalb des Waldes).')));
+    g.standort.push(h('div', { class: 'geo-card muted-card' }, h('p', { class: 'geo-kicker' }, 'Standort'), h('p', {}, 'Für diesen Punkt ist keine forstliche Standortskartierung hinterlegt (meist außerhalb des Waldes).')));
   }
   // Schutzstatus
   const LEVEL = ['Hinweis', 'geschützt', 'europäisch geschützt', 'streng geschützt'];
-  blocks.push(h('div', { class: 'geo-card' },
+  g.schutz.push(h('div', { class: 'geo-card' },
     h('p', { class: 'geo-kicker' }, 'Schutzstatus'),
     info.schutz.length
       ? h('ul', { class: 'geo-list' }, info.schutz.map((x) => h('li', { class: `prot prot-${x.level}` },
@@ -356,7 +367,7 @@ function renderGeoInfo(info) {
       : h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Kein Schutzgebiet am angetippten Punkt.'),
   ));
   // Waldfunktionen
-  blocks.push(h('div', { class: 'geo-card' },
+  g.schutz.push(h('div', { class: 'geo-card' },
     h('p', { class: 'geo-kicker' }, 'Waldfunktionen'),
     info.funktion.length
       ? h('ul', { class: 'geo-list' }, info.funktion.map((x) => h('li', { class: 'func' },
@@ -370,7 +381,7 @@ function renderGeoInfo(info) {
   const waldWichtig = info.wald.filter((x) => x.layer === 'waldlebensraumtypen' ? (lrtCode(x.props) ? lrtWichtig(lrtCode(x.props)) : true)
     : x.layer === 'waldbiotope' ? biotopWichtig('', x.props) : true);
   if (waldWichtig.length) {
-    blocks.push(h('div', { class: 'geo-card' },
+    g.schutz.push(h('div', { class: 'geo-card' },
       h('p', { class: 'geo-kicker' }, 'Biotope und Besonderheiten'),
       h('ul', { class: 'geo-list' }, waldWichtig.map((x) => {
         const details = Object.entries(x.props).filter(([k]) => !/datum|flaeche|urheber|stand/i.test(k)).map(([k, v]) => `${umlaut(k)}: ${umlaut(v)}`).slice(0, 4);
@@ -388,7 +399,7 @@ function renderGeoInfo(info) {
   }
   // Zuständigkeit: Forstamt/Revier und die eigene FBG
   const fbg = store.get().profile.fbg;
-  blocks.push(h('div', { class: 'geo-card' },
+  g.zust.push(h('div', { class: 'geo-card' },
     h('p', { class: 'geo-kicker' }, 'Zuständig'),
     info.zustaendig ? h('p', {}, h('strong', {}, `Forstamt ${info.zustaendig.Forstamt || '–'}`), info.zustaendig.Revier ? `, Revier ${info.zustaendig.Revier}` : '') : null,
     info.zustaendig ? h('p', { class: 'hint' }, 'ThüringenForst berät zu Waldbau, Förderung und Waldschutz.') : null,
@@ -397,7 +408,13 @@ function renderGeoInfo(info) {
       : h('p', { class: 'hint' }, 'Bist du Mitglied einer Forstbetriebsgemeinschaft? ',
           h('button', { class: 'link-btn', onclick: () => openProfile() }, 'Im Profil eintragen')),
   ));
-  return blocks;
+  // Kurzinfo für die zugeklappten Kacheln
+  const st0 = info.standort ? explainStandort(info.standort) : null;
+  g.vorschau.standort = st0 ? (st0.desc ? st0.desc[0].toUpperCase() + st0.desc.slice(1) : `Standortsgruppe ${st0.gruppe}`) : 'keine Standortskartierung';
+  g.vorschau.schutz = [info.schutz.length ? info.schutz.map((x) => x.short).filter((v, i, arr) => arr.indexOf(v) === i).join(', ') : 'kein Schutzgebiet',
+    info.funktion.length ? `${info.funktion.length} Waldfunktion${info.funktion.length > 1 ? 'en' : ''}` : null].filter(Boolean).join(' · ');
+  g.vorschau.zust = info.zustaendig?.Forstamt ? `Forstamt ${info.zustaendig.Forstamt}${info.zustaendig.Revier ? `, Revier ${info.zustaendig.Revier}` : ''}` : (fbg || '');
+  return g;
 }
 
 function bestandCard(b) {
@@ -409,21 +426,34 @@ function bestandCard(b) {
 }
 
 function geoInfoBlock(latlng) {
-  const body = h('div', { class: 'geo-grid', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Lade Standort, Schutzstatus und Waldfunktionen …'));
+  const lade = (t) => h('p', { class: 'muted' }, t);
+  const B = { standort: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Standort und Bestand …')),
+    schutz: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Schutzstatus und Waldfunktionen …')),
+    zust: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Zuständigkeit …')) };
+  const quelle = h('p', { class: 'hint' }, 'Am angetippten Punkt laut Geoportal Thüringen (© GDI-Th / ThüringenForst / TLUBN). Ohne Gewähr – vor Maßnahmen im Zweifel beim Forstamt nachfragen.');
+  const K = {
+    standort: klapp('standort', 'Standort und Empfehlungen', [B.standort, quelle.cloneNode(true)], 'Lädt …'),
+    schutz: klapp('schutz', 'Schutzstatus und Waldfunktionen', [B.schutz, quelle.cloneNode(true)], 'Lädt …'),
+    zust: klapp('zust', 'Zuständigkeiten', B.zust, 'Lädt …'),
+  };
   const bestandP = bestandAt([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]]).catch(() => null);
   queryPoint(latlng).then(async (info) => {
     if (info.failed) throw new Error('offline');
     const b = await bestandP;
-    fill(body, b ? bestandCard(b) : null, ...renderGeoInfo(info));
-  }).catch(() => fill(body,
-    h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'),
-    geoFrame('Forstliche Angaben am Punkt', INFO_SOURCES.forst(latlng), 220),
-    geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160)));
-  return h('div', { class: 'info-block' },
-    h('h3', {}, 'Standort, Schutzstatus und Waldfunktionen'),
-    body,
-    h('p', { class: 'hint' }, 'Am angetippten Punkt laut Geoportal Thüringen (© GDI-Th / ThüringenForst / TLUBN). Ohne Gewähr – vor Maßnahmen im Zweifel beim Forstamt nachfragen.'),
-  );
+    const g = renderGeoInfo(info);
+    fill(B.standort, b ? bestandCard(b) : null, ...g.standort);
+    fill(B.schutz, ...g.schutz);
+    fill(B.zust, ...g.zust);
+    K.standort.setKurz(`${b ? `${b.art || b.text} · ` : ''}${g.vorschau.standort}`);
+    K.schutz.setKurz(g.vorschau.schutz);
+    K.zust.setKurz(g.vorschau.zust);
+  }).catch(() => {
+    fill(B.standort, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Forstliche Angaben am Punkt', INFO_SOURCES.forst(latlng), 220));
+    fill(B.schutz, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160));
+    fill(B.zust, h('p', { class: 'muted' }, 'Das Geoportal ist gerade nicht erreichbar.'));
+    Object.values(K).forEach((k) => k.setKurz('nicht erreichbar'));
+  });
+  return [K.standort, K.schutz, K.zust];
 }
 
 /** Das braune „i“: markiert die angetippte Stelle; Antippen springt zur Infobox */
@@ -532,8 +562,7 @@ async function renderInfo() {
       ))),
       rescue.length ? h('p', { class: 'hint' }, 'Demo-Rettungspunkte. Im Notfall immer 112 wählen und die Rettungspunkt-Nummer nennen.') : null,
     ),
-    isAlkis ? h('div', { class: 'info-block' }, h('h3', {}, 'Besonderheiten'),
-      h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …'))) : null,
+    isAlkis ? klapp('besonder', 'Besonderheiten', h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …')), 'Verkehrssicherung, Biotope') : null,
     isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Besonderheiten'),
       p.features?.length

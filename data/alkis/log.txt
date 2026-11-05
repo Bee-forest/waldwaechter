@@ -1,84 +1,41 @@
-2026-11-03 17:12 UTC
-Region Landkreis Greiz: 810 Kacheln
-  Felder: identifier=DETHL58P0000vQTkFL, oid=DETHL58P0000vQTkFL, aktualit=2017-08-24, idflurst=DETHL58P0000vQTk, flaeche=5768, flstkennz=162329010011340002__, land=Thüringen, gemarkung=Weida, flur=Flur 10, flurstnr=1134/2, gmdschl=16076079, regbezirk=unbesetzt, kreis=Greiz, gemeinde=Weida, lagebeztxt=Am Lilienthalweg; In der unter, tntxt=Gehoelz; 5768
-  Verwende adv_alkis_wfs mit Variante utm (501 Flurstücke in der Probe)
-  25/810 Kacheln, 9749 Flurstücke
-  50/810 Kacheln, 19939 Flurstücke
-  75/810 Kacheln, 31282 Flurstücke
-  100/810 Kacheln, 43150 Flurstücke
-  125/810 Kacheln, 55892 Flurstücke
-  150/810 Kacheln, 66945 Flurstücke
-  175/810 Kacheln, 78602 Flurstücke
-  200/810 Kacheln, 89050 Flurstücke
-  225/810 Kacheln, 98341 Flurstücke
-  250/810 Kacheln, 106382 Flurstücke
-  275/810 Kacheln, 117552 Flurstücke
-  300/810 Kacheln, 126392 Flurstücke
-  325/810 Kacheln, 139858 Flurstücke
-  350/810 Kacheln, 148998 Flurstücke
-  375/810 Kacheln, 161525 Flurstücke
-  400/810 Kacheln, 174131 Flurstücke
-  425/810 Kacheln, 184805 Flurstücke
-  450/810 Kacheln, 198083 Flurstücke
-  475/810 Kacheln, 208636 Flurstücke
-  500/810 Kacheln, 216213 Flurstücke
-  525/810 Kacheln, 223746 Flurstücke
-  550/810 Kacheln, 232499 Flurstücke
-  575/810 Kacheln, 239773 Flurstücke
-  600/810 Kacheln, 246846 Flurstücke
-  625/810 Kacheln, 255222 Flurstücke
-  650/810 Kacheln, 260395 Flurstücke
-  675/810 Kacheln, 266013 Flurstücke
-  700/810 Kacheln, 270869 Flurstücke
-  725/810 Kacheln, 273113 Flurstücke
-  750/810 Kacheln, 275608 Flurstücke
-  775/810 Kacheln, 279552 Flurstücke
-  800/810 Kacheln, 283291 Flurstücke
-Region Saale-Orla-Kreis: 1050 Kacheln
-  25/1050 Kacheln, 294864 Flurstücke
-  50/1050 Kacheln, 301830 Flurstücke
-  75/1050 Kacheln, 308024 Flurstücke
-  100/1050 Kacheln, 316931 Flurstücke
-  125/1050 Kacheln, 327470 Flurstücke
-  150/1050 Kacheln, 335269 Flurstücke
-  175/1050 Kacheln, 343816 Flurstücke
-  200/1050 Kacheln, 354702 Flurstücke
-  225/1050 Kacheln, 362900 Flurstücke
-  250/1050 Kacheln, 372023 Flurstücke
-  275/1050 Kacheln, 381980 Flurstücke
-  300/1050 Kacheln, 392819 Flurstücke
-  325/1050 Kacheln, 401980 Flurstücke
-  350/1050 Kacheln, 410158 Flurstücke
-  375/1050 Kacheln, 422902 Flurstücke
-  400/1050 Kacheln, 433088 Flurstücke
-  425/1050 Kacheln, 441901 Flurstücke
-  450/1050 Kacheln, 454601 Flurstücke
-  475/1050 Kacheln, 464791 Flurstücke
-  500/1050 Kacheln, 474599 Flurstücke
-  525/1050 Kacheln, 483318 Flurstücke
-  550/1050 Kacheln, 491421 Flurstücke
-  575/1050 Kacheln, 498781 Flurstücke
-  600/1050 Kacheln, 505407 Flurstücke
-  625/1050 Kacheln, 517104 Flurstücke
-  650/1050 Kacheln, 525920 Flurstücke
-  675/1050 Kacheln, 533563 Flurstücke
-  700/1050 Kacheln, 542300 Flurstücke
-  725/1050 Kacheln, 552934 Flurstücke
-  750/1050 Kacheln, 563128 Flurstücke
-  775/1050 Kacheln, 571913 Flurstücke
-  800/1050 Kacheln, 584343 Flurstücke
-  825/1050 Kacheln, 593025 Flurstücke
-  850/1050 Kacheln, 600986 Flurstücke
-  875/1050 Kacheln, 607044 Flurstücke
-  900/1050 Kacheln, 616611 Flurstücke
-  925/1050 Kacheln, 623574 Flurstücke
-  950/1050 Kacheln, 626808 Flurstücke
-  975/1050 Kacheln, 632935 Flurstücke
-  1000/1050 Kacheln, 639841 Flurstücke
-  1025/1050 Kacheln, 643103 Flurstücke
-  1050/1050 Kacheln, 647260 Flurstücke
-Region Ilmenau und Umgebung: 90 Kacheln
-  25/90 Kacheln, 663132 Flurstücke
-  50/90 Kacheln, 678816 Flurstücke
-  75/90 Kacheln, 692360 Flurstücke
-Fertig: 1684 Kacheln, 701467 Flurstücke, 0 Fehler
+2026-11-05 16:26 UTC
+Region Landkreis Greiz: bereits vorhanden, übersprungen
+Region Saale-Orla-Kreis: bereits vorhanden, übersprungen
+Region Ilmenau und Umgebung: bereits vorhanden, übersprungen
+Region Landkreis Gotha: 840 Kacheln
+  Felder: identifier=DETHL54P0000idgUFL, oid=DETHL54P0000idgUFL, aktualit=2018-11-30, idflurst=DETHL54P0000idgU, flaeche=2641, flstkennz=163203017001880002__, land=Thüringen, gemarkung=Bad Langensalza, flur=Flur 17, flurstnr=188/2, gmdschl=16064003, regbezirk=unbesetzt, kreis=Unstrut-Hainich-Kreis, gemeinde=Bad Langensalza, lagebeztxt=In den oberen Artäckern, tntxt=Landwirtschaft; 726|Weg; 1915
+  Verwende adv_alkis_wfs mit Variante utm (994 Flurstücke in der Probe)
+  25/840 Kacheln, 15231 Flurstücke
+  50/840 Kacheln, 30871 Flurstücke
+  75/840 Kacheln, 45666 Flurstücke
+  100/840 Kacheln, 57180 Flurstücke
+  125/840 Kacheln, 67599 Flurstücke
+  150/840 Kacheln, 78300 Flurstücke
+  175/840 Kacheln, 89384 Flurstücke
+  200/840 Kacheln, 102642 Flurstücke
+  225/840 Kacheln, 118458 Flurstücke
+  250/840 Kacheln, 131962 Flurstücke
+  275/840 Kacheln, 142397 Flurstücke
+  300/840 Kacheln, 152852 Flurstücke
+  325/840 Kacheln, 168167 Flurstücke
+  350/840 Kacheln, 179530 Flurstücke
+  375/840 Kacheln, 192778 Flurstücke
+  400/840 Kacheln, 208039 Flurstücke
+  425/840 Kacheln, 218990 Flurstücke
+  450/840 Kacheln, 228720 Flurstücke
+  475/840 Kacheln, 245910 Flurstücke
+  500/840 Kacheln, 258400 Flurstücke
+  525/840 Kacheln, 270061 Flurstücke
+  550/840 Kacheln, 281564 Flurstücke
+  575/840 Kacheln, 291764 Flurstücke
+  600/840 Kacheln, 305371 Flurstücke
+  625/840 Kacheln, 319094 Flurstücke
+  650/840 Kacheln, 334588 Flurstücke
+  675/840 Kacheln, 350604 Flurstücke
+  700/840 Kacheln, 367941 Flurstücke
+  725/840 Kacheln, 380850 Flurstücke
+  750/840 Kacheln, 397587 Flurstücke
+  775/840 Kacheln, 411259 Flurstücke
+  800/840 Kacheln, 427005 Flurstücke
+  825/840 Kacheln, 444313 Flurstücke
+Fertig: 840 Kacheln, 453073 Flurstücke, 0 Fehler

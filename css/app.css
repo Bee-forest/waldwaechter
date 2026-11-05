@@ -880,3 +880,18 @@ label.check input[type=checkbox] { width: 22px; height: 22px; flex: none; margin
 .geo-card .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Quellenangaben ganz unten, klein */
 .info-quellen { margin: 16px 2px 0; font-size: 12px; line-height: 1.4; color: var(--ink-2); }
+
+/* Baumartenempfehlung (BZT-Tabellenwerk) */
+.bzt { display: grid; gap: 10px; }
+.ba-gruppe { display: grid; gap: 6px; }
+.ba-gruppe small { color: var(--ink-2); font-weight: 400; }
+.ba-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ba-chip { display: inline-flex; gap: 4px; align-items: baseline; padding: 4px 10px; border-radius: 999px; background: var(--primary-soft); font-size: 14px; }
+.bzt-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bzt-liste li { display: grid; gap: 3px; }
+.bzt-liste li > span { display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; }
+.bzt-liste li > span small { flex-basis: 100%; color: var(--ink-2); font-size: 13px; }
+.bzt-liste li.leer strong { color: var(--ink-2); font-weight: 600; }
+.bzt-code { padding: 2px 8px; border-radius: 8px; background: var(--surface-2); font-weight: 700; font-size: 14px; }
+.bzt-nachbar summary { cursor: pointer; font-weight: 700; }
+.bzt-nachbar p { margin: 6px 0 0; }

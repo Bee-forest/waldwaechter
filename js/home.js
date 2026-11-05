@@ -14,6 +14,7 @@ import { zeigeVerordnung } from './schutzgebiete.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt, KORREKTUR_ARTEN, SCHICHTEN, korrAlter } from './map/bestand.js';
+import { empfehlung, bztName, GRUPPEN, BAUMARTEN_KURZ, eichenHinweis } from './bzt.js';
 import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
@@ -344,7 +345,6 @@ function renderGeoInfo(info) {
       st.gruppe ? h('p', { class: 'code-line' }, h('span', { class: 'code' }, st.gruppe), decoded ? ` = ${decoded}` : '', h('small', {}, d.bereichLabel)) : null,
       meter(NAEHRKRAFT.map((n) => n.label), d.nk, 'Nährstoffe', ['#C9B98A', '#B9C27A', '#8FAF4E', '#5E9A3A', '#2F7D3A']),
       meter(WASSER_SKALA, d.wasser, d.wechsel ? 'Wasserversorgung (wechselnd)' : 'Wasserversorgung', ['#D9B36A', '#CFC07C', '#A9C48A', '#7FB59A', '#5A9EB5', '#3F7FB0']),
-      st.tips.length ? h('div', { class: 'geo-tips' }, h('strong', {}, 'Was heißt das für dich?'), h('ul', {}, st.tips.map((t) => h('li', {}, t)))) : null,
       h('p', { class: 'geo-facts' }, [st.einheit && `Standortseinheit ${st.einheit}`, st.bodenform && `Bodenform ${st.bodenform}`, st.wasserStufe && `Wasserhaushaltsstufe ${st.wasserStufe}`].filter(Boolean).join(' · ')),
     ));
   } else {
@@ -466,14 +466,63 @@ function bestandKorrigieren(parcelId, b) {
   });
 }
 
+function bztKurz(r) {
+  if (r.status !== 'ok') return r.status === 'ausserhalb' ? 'außerhalb Thüringens' : 'kein Eintrag im Tabellenwerk';
+  return `Hauptbaumarten: ${r.eintrag.B.join(', ') || '–'}`;
+}
+/** Baumartenempfehlung und Bestandeszieltypen aus dem Tabellenwerk */
+function bztKarte(r) {
+  if (r.status === 'ausserhalb') return h('p', { class: 'muted' }, 'Der Punkt liegt außerhalb der Thüringer Wuchseinheiten.');
+  if (r.status !== 'ok') return h('div', {}, h('p', { class: 'muted' }, `Für die Standortseinheit ${r.einheit || r.gruppe} enthält das Tabellenwerk in der Wuchseinheit ${r.wuchseinheitName} keinen Eintrag (aufgeführt sind nur Standorte ab 1 % Flächenanteil).`),
+    h('p', { class: 'hint' }, 'Frag beim Forstamt nach einer Empfehlung für diesen Standort.'));
+  const e = r.eintrag;
+  const arten = (liste) => (liste.length ? liste.map((k) => h('span', { class: 'ba-chip', title: BAUMARTEN_KURZ[k] || k }, h('strong', {}, k), ` ${BAUMARTEN_KURZ[k] || ''}`)) : h('span', { class: 'muted' }, '–'));
+  const trefferText = r.treffer === 'genau' ? '' : r.treffer === 'zusatz'
+    ? ` Für ${r.einheit} gilt der Eintrag ${r.code} (gleiche Standortseinheit mit Zusatzkennzeichen).`
+    : ` Die Standortseinheit ${r.einheit || r.gruppe} steht nicht im Tabellenwerk; gezeigt wird die ähnlichste Einheit ${r.code} derselben Standortsgruppe ${r.gruppe || ''}.`;
+  return h('div', { class: 'bzt' },
+    h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, 'Standort im Tabellenwerk'),
+      h('h4', {}, `${r.code}: ${e.name}`),
+      h('dl', { class: 'bestand-schichten' },
+        h('div', {}, h('dt', {}, 'Wuchseinheit'), h('dd', {}, `${r.wuchseinheitName} (${r.wuchseinheit})`)),
+        h('div', {}, h('dt', {}, 'Klimabereich 2041–2070'), h('dd', {}, `${r.klimabereichTabelleName} (${r.klimabereichTabelle})`)),
+        e.boden ? h('div', {}, h('dt', {}, 'Häufiger Bodentyp'), h('dd', {}, e.boden)) : null),
+      h('p', { class: 'muted' }, `Nährkraft und Wasserhaushalt werden über die Standortseinheit gemeinsam bewertet, dazu das künftige Klima.${trefferText}${r.klimabereichTabelle !== r.klimabereich && r.klimabereich !== '0' ? ` Am Punkt selbst liegt laut Karte Klimabereich ${r.klimabereich}; dafür enthält das Tabellenwerk hier keinen Eintrag.` : ''}`)),
+    h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, 'Empfohlene Baumarten'),
+      h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Hauptbaumarten'), h('small', {}, ' 5/10 bis 8/10 der Fläche')), h('div', { class: 'ba-chips' }, arten(e.B))),
+      h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Mischbaumarten'), h('small', {}, ' 2/10 bis 5/10')), h('div', { class: 'ba-chips' }, arten(e.C))),
+      h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Nebenbaumarten'), h('small', {}, ' bis 2/10')), h('div', { class: 'ba-chips' }, arten(e.D))),
+      h('p', { class: 'hint' }, 'Die Reihenfolge ist keine Rangfolge – die genannten Arten sind gleichwertig. Reinbestände werden nicht mehr empfohlen.'),
+      [...e.B, ...e.C].includes('EI') ? h('p', { class: 'hint' }, eichenHinweis(r.gruppe || r.code)) : null),
+    h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, 'Mögliche Bestandeszieltypen'),
+      h('ul', { class: 'bzt-liste' }, GRUPPEN.map(([k, l]) => h('li', { class: e.bzt[k]?.length ? '' : 'leer' },
+        h('strong', {}, l),
+        e.bzt[k]?.length ? h('span', {}, e.bzt[k].map((c) => h('span', { class: 'bzt-code', title: bztName(c) }, c)), h('small', {}, e.bzt[k].map(bztName).join(' · ')))
+          : h('span', { class: 'muted' }, `keine ${l}-BZT empfohlen`)))),
+      e.wald ? h('p', { class: 'muted' }, `Natürliche Waldgesellschaft: ${e.wald}`) : null,
+      h('p', { class: 'hint' }, 'Die Wahl des Bestandeszieltyps richtet sich nach deinen Zielen und der Lage vor Ort; die Untergliederung ist keine Rangfolge.')),
+    r.andereWE ? h('details', { class: 'bzt-nachbar', open: true }, h('summary', {}, `Klimabereich ${r.klimabereich} am Punkt: Empfehlung aus der Nachbar-Wuchseinheit`),
+      h('p', {}, `Das Tabellenwerk führt ${r.klimabereichName} (${r.klimabereich}) für ${r.wuchseinheitName} nicht. In ${r.andereWE.name} (${r.andereWE.wuchseinheit}, ca. ${r.andereWE.abstand.toLocaleString('de-DE')} m entfernt) gilt dafür für ${r.andereWE.code}:`),
+      h('p', {}, h('strong', {}, 'Hauptbaumarten: '), r.andereWE.eintrag.B.join(', ') || '–', h('br'), h('strong', {}, 'Mischbaumarten: '), r.andereWE.eintrag.C.join(', ') || '–', h('br'),
+        h('strong', {}, 'BZT: '), Object.values(r.andereWE.eintrag.bzt).flat().join(', ') || '–')) : null,
+    r.nachbarn?.length ? h('details', { class: 'bzt-nachbar' }, h('summary', {}, `Nahe Grenze zu Klimabereich ${r.nachbarn.map((n) => n.klimabereich).join(', ')} – auch diese Empfehlung prüfen`),
+      r.nachbarn.map((n) => h('p', {}, h('strong', {}, `${n.name} (${n.klimabereich}), ca. ${n.abstand.toLocaleString('de-DE')} m entfernt: `), `Hauptbaumarten ${n.eintrag.B.join(', ') || '–'}; Mischbaumarten ${n.eintrag.C.join(', ') || '–'}`))) : null,
+    h('p', { class: 'info-quellen' }, 'Quelle: ThüringenForst, Standortgerechte Baumarten- und Bestandeszieltypenwahl, Tabellenwerk (Anlage 6 DO Waldbau, Juni 2015). Klimabereiche aus der Karte im Anhang A, auf ca. 150 m genau verortet; Wuchseinheiten: Open Data ThüringenForst.'));
+}
+
 function geoInfoBlock(latlng, parcelId = null) {
   const lade = (t) => h('p', { class: 'muted' }, t);
   const B = { standort: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Standort und Bestand …')),
+    bzt: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Baumartenempfehlung …')),
     schutz: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Schutzstatus und Waldfunktionen …')),
     zust: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Zuständigkeit …')) };
   const quelle = h('p', { class: 'hint' }, 'Am angetippten Punkt laut Geoportal Thüringen (© GDI-Th / ThüringenForst / TLUBN). Ohne Gewähr – vor Maßnahmen im Zweifel beim Forstamt nachfragen.');
   const K = {
-    standort: klapp('standort', 'Standort und Empfehlungen', [B.standort, quelle.cloneNode(true)], 'Lädt …'),
+    standort: klapp('standort', 'Standort und Bestand', [B.standort, quelle.cloneNode(true)], 'Lädt …'),
+    bzt: klapp('bzt', 'Baumartenempfehlung', B.bzt, 'Lädt …'),
     schutz: klapp('schutz', 'Schutzstatus und Waldfunktionen', [B.schutz, quelle.cloneNode(true)], 'Lädt …'),
     zust: klapp('zust', 'Zuständigkeiten', B.zust, 'Lädt …'),
   };
@@ -489,13 +538,19 @@ function geoInfoBlock(latlng, parcelId = null) {
     K.standort.setKurz(`${kb || b ? `${kb || b.art || b.text} · ` : ''}${g.vorschau.standort}`);
     K.schutz.setKurz(g.vorschau.schutz);
     K.zust.setKurz(g.vorschau.zust);
+    const sp = info.standort || {};
+    const einheit = String(sp.Standortseinheiten || '').trim(), gruppe = String(sp.Standortsguppe || sp.Standortsgruppe || '').trim();
+    if (!einheit && !gruppe) { fill(B.bzt, h('p', { class: 'muted' }, 'Für diesen Punkt ist keine Standortskartierung hinterlegt – ohne Standortseinheit gibt das Tabellenwerk keine Empfehlung.')); K.bzt.setKurz('keine Standortskartierung'); return; }
+    empfehlung([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]], { einheit, gruppe }).then((r) => { fill(B.bzt, bztKarte(r)); K.bzt.setKurz(bztKurz(r)); })
+      .catch(() => { fill(B.bzt, h('p', { class: 'muted' }, 'Die Baumartenempfehlung konnte nicht geladen werden.')); K.bzt.setKurz('nicht verfügbar'); });
   }).catch(() => {
     fill(B.standort, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Forstliche Angaben am Punkt', INFO_SOURCES.forst(latlng), 220));
     fill(B.schutz, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160));
     fill(B.zust, h('p', { class: 'muted' }, 'Das Geoportal ist gerade nicht erreichbar.'));
+    fill(B.bzt, h('p', { class: 'muted' }, 'Ohne Standortskarte (Geoportal nicht erreichbar) ist keine Baumartenempfehlung möglich.'));
     Object.values(K).forEach((k) => k.setKurz('nicht erreichbar'));
   });
-  return [K.standort, K.schutz, K.zust];
+  return [K.standort, K.bzt, K.schutz, K.zust];
 }
 
 /** Das braune „i“: markiert die angetippte Stelle; Antippen springt zur Infobox */

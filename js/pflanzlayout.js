@@ -71,14 +71,14 @@ function rng(seed) {
 function mischen(arr, r) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
 export const zellSchluessel = (form, [x, y]) => { const c = (FORMEN[form] || FORMEN.einzeln).zelle; return `${Math.floor(x / c)},${Math.floor(y / c)}`; };
 
-const memo = [{ key: '' }, { key: '' }];
+const memo = { key: '' };
 /**
  * @param {{ ring, arten: {name, anteil, nHa, gruppeHa}[], gassen: {abstand, breite, winkel, versatz}, form, seed, mal }} p
  * @param {boolean} mitPunkten  Pflanzplätze erzeugen (für Karte und PDF)
  */
 export function pflanzLayout(p, mitPunkten = false) {
-  const key = JSON.stringify([p.ring, p.arten.map((a) => [a.name, a.anteil, a.nHa, a.gruppeHa]), p.gassen, p.form, p.seed, p.mal, mitPunkten]);
-  const M = memo[mitPunkten ? 1 : 0];
+  const key = JSON.stringify([p.ring, p.arten.map((a) => [a.name, a.anteil, a.nHa, a.gruppeHa]), p.gassen, p.form, p.seed, p.mal]);
+  const M = memo;
   if (M.key === key) return M.wert;
   const form = FORMEN[p.form] ? p.form : 'einzeln';
   const F = FORMEN[form];
@@ -107,7 +107,7 @@ export function pflanzLayout(p, mitPunkten = false) {
     }
   }
   // Übermalte Abschnitte
-  for (const pc of pieces) if (mal[pc.pk] && namen.includes(mal[pc.pk])) { pc.art = mal[pc.pk]; pc.gemalt = true; }
+  for (const pc of pieces) if (mal[pc.pk] && !pc.pk.startsWith('p:') && namen.includes(mal[pc.pk])) { pc.art = mal[pc.pk]; pc.gemalt = true; }
   // Gruppen der übrigen Abschnitte
   const gruppen = new Map();
   for (const pc of pieces) if (!pc.art) { const g = gruppen.get(pc.gk) || { key: pc.gk, len: 0, pieces: [], ix: pc.ix, iy: pc.iy, band: pc.row }; g.len += pc.len; g.pieces.push(pc); gruppen.set(pc.gk, g); }
@@ -145,47 +145,58 @@ export function pflanzLayout(p, mitPunkten = false) {
   const lenEff = Object.fromEntries(namen.map((n) => [n, len[n] + anteil[n] * Lmix]));
   const gesamtLen = pieces.reduce((a, pc) => a + pc.len, 0);
 
-  let punkte = null;
-  if (mitPunkten) {
-    punkte = [];
-    const verteile = (liste, n, artVon) => {
-      const L = liste.reduce((a, pc) => a + pc.len, 0);
-      if (!n || !L) return;
-      const d = L / n; let pos = d / 2, k = 0, basis = 0;
-      for (const pc of liste) {
-        while (k < n && pos < basis + pc.len) { punkte.push([pc.x1 + (pos - basis), pc.y, artVon(k)]); k++; pos += d; }
-        basis += pc.len;
-      }
-    };
-    for (const n of namen) verteile(pieces.filter((pc) => pc.art === n), reinStk[n], () => n);
-    const mixListe = pieces.filter((pc) => pc.art === 'mix');
-    const folge = mischen(namen.flatMap((n) => Array(mixStk[n]).fill(n)), r);
-    verteile(mixListe, folge.length, (k) => folge[k]);
-  }
-  const wert = { R, form, pieces, stueck, lenEff, gesamtLen, Lmix, ha: areaHa(p.ring), nettoHa: (gesamtLen * REIHE) / 10000, punkte };
+  // Pflanzplätze: [x, y, Baumart, Abstand in der Reihe, Schlüssel]. Feste Lage – Übermalen ändert nur die Baumart.
+  const punkte = [];
+  const verteile = (liste, n, artVon) => {
+    const L = liste.reduce((a, pc) => a + pc.len, 0);
+    if (!n || !L) return;
+    const d = L / n; let pos = d / 2, k = 0, basis = 0;
+    for (const pc of liste) {
+      while (k < n && pos < basis + pc.len) { const x = pc.x1 + (pos - basis); punkte.push([x, pc.y, artVon(k), d, `p:${Math.round(x * 10)},${Math.round(pc.y * 10)}`]); k++; pos += d; }
+      basis += pc.len;
+    }
+  };
+  for (const n of namen) verteile(pieces.filter((pc) => pc.art === n), reinStk[n], () => n);
+  const mixListe = pieces.filter((pc) => pc.art === 'mix');
+  const folge = mischen(namen.flatMap((n) => Array(mixStk[n]).fill(n)), r);
+  verteile(mixListe, folge.length, (k) => folge[k]);
+  // Einzeln übermalte Pflanzen
+  for (const q of punkte) { const m = mal[q[4]]; if (m && namen.includes(m)) q[2] = m; }
+  for (const n of namen) { stueck[n] = 0; lenEff[n] = 0; }
+  for (const q of punkte) { stueck[q[2]]++; lenEff[q[2]] += q[3]; }
+  // Raster für die Suche beim Malen (2-m-Zellen)
+  const index = new Map();
+  punkte.forEach((q, i) => { const k = `${Math.floor(q[0] / 2)},${Math.floor(q[1] / 2)}`; (index.get(k) || index.set(k, []).get(k)).push(i); });
+  const wert = { R, form, pieces, stueck, lenEff, gesamtLen: punkte.reduce((a, q) => a + q[3], 0) || gesamtLen, Lmix, ha: areaHa(p.ring), nettoHa: (gesamtLen * REIHE) / 10000, punkte, index };
   M.key = key; M.wert = wert;
   return wert;
 }
 /** Baumart an einem Punkt ('mix' = Einzelmischung) */
 export function artAm(lay, ll) {
   const [x, y] = lay.R.toXY(ll);
-  let best = null, bd = Infinity;
-  for (const pc of lay.pieces) {
-    const dy = Math.abs(pc.y - y); if (dy > REIHE) continue;
-    const dx = x < pc.x1 ? pc.x1 - x : x > pc.x2 ? x - pc.x2 : 0;
-    const d = dy + dx; if (d < bd) { bd = d; best = pc; }
+  const q = punkteNahe(lay, [x, y], 4)[0];
+  if (q) return lay.punkte[q.i][2];
+  return null;
+}
+/** Pflanzplätze im Umkreis r (m) um xy, nach Abstand sortiert */
+export function punkteNahe(lay, [x, y], r) {
+  const out = [], c = Math.ceil(r / 2), ix = Math.floor(x / 2), iy = Math.floor(y / 2);
+  for (let a = ix - c; a <= ix + c; a++) for (let b = iy - c; b <= iy + c; b++) for (const i of lay.index.get(`${a},${b}`) || []) {
+    const q = lay.punkte[i], d = Math.hypot(q[0] - x, q[1] - y);
+    if (d <= r) out.push({ i, d });
   }
-  return bd < 3 ? best.art : null;
+  return out.sort((u, v) => u.d - v.d);
 }
 /** Zusammenhängende Abschnitte je Reihe und Baumart als Rechtecke (für Bestandeskarte und PDF) */
-export function streifen(lay) {
+export function streifen(lay, minLaenge = 0) {
   const out = []; let cur = null;
-  const sorted = [...lay.pieces].sort((a, b) => a.y - b.y || a.x1 - b.x1);
-  for (const pc of sorted) {
-    if (cur && cur.y === pc.y && cur.art === pc.art && Math.abs(cur.x2 - pc.x1) < 1e-6) { cur.x2 = pc.x2; continue; }
-    cur = { y: pc.y, x1: pc.x1, x2: pc.x2, art: pc.art }; out.push(cur);
+  const sorted = [...lay.punkte].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  for (const [x, y, art, d] of sorted) {
+    const x1 = x - d / 2, x2 = x + d / 2;
+    if (cur && cur.y === y && cur.art === art && x1 - cur.x2 < 0.05) { cur.x2 = x2; continue; }
+    cur = { y, x1, x2, art }; out.push(cur);
   }
-  return out.map((st) => ({ art: st.art, ring: [[st.x1, st.y - REIHE / 2], [st.x2, st.y - REIHE / 2], [st.x2, st.y + REIHE / 2], [st.x1, st.y + REIHE / 2]].map(lay.R.toLL) }));
+  return out.filter((st) => st.x2 - st.x1 >= minLaenge).map((st) => ({ art: st.art, ring: [[st.x1, st.y - REIHE / 2], [st.x2, st.y - REIHE / 2], [st.x2, st.y + REIHE / 2], [st.x1, st.y + REIHE / 2]].map(lay.R.toLL) }));
 }
 /** Größe der zusammenhängenden Flächen je Baumart (m²) – für die Hinweise zur Gruppengröße */
 export function gruppenGroessen(lay) {

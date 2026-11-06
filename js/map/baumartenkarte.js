@@ -80,7 +80,7 @@ export function createBaumartenLayer({ minZoom = 13 } = {}) {
       }
       // Gruppen, Trupps und Reihen der Pflanzplanung
       const lay = gespeichertesLayout(m);
-      if (lay) for (const st of streifen(lay)) if (st.art && st.art !== 'mix' && st.art !== pp.grund) group.addLayer(L.polygon(st.ring, { stroke: false, fillColor: farbeVon(`${gruppeFarbe(st.art)} 1-40 Jahre`), fillOpacity: 0.85, interactive: false }));
+      if (lay) for (const st of streifen(lay, 4)) if (st.art && st.art !== pp.grund) group.addLayer(L.polygon(st.ring, { stroke: false, fillColor: farbeVon(`${gruppeFarbe(st.art)} 1-40 Jahre`), fillOpacity: 0.85, interactive: false }));
       drawn.set(key, true);
     }
   }

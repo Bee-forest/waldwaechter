@@ -9,7 +9,7 @@ import { areaHa, formatHa, centroid, pointInPolygon } from './geo.js';
 import { miniKarte } from './flaeche.js';
 import { umlaufSteuerung, vereinfachen } from './umlauf.js';
 import { Pdf, herunterladen } from './pdf.js';
-import { pflanzLayout, gassenLinien, rahmen, FORMEN, zellSchluessel, streifen, gruppenGroessen } from './pflanzlayout.js';
+import { pflanzLayout, gassenLinien, rahmen, FORMEN, punkteNahe, streifen, gruppenGroessen } from './pflanzlayout.js';
 import { angebote, angebot, sortimentText, angebotText, eigenerPreis, eigenenPreisMerken, vorgabe as preisVorgabe, eigeneBaumarten, eigeneBaumartMerken, WBS_QUELLE } from './pflanzpreise.js';
 
 // ---------- Rahmenpflanzverbände (Richtlinie forstwirtschaftliche Maßnahmen 2025, Anlage 3; Reihenabstand 2,5 m) ----------
@@ -128,20 +128,27 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   let schritt = 0, letzterSchritt = -1, weitereOffen = false;
   const SCHRITTE = ['Pflanzfläche', 'Baumarten', 'Pflanzenzahl und Verband', 'Baumarten verteilen', 'Pflanzplan und Kosten'];
   const body = h('div', { class: 'pflanzung' });
-  let karte = null, umlauf = null, weiterBtn = null, griff = null, pinsel = null, malt = false, geplant = false;
+  let karte = null, umlauf = null, weiterBtn = null, griff = null, pinsel = null, malt = false, geplant = false, marker = [], warteschlange = [], pinselGroesse = 'einzeln';
   const page = openPage('Pflanzung planen', body, { onClose: () => { umlauf?.stop(); karte?.remove(); } });
   const mapEl = h('div', { class: 'mini-map zaun-map' });
   const status = h('p', { class: 'draw-status', 'aria-live': 'polite' });
   const umlaufHost = h('div');
   const summeHost = h('div');
+  const hinweisHost = h('div');
+  const PINSEL = { einzeln: ['Einzelne Pflanze', 1.8], klein: ['Klein (Ø 5 m)', 2.5], gross: ['Groß (Ø 10 m)', 5] };
   const lyr = L.layerGroup(), lyrGassen = L.layerGroup(), lyrPunkte = L.layerGroup();
   const canvas = L.canvas({ padding: 0.3 });
 
   // ---------- Pflanzplätze ----------
   const nHaVon = (x) => { if (x.nHa == null) { const V = verbandVon(x.name); x.nHa = Math.round((V[0] + V[1]) / 2 / 100) * 100; } return x.nHa; };
   const verbandVon = (name) => VERBAND[artInfo(name)?.verband || 'elb'][s.art === 'voranbau' ? 'voranbau' : 'frei'];
+  // Übermalte Pflanzen gehören zu festen Pflanzplätzen; ändern sich Fläche, Baumarten, Verband, Gassen oder Mischung, gilt die Übermalung nicht mehr
+  const basis = () => JSON.stringify([s.ring, s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed]);
   function layout(mitPunkten = false) {
     if (s.gassen.winkel == null && s.ring.length >= 3) s.gassen.winkel = Math.round(hauptRichtung(s.ring));
+    const b = basis();
+    if (s.vert.basis && s.vert.basis !== b && Object.keys(s.vert.mal).length) { s.vert.mal = {}; toast('Übermalung zurückgesetzt, weil sich die Pflanzung geändert hat.'); }
+    s.vert.basis = b;
     return pflanzLayout({ ring: s.ring, arten: s.arten.map((x) => ({ name: x.name, anteil: Number(x.anteil) || 0, nHa: nHaVon(x), gruppeHa: artInfo(x.name)?.gruppeHa || 0 })),
       gassen: s.gassen, form: s.vert.form, seed: s.vert.seed, mal: s.vert.mal }, mitPunkten);
   }
@@ -161,7 +168,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     const el = map.getContainer(), aktiv = new Set();
     el.addEventListener('pointerdown', (e) => { aktiv.add(e.pointerId); malt = schritt === 3 && !!pinsel && aktiv.size === 1; if (malt) { malen(e); e.preventDefault(); } });
     el.addEventListener('pointermove', (e) => { if (malt && aktiv.size === 1) malen(e); else if (aktiv.size > 1) malt = false; });
-    const ende = (e) => { aktiv.delete(e.pointerId); if (malt) { malt = false; render(); } };
+    const ende = (e) => { aktiv.delete(e.pointerId); if (malt) { malt = false; aktualisieren(); } };
     el.addEventListener('pointerup', ende); el.addEventListener('pointercancel', ende);
     if (s.ring.length >= 3) setTimeout(() => map.fitBounds(L.latLngBounds(s.ring), { padding: [20, 20], maxZoom: 18 }), 120);
   }
@@ -192,7 +199,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     griff.on('dragend', () => render());
   }
   function zeichnePunkte() {
-    lyrPunkte.clearLayers();
+    lyrPunkte.clearLayers(); marker = [];
     if (!karte || schritt < 2 || s.ring.length < 3 || !s.arten.length) return;
     const lay = layout(true);
     if (lay.punkte.length > 40000) {
@@ -200,16 +207,37 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
       return;
     }
     const z = karte.map.getZoom(), rad = z >= 19 ? 3.2 : z >= 18 ? 2.3 : z >= 17 ? 1.6 : 1.1;
-    for (const [x, y, art] of lay.punkte) L.circleMarker(lay.R.toLL([x, y]), { renderer: canvas, radius: rad, stroke: false, fillColor: farbe(art), fillOpacity: 1, interactive: false }).addTo(lyrPunkte);
+    marker = lay.punkte.map(([x, y, art]) => L.circleMarker(lay.R.toLL([x, y]), { renderer: canvas, radius: rad, stroke: false, fillColor: farbe(art), fillOpacity: 1, interactive: false }).addTo(lyrPunkte));
   }
   function malen(e) {
-    const ll = karte.map.mouseEventToLatLng(e), pt = [ll.lat, ll.lng];
-    if (!pointInPolygon(pt, s.ring)) return;
-    const k = zellSchluessel(s.vert.form, rahmen(s.ring, s.gassen.winkel || 0).toXY(pt));
-    if (pinsel === '__auto') { if (!(k in s.vert.mal)) return; delete s.vert.mal[k]; } else { if (s.vert.mal[k] === pinsel) return; s.vert.mal[k] = pinsel; }
+    const ll = karte.map.mouseEventToLatLng(e);
+    warteschlange.push([ll.lat, ll.lng]);
     if (geplant) return;
     geplant = true;
-    requestAnimationFrame(() => { geplant = false; zeichnePunkte(); fill(summeHost, aufteilung(rechnen())); });
+    requestAnimationFrame(() => {
+      geplant = false;
+      const lay = layout(true), r = PINSEL[pinselGroesse][1];
+      const geaendert = new Set();
+      for (const pt of warteschlange.splice(0)) {
+        const nahe = punkteNahe(lay, lay.R.toXY(pt), r);
+        for (const { i } of pinselGroesse === 'einzeln' ? nahe.slice(0, 1) : nahe) {
+          const key = lay.punkte[i][4];
+          if (pinsel === '__auto') { if (key in s.vert.mal) { delete s.vert.mal[key]; geaendert.add(i); } }
+          else if (lay.punkte[i][2] !== pinsel || s.vert.mal[key] !== pinsel) { s.vert.mal[key] = pinsel; geaendert.add(i); }
+        }
+      }
+      if (!geaendert.size) return;
+      const neu = layout(true);
+      if (marker.length === neu.punkte.length) geaendert.forEach((i) => marker[i].setStyle({ fillColor: farbe(neu.punkte[i][2]) }));
+      else zeichnePunkte();
+      aktualisieren();
+    });
+  }
+  /** Aufteilung und Hinweise nach dem Malen auffrischen, ohne die Seite neu aufzubauen */
+  function aktualisieren() {
+    const b = rechnen();
+    fill(summeHost, aufteilung(b));
+    fill(hinweisHost, verteilHinweise(b));
   }
   function pinselSetzen(p) {
     pinsel = p;
@@ -372,9 +400,9 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
       const b = rechnen();
       const F = FORMEN[s.vert.form];
       const pinselChip = (wert, text, c) => h('button', { type: 'button', class: `art-chip ${pinsel === wert ? 'on' : ''}`, style: `--c:${c}`, 'aria-pressed': String(pinsel === wert), onclick: () => { pinselSetzen(pinsel === wert ? null : wert); render(); } }, wert && wert !== '__auto' ? h('span', { class: 'dot' }) : null, text);
-      fill(summeHost, aufteilung(b));
+      fill(summeHost, aufteilung(b)); fill(hinweisHost, verteilHinweise(b));
       inhalt = [
-        h('p', { class: 'muted' }, 'Die Fläche ist schon bepflanzt: Jeder Punkt ist eine Pflanze. Wähle die Mischungsform – danach kannst du einzelne Bereiche mit einer Baumart übermalen.'),
+        h('p', { class: 'muted' }, 'Die Fläche ist schon bepflanzt: Jeder Punkt ist eine Pflanze. Wähle die Mischungsform – danach kannst du einzelne Pflanzen oder ganze Bereiche mit einer anderen Baumart übermalen.'),
         h('p', { class: 'sheet-label' }, 'Mischungsform'),
         h('div', { class: 'art-chips', role: 'radiogroup', 'aria-label': 'Mischungsform' }, Object.entries(FORMEN).map(([k, f]) => h('button', { type: 'button', role: 'radio', class: `art-chip ${s.vert.form === k ? 'on' : ''}`, style: '--c:#2E7D32', 'aria-checked': String(s.vert.form === k),
           onclick: () => { if (s.vert.form === k) return; s.vert.form = k; s.vert.mal = {}; render(); } }, f.label))),
@@ -382,12 +410,16 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
         mapEl,
         h('p', { class: 'sheet-label' }, 'Übermalen'),
         h('div', { class: 'art-chips pinsel' }, pinselChip(null, 'Karte verschieben', '#2E7D32'), s.arten.map((x) => pinselChip(x.name, x.name, farbe(x.name))), pinselChip('__auto', 'Radierer (automatisch)', '#9E9E9E')),
-        h('p', { class: 'hint' }, pinsel ? `Tippe oder wische über die Karte, um Bereiche von etwa ${F.zelle} × ${F.zelle} m ${pinsel === '__auto' ? 'wieder automatisch zu verteilen' : `mit ${pinsel} zu bepflanzen`}. Zoomen geht mit zwei Fingern; zum Verschieben „Karte verschieben“ wählen.` : 'Wähle eine Baumart, um Bereiche in der Karte mit ihr zu bepflanzen.'),
+        h('div', { class: 'art-chips', role: 'radiogroup', 'aria-label': 'Pinselgröße' }, Object.entries(PINSEL).map(([k, [l]]) => h('button', { type: 'button', role: 'radio', class: `art-chip ${pinselGroesse === k ? 'on' : ''}`, style: '--c:#6D4C41', 'aria-checked': String(pinselGroesse === k),
+          onclick: () => { pinselGroesse = k; if (k === 'einzeln' && karte && karte.map.getZoom() < 19) karte.map.setZoom(19); render(); } }, l))),
+        h('p', { class: 'hint' }, pinsel
+          ? `Tippe oder wische über die Pflanzen, um sie ${pinsel === '__auto' ? 'wieder automatisch zu verteilen' : `zu ${pinsel} zu machen`}. Die Pflanzplätze bleiben stehen, nur die Baumart ändert sich.${pinselGroesse === 'einzeln' ? ' Für einzelne Pflanzen weit hineinzoomen (zwei Finger).' : ''} Zum Verschieben der Karte „Karte verschieben“ wählen.`
+          : 'Wähle eine Baumart und übermale damit einzelne Pflanzen oder ganze Bereiche.'),
         h('div', { class: 'btn-row' },
-          h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.vert.seed = (s.vert.seed || 1) + 1; render(); } }, 'Neu mischen'),
-          Object.keys(s.vert.mal).length ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.vert.mal = {}; render(); } }, 'Übermalung zurücksetzen') : null),
+          h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.vert.mal = {}; s.vert.seed = (s.vert.seed || 1) + 1; render(); } }, 'Neu mischen'),
+          h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.vert.mal = {}; render(); } }, 'Übermalung zurücksetzen')),
         summeHost,
-        verteilHinweise(b),
+        hinweisHost,
         h('details', { class: 'weitere-arten' }, h('summary', {}, 'Hinweise zu den Baumarten'), h('ul', { class: 'lrt-punkte' }, b.zeilen.map((z) => h('li', {}, h('strong', {}, `${z.name}: `), z.info.hinweis)))),
         nav(true)];
     } else {

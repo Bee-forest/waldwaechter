@@ -87,6 +87,35 @@ export async function queryPoint(latlng) {
   return out;
 }
 
+/**
+ * Nächstgelegener kartierter Standort, wenn am Punkt keine Standortskartierung vorliegt.
+ * Sucht in Ringen (50 m … 1,5 km) in 8 bzw. 16 Richtungen, Ring für Ring, und nimmt den ersten Treffer.
+ * @returns {Promise<{ standort: object, latlng: [number, number], abstand: number, richtung: string } | null>}
+ */
+export async function naechsterStandort(latlng, radien = [50, 100, 200, 350, 600, 1000, 1500]) {
+  const lat = latlng.lat ?? latlng[0], lng = latlng.lng ?? latlng[1];
+  const q = QUERIES.find((x) => x.key === 'standort');
+  const RICHTUNG = ['Norden', 'Nordosten', 'Osten', 'Südosten', 'Süden', 'Südwesten', 'Westen', 'Nordwesten'];
+  for (const r of radien) {
+    const n = r >= 350 ? 16 : 8;
+    const punkte = Array.from({ length: n }, (_, i) => {
+      const w = (i / n) * 2 * Math.PI;
+      return { w, ll: [lat + (r * Math.cos(w)) / 110540, lng + (r * Math.sin(w)) / (111320 * Math.cos((lat * Math.PI) / 180))] };
+    });
+    const treffer = await Promise.all(punkte.map(async (pt) => {
+      try {
+        const res = await fetch(gfiUrl(q.url, q.layer, pt.ll), { mode: 'cors' });
+        if (!res.ok) return null;
+        const f = parseFeatures(await res.text())[0];
+        return f && (String(f.Standortseinheiten || '').trim() || String(f.Standortsguppe || f.Standortsgruppe || '').trim()) ? { ...pt, f } : null;
+      } catch { return null; }
+    }));
+    const t = treffer.find(Boolean);
+    if (t) return { standort: t.f, latlng: t.ll, abstand: r, richtung: RICHTUNG[Math.round((t.w / (2 * Math.PI)) * 8) % 8] };
+  }
+  return null;
+}
+
 // ---------- Standort verständlich machen ----------
 // Schlüssel der Standortsformengruppe (forstliche Standortserkundung Thüringen):
 // [Feuchtebereich] Nährkraftstufe Feuchtestufe [C = carbonatisch], z. B. M2, WM1, R2C, NZ2

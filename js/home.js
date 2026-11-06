@@ -15,7 +15,7 @@ import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt, KORREKTUR_ARTEN, SCHICHTEN, korrAlter, pflanzungAm } from './map/bestand.js';
 import { empfehlung, bztName, GRUPPEN, BAUMARTEN_KURZ, eichenHinweis } from './bzt.js';
-import { queryPoint, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
+import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
   nsg: 'Naturschutz',
@@ -549,8 +549,22 @@ function geoInfoBlock(latlng, parcelId = null) {
     K.zust.setKurz(g.vorschau.zust);
     const sp = info.standort || {};
     const einheit = String(sp.Standortseinheiten || '').trim(), gruppe = String(sp.Standortsguppe || sp.Standortsgruppe || '').trim();
-    if (!einheit && !gruppe) { fill(B.bzt, h('p', { class: 'muted' }, 'Für diesen Punkt ist keine Standortskartierung hinterlegt – ohne Standortseinheit gibt das Tabellenwerk keine Empfehlung.')); K.bzt.setKurz('keine Standortskartierung'); return; }
-    empfehlung([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]], { einheit, gruppe }).then((r) => { fill(B.bzt, bztKarte(r)); K.bzt.setKurz(bztKurz(r)); })
+    const pt = [latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]];
+    if (!einheit && !gruppe) {
+      // Keine Kartierung am Punkt: nächstgelegenen kartierten Standort verwenden
+      fill(B.bzt, lade('Am Punkt ist keine Standortskartierung hinterlegt – suche den nächstgelegenen kartierten Standort …'));
+      K.bzt.setKurz('suche nächsten Standort …');
+      const n = await naechsterStandort(pt).catch(() => null);
+      if (!n) { fill(B.bzt, h('p', { class: 'muted' }, 'Für diesen Punkt und im Umkreis von 1,5 km ist keine Standortskartierung hinterlegt – ohne Standortseinheit gibt das Tabellenwerk keine Empfehlung.')); K.bzt.setKurz('keine Standortskartierung'); return; }
+      const ne = String(n.standort.Standortseinheiten || '').trim(), ng = String(n.standort.Standortsguppe || n.standort.Standortsgruppe || '').trim();
+      const st = explainStandort(n.standort);
+      const notiz = h('div', { class: 'lrt-hinweis brutzeit' }, h('strong', {}, 'Nächstgelegener kartierter Standort'),
+        h('p', {}, `Am angetippten Punkt ist keine Standortskartierung hinterlegt. Verwendet wird der nächste kartierte Standort, ca. ${n.abstand.toLocaleString('de-DE')} m in Richtung ${n.richtung}: ${ne || ng}${st?.desc ? ` (${st.desc})` : ''}. Klimabereich und Wuchseinheit gelten für den angetippten Punkt.`),
+        h('p', { class: 'muted' }, 'Ob der Standort vor Ort passt, im Zweifel mit dem Forstamt abstimmen.'));
+      return empfehlung(pt, { einheit: ne, gruppe: ng }).then((r) => { fill(B.bzt, notiz, bztKarte(r)); K.bzt.setKurz(`nächster Standort (${n.abstand.toLocaleString('de-DE')} m): ${bztKurz(r)}`); })
+        .catch(() => { fill(B.bzt, h('p', { class: 'muted' }, 'Die Baumartenempfehlung konnte nicht geladen werden.')); K.bzt.setKurz('nicht verfügbar'); });
+    }
+    empfehlung(pt, { einheit, gruppe }).then((r) => { fill(B.bzt, bztKarte(r)); K.bzt.setKurz(bztKurz(r)); })
       .catch(() => { fill(B.bzt, h('p', { class: 'muted' }, 'Die Baumartenempfehlung konnte nicht geladen werden.')); K.bzt.setKurz('nicht verfügbar'); });
   }).catch(() => {
     fill(B.standort, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Forstliche Angaben am Punkt', INFO_SOURCES.forst(latlng), 220));

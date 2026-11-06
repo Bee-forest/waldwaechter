@@ -165,6 +165,10 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
       x.standortheimisch ??= pp.arten.every((a) => baumart(a.name)?.heimisch) ? 'ja' : 'nein';
     }
     if (m.type === 'pflanzung' && !x.baumarten) x.baumarten = pflanzen(m, x).map((b) => ({ ...b, stueck: num(b.stueck) || '' }));
+    if (m.type === 'einzelschutz' && m.schutz) {
+      if (x.kunststofffrei == null && m.schutz.material === 'kunststofffrei') x.kunststofffrei = true;
+      x.kultur ??= 'ja';
+    }
     if (m.type === 'pflege' && !x.pflegeArt) x.pflegeArt = kategorie(m, x) || 'wertastung';
   }
   // Besitzgröße: Summe der eigenen Waldflurstücke

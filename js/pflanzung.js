@@ -549,14 +549,38 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     }));
     toast(`Pflanzung gebucht: ${b.stueck.toLocaleString('de-DE')} Pflanzen auf ${formatHa(b.ha)}`);
     umlauf?.stop();
-    const zaun = await dialog({ title: 'Wird auch ein Zaun benötigt?',
-      body: h('p', {}, 'Der Zaunverlauf kann direkt aus der Pflanzfläche übernommen werden. Länge, Material und Kosten rechnet die App dann aus.'),
-      actions: [{ label: 'Nein', value: false }, { label: 'Ja, Zaun planen', value: true, primary: true }] });
+    const wahl = await dialog({ title: 'Wildschutz für die Pflanzung?', body: await schutzVergleich(b),
+      actions: [{ label: 'Kein Wildschutz', value: null }, { label: 'Einzelschutz', value: 'einzel' }, { label: 'Zaun', value: 'zaun', primary: true }] });
     page.close();
-    if (!zaun) { onSaved?.([neuId]); return; }
-    const { openZaunPlanung } = await import('./zaun.js');
-    openZaunPlanung({ parcelId: s.parcelId, pts: s.ring, foerdern, quelle: 'Zaunverlauf aus der Pflanzfläche übernommen – Punkte lassen sich anpassen.',
-      onSaved: (zid) => onSaved?.([neuId, zid]), onAbbruch: () => onSaved?.([neuId]) });
+    if (wahl === 'zaun') {
+      const { openZaunPlanung } = await import('./zaun.js');
+      openZaunPlanung({ parcelId: s.parcelId, pts: s.ring, foerdern, quelle: 'Zaunverlauf aus der Pflanzfläche übernommen – Punkte lassen sich anpassen.',
+        onSaved: (zid) => onSaved?.([neuId, zid]), onAbbruch: () => onSaved?.([neuId]) });
+    } else if (wahl === 'einzel') {
+      const { openEinzelschutzPlanung } = await import('./einzelschutz.js');
+      openEinzelschutzPlanung({ pflanzung: store.get().measures.find((m) => m.id === neuId), foerdern,
+        onSaved: (eid) => onSaved?.([neuId, eid]), onAbbruch: () => onSaved?.([neuId]) });
+    } else onSaved?.([neuId]);
+  }
+
+  /** Grober Vergleich Zaun – Einzelschutz für diese Fläche (Material netto, Förderung nach der Richtlinie) */
+  async function schutzVergleich(b) {
+    const [{ materialListe }, { SAETZE }] = await Promise.all([import('./zaun.js'), import('./foerder-formular.js')]);
+    const ml = materialListe({ pts: s.ring, geschlossen: true, hoehe: 160 });
+    const zaunMat = ml.posten.reduce((a, x) => a + (x.preise?.length ? Math.min(...x.preise.map((q) => q.preis)) * x.menge : 0), 0);
+    const lfm = Math.round(ml.geo.laenge);
+    const es = b.zeilen.filter((z) => !['Gemeine Fichte', 'Gemeine Kiefer', 'Schwarzkiefer', 'Schwarzerle', 'Sandbirke', 'Aspe', 'Robinie', 'Blaufichte'].includes(z.name)).reduce((a, z) => a + z.stueck, 0) || b.stueck;
+    const proHa = b.ha ? Math.round(b.stueck / b.ha) : 0;
+    return h('div', { class: 'dialog-body' },
+      h('p', {}, 'Die Daten der Pflanzung werden übernommen – für den Zaun die Fläche als Zaunverlauf, für den Einzelschutz Baumarten und Stückzahlen.'),
+      h('table', { class: 'vergleich' },
+        h('tr', {}, h('th', {}, ''), h('th', {}, 'Zaun (Rehwild)'), h('th', {}, 'Einzelschutz')),
+        h('tr', {}, h('td', {}, 'Umfang'), h('td', {}, `${lfm.toLocaleString('de-DE')} lfm`), h('td', {}, `ca. ${es.toLocaleString('de-DE')} Stück`)),
+        h('tr', {}, h('td', {}, 'Material netto'), h('td', {}, `ca. ${euro(zaunMat)}`), h('td', {}, 'je nach Angebot')),
+        h('tr', {}, h('td', {}, 'Förderung'), h('td', {}, `${euro(SAETZE.GANW.zaun.reh * lfm)}`), h('td', {}, `${euro(SAETZE.GANW.es.klein * es)} (ab 1,20 m)`))),
+      h('p', { class: 'muted' }, proHa > 1500 ? `Bei ${proHa.toLocaleString('de-DE')} Pflanzen je ha ist ein Zaun meist günstiger. Einzelschutz lohnt sich eher für wenige, wertvolle Pflanzen (Eiche, Kirsche, Tanne) oder kleine Flächen.`
+        : `Bei ${proHa.toLocaleString('de-DE')} Pflanzen je ha kann Einzelschutz günstiger sein als ein Zaun – vergleiche die Angebote.`),
+      h('p', { class: 'muted' }, 'Förderung nach der Richtlinie (Teil A); im Landesprogramm sind die Sätze höher.'));
   }
 
   render();

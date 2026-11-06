@@ -933,3 +933,7 @@ label.check input[type=checkbox] { width: 22px; height: 22px; flex: none; margin
 .art-chips.pinsel .art-chip.on { box-shadow: 0 0 0 2px var(--c) inset; }
 .mat-kurz .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .erinnerung-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--primary) 12%, var(--surface)); }
+table.vergleich { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: .92rem; }
+table.vergleich th, table.vergleich td { text-align: left; padding: 6px 4px; border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent); vertical-align: top; }
+table.vergleich th { font-weight: 700; }
+.dialog-actions:has(> :nth-child(3)) { flex-wrap: wrap; }

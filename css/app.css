@@ -937,3 +937,8 @@ table.vergleich { width: 100%; border-collapse: collapse; margin: 8px 0; font-si
 table.vergleich th, table.vergleich td { text-align: left; padding: 6px 4px; border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent); vertical-align: top; }
 table.vergleich th { font-weight: 700; }
 .dialog-actions:has(> :nth-child(3)) { flex-wrap: wrap; }
+.karten-schalter { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,.25); margin: 8px !important; }
+.karten-schalter button { padding: 6px 10px; font-size: .85rem; }
+.verband-felder { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.verband-felder label { font-size: .8rem; }
+.zaun-summe .summe-feld { width: 9em; text-align: right; font-weight: 700; }

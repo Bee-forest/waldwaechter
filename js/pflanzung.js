@@ -86,7 +86,7 @@ export const artInfo = (name) => PFLANZ_ARTEN.find((a) => a.name === name) || ei
 const zahl = (v) => { if (typeof v === 'number') return Number.isFinite(v) ? v : null; const t = String(v ?? '').trim().replace(/\s|€/g, ''); const s = /,/.test(t) ? t.replace(/\./g, '').replace(',', '.') : t; const n = Number(s); return s !== '' && Number.isFinite(n) ? n : null; };
 const euro = (v) => `${Number(v || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 const dez = (v, d = 1) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
-const verbandText = (nHa) => `${dez(REIHE)} × ${dez(10000 / (nHa * REIHE), 2)} m`;
+const verbandText = (nHa, reihe = REIHE) => `${dez(reihe)} × ${dez(10000 / (nHa * reihe), 2)} m`;
 /** Alter einer Pflanze aus dem Sortiment („1+1“ → 2, „2/0“ → 2); unbekannt → 2 Jahre */
 export function sortimentAlter(sortiment) {
   const m = /(\d)\s*[+/]\s*(\d)/.exec(String(sortiment || ''));
@@ -125,6 +125,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   };
   s.vert ||= { form: 'einzeln', seed: 1, mal: {} };
   s.gassen.versatz ??= 0;
+  s.reihe ??= REIHE;
   let schritt = 0, letzterSchritt = -1, weitereOffen = false;
   const SCHRITTE = ['Pflanzfläche', 'Baumarten', 'Pflanzenzahl und Verband', 'Baumarten verteilen', 'Pflanzplan und Kosten'];
   const body = h('div', { class: 'pflanzung' });
@@ -143,14 +144,14 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   const nHaVon = (x) => { if (x.nHa == null) { const V = verbandVon(x.name); x.nHa = Math.round((V[0] + V[1]) / 2 / 100) * 100; } return x.nHa; };
   const verbandVon = (name) => VERBAND[artInfo(name)?.verband || 'elb'][s.art === 'voranbau' ? 'voranbau' : 'frei'];
   // Übermalte Pflanzen gehören zu festen Pflanzplätzen; ändern sich Fläche, Baumarten, Verband, Gassen oder Mischung, gilt die Übermalung nicht mehr
-  const basis = () => JSON.stringify([s.ring, s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed]);
+  const basis = () => JSON.stringify([s.ring, s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed, s.reihe]);
   function layout(mitPunkten = false) {
     if (s.gassen.winkel == null && s.ring.length >= 3) s.gassen.winkel = Math.round(hauptRichtung(s.ring));
     const b = basis();
     if (s.vert.basis && s.vert.basis !== b && Object.keys(s.vert.mal).length) { s.vert.mal = {}; toast('Übermalung zurückgesetzt, weil sich die Pflanzung geändert hat.'); }
     s.vert.basis = b;
     return pflanzLayout({ ring: s.ring, arten: s.arten.map((x) => ({ name: x.name, anteil: Number(x.anteil) || 0, nHa: nHaVon(x), gruppeHa: artInfo(x.name)?.gruppeHa || 0 })),
-      gassen: s.gassen, form: s.vert.form, seed: s.vert.seed, mal: s.vert.mal }, mitPunkten);
+      gassen: s.gassen, form: s.vert.form, seed: s.vert.seed, mal: s.vert.mal, reihe: s.reihe }, mitPunkten);
   }
 
   // ---------- Karte ----------
@@ -291,7 +292,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
       const flaecheHa = lay.gesamtLen ? (ha * (lay.lenEff[x.name] || 0)) / lay.gesamtLen : 0;
       const stueck = lay.stueck[x.name] || 0;
       const preis = zahl(x.preis);
-      return { ...x, info, V, flaecheHa, anteilEcht: ha ? flaecheHa / ha : 0, stueck, verband: verbandText(x.nHa), preis, kosten: preis != null ? preis * stueck : null };
+      return { ...x, info, V, flaecheHa, anteilEcht: ha ? flaecheHa / ha : 0, stueck, verband: verbandText(x.nHa, s.reihe), lenEff: lay.lenEff[x.name] || 0, basisLen: lay.basisLen[x.name] || 0, gemalt: stueck - (lay.basisStk[x.name] || 0), preis, kosten: preis != null ? preis * stueck : null };
     });
     s.grund = [...zeilen].sort((a, b) => b.flaecheHa - a.flaecheHa)[0]?.name || null;
     return { ha, nettoHa: lay.nettoHa, zeilen, lay, stueck: zeilen.reduce((a, z) => a + z.stueck, 0), kosten: zeilen.reduce((a, z) => a + (z.kosten || 0), 0) };
@@ -393,14 +394,37 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
             h('input', { type: 'range', min: 0, max: s.gassen.abstand - 0.5, step: 0.5, value: s.gassen.versatz || 0, 'aria-label': 'Lage der Rückegassen in Metern',
               oninput: (e) => { s.gassen.versatz = Number(e.target.value); e.target.previousSibling.textContent = `Gassen verschieben: ${dez(s.gassen.versatz)} m`; zeichneGassen(); }, onchange: () => render() }))) : null,
         h('p', { class: 'hint' }, `Pflanzfläche ${formatHa(b.ha)}, davon bepflanzt ${formatHa(b.nettoHa)} (${Math.round((b.nettoHa / Math.max(b.ha, 1e-9)) * 100)} %) – ohne Gassen und 1 m Abstand zum Rand. Jeder Punkt in der Karte ist eine Pflanze.`),
-        h('ul', { class: 'pflanz-liste' }, b.zeilen.map((z) => h('li', {},
-          h('div', { class: 'mat-kopf' }, h('strong', {}, h('span', { class: 'dot', style: `background:${z.info.farbe}` }), ` ${z.name}`), h('span', { class: 'mat-menge' }, `${z.stueck.toLocaleString('de-DE')} Stück`)),
-          h('label', {}, 'Pflanzen je Hektar', h('input', { type: 'number', min: 100, max: 12000, step: 100, value: z.nHa, onchange: (e) => { const x = s.arten.find((y) => y.name === z.name); x.nHa = Math.max(100, Number(e.target.value) || z.nHa); render(); } })),
-          h('small', { class: 'muted' }, `Rahmenpflanzverband ${s.art === 'voranbau' ? 'Voranbau' : 'Freifläche'}: ${z.V[0].toLocaleString('de-DE')}–${z.V[1].toLocaleString('de-DE')} Stück/ha${z.V[2] ? ` (${z.V[2]})` : ''}`),
-          h('small', {}, `Pflanzverband ${z.verband} (Reihenabstand × Abstand in der Reihe)`),
-          (z.nHa < z.V[0] || z.nHa > z.V[1]) ? h('small', { class: 'warn-line' }, 'Außerhalb des Rahmenpflanzverbands – für die Förderung mit dem Forstamt abstimmen.') : null))),
-        h('div', { class: 'zaun-summe' }, h('span', {}, 'Pflanzen gesamt'), h('strong', {}, `${b.stueck.toLocaleString('de-DE')} Stück`)),
-        h('p', { class: 'hint' }, 'Quelle der Pflanzenzahlen: Rahmenpflanzverbände, Anlage 3 der Thüringer Richtlinie zur Förderung forstwirtschaftlicher Maßnahmen 2025 (Pflanzen je Hektar Arbeitsfläche, Reihenabstand 2,5 m).'),
+        h('p', { class: 'hint' }, 'Gib je Baumart entweder die Stückzahl, die Pflanzen je Hektar oder den Abstand in der Reihe an – die anderen Werte rechnet die App aus.'),
+        h('label', {}, 'Reihenabstand (m) – gilt für alle Baumarten', h('input', { type: 'number', min: 1, max: 5, step: 0.1, value: s.reihe, inputmode: 'decimal',
+          onchange: (e) => { const v = zahl(e.target.value); s.reihe = v >= 1 && v <= 5 ? Math.round(v * 10) / 10 : REIHE; render(); } })),
+        h('ul', { class: 'pflanz-liste' }, b.zeilen.map((z) => {
+          const x = s.arten.find((y) => y.name === z.name);
+          const netto = (z.lenEff * s.reihe) / 10000; // bepflanzte Fläche dieser Baumart in ha
+          const setze = (nHa) => { if (nHa > 0 && Number.isFinite(nHa)) { x.nHa = Math.max(50, Math.min(20000, nHa)); render(); } };
+          const abstand = 10000 / (z.nHa * s.reihe);
+          return h('li', {},
+            h('div', { class: 'mat-kopf' }, h('strong', {}, h('span', { class: 'dot', style: `background:${z.info.farbe}` }), ` ${z.name}`), h('span', { class: 'mat-menge' }, `Verband ${z.verband}`)),
+            h('div', { class: 'verband-felder' },
+              h('label', {}, 'Stück gesamt', h('input', { type: 'number', min: 1, step: 1, value: z.stueck, onchange: (e) => { const n = Math.round(zahl(e.target.value)) - z.gemalt; if (n > 0 && z.basisLen > 0) setze((n * 10000) / (z.basisLen * s.reihe)); } })),
+              h('label', {}, 'je Hektar', h('input', { type: 'number', min: 50, max: 20000, step: 50, value: Math.round(z.nHa), onchange: (e) => setze(Math.round(zahl(e.target.value))) })),
+              h('label', {}, 'Abstand in der Reihe (m)', h('input', { type: 'number', min: 0.2, max: 10, step: 0.05, inputmode: 'decimal', value: Math.round(abstand * 100) / 100, onchange: (e) => { const d = zahl(e.target.value); if (d > 0) setze(10000 / (d * s.reihe)); } }))),
+            h('small', { class: 'muted' }, `${formatHa(netto)} bepflanzt · Rahmenpflanzverband ${s.art === 'voranbau' ? 'Voranbau' : 'Freifläche'}: ${z.V[0].toLocaleString('de-DE')}–${z.V[1].toLocaleString('de-DE')} Stück/ha${z.V[2] ? ` (${z.V[2]})` : ''}`),
+            (z.nHa < z.V[0] || z.nHa > z.V[1]) ? h('small', { class: 'warn-line' }, 'Außerhalb des Rahmenpflanzverbands – für die Förderung mit dem Forstamt abstimmen.') : null);
+        })),
+        h('div', { class: 'zaun-summe' }, h('span', {}, 'Pflanzen gesamt'),
+          h('input', { class: 'summe-feld', type: 'number', min: 1, step: 1, value: b.stueck, 'aria-label': 'Pflanzen gesamt',
+            onchange: (e) => {
+              // Gesamtzahl im Verhältnis der Baumarten verteilen (größte Reste), dann Pflanzen je ha je Baumart daraus
+              const ziel = Math.round(zahl(e.target.value));
+              if (!(ziel > 0) || !b.stueck) return;
+              const roh = b.zeilen.map((z) => (z.stueck / b.stueck) * ziel);
+              const ganz = roh.map(Math.floor);
+              let rest = ziel - ganz.reduce((a, v) => a + v, 0);
+              roh.map((v, i) => [v - ganz[i], i]).sort((p, q) => q[0] - p[0]).forEach(([, i]) => { if (rest > 0) { ganz[i]++; rest--; } });
+              b.zeilen.forEach((z, i) => { const x = s.arten.find((y) => y.name === z.name); if (z.basisLen > 0 && ganz[i] - z.gemalt > 0) x.nHa = ((ganz[i] - z.gemalt) * 10000) / (z.basisLen * s.reihe); });
+              render();
+            } })),
+        h('p', { class: 'hint' }, `Quelle der Rahmenpflanzverbände: Anlage 3 der Thüringer Richtlinie zur Förderung forstwirtschaftlicher Maßnahmen 2025 (Pflanzen je Hektar Arbeitsfläche, bezogen auf 2,5 m Reihenabstand).${s.reihe !== REIHE ? ` Bei ${dez(s.reihe)} m Reihenabstand ändert sich die Stückzahl je Hektar entsprechend.` : ''}`),
         nav(true)];
     } else if (schritt === 3) {
       const b = rechnen();
@@ -578,7 +602,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
       id: neuId, type: 'pflanzung', parcelId: s.parcelId, date: s.date ? new Date(s.date).getTime() : null, status: 'geplant', createdAt: Date.now(), note: s.note.trim(),
       details: { species: haupt?.name || '', count: String(b.stueck), area: dez(b.ha, 2), verband: b.zeilen.map((z) => `${z.name} ${z.verband}`).join('; ') },
       flaeche: { ring: [...s.ring], ha: b.ha },
-      pflanzplan: { art: s.art, gassen: { ...s.gassen }, netto: b.ha ? b.nettoHa / b.ha : 1, grund: s.grund, zonen: [],
+      pflanzplan: { art: s.art, reihe: s.reihe, gassen: { ...s.gassen }, netto: b.ha ? b.nettoHa / b.ha : 1, grund: s.grund, zonen: [],
         vert: { form: s.vert.form, seed: s.vert.seed, mal: { ...s.vert.mal } },
         vorgabe: s.arten.map((x) => ({ name: x.name, anteil: Number(x.anteil) || 0, nHa: x.nHa, gruppeHa: artInfo(x.name)?.gruppeHa || 0 })),
         arten: b.zeilen.map((z) => ({ name: z.name, code: z.info.code, anteil: Math.round(z.anteilEcht * 1000) / 10, flaecheHa: Math.round(z.flaecheHa * 10000) / 10000, nHa: z.nHa, stueck: z.stueck, verband: z.verband, sortiment: z.sortiment || '', wbsNr: z.wbsNr ?? null, preis: z.preis, kosten: z.kosten })),

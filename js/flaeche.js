@@ -1,7 +1,7 @@
 // Fläche einer Maßnahme: ganzes Flurstück oder selbst eingezeichnete Teilfläche.
 import { h, fill } from './ui.js';
 import { store } from './store.js';
-import { createBaseMap } from './map/basemap.js';
+import { createBaseMap, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, polysOf, inPolys, centroid } from './geo.js';
 import { amtlicheFlaecheHa } from './map/thueringen.js';
 import { umlaufSteuerung, vereinfachen } from './umlauf.js';
@@ -15,6 +15,26 @@ export function miniKarte(el, parcel, { zoom = 17 } = {}) {
   const polys = parcel ? polysOf(parcel) : [];
   const base = createBaseMap(el, { center: parcel ? centroid(parcel.ring) : [50.9, 11.0], zoom, basemap: settings.basemap, alkis: false });
   const map = base.map;
+  // Hintergrund OSM / Luftbild umschaltbar (Wahl wird gemerkt)
+  const Schalter = L.Control.extend({
+    onAdd() {
+      const el = L.DomUtil.create('div', 'segmented compact karten-schalter');
+      el.setAttribute('role', 'radiogroup'); el.setAttribute('aria-label', 'Hintergrundkarte');
+      const malen = () => {
+        el.replaceChildren(...Object.entries(BASEMAP_LABELS).map(([k, l]) => {
+          const b = L.DomUtil.create('button', '');
+          b.type = 'button'; b.textContent = l; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(base.basemap === k));
+          b.onclick = (e) => { e.preventDefault(); base.setBasemap(k); store.update((x) => { x.settings.basemap = k; }); malen(); };
+          return b;
+        }));
+      };
+      malen();
+      L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);
+      ['pointerdown', 'touchstart', 'mousedown'].forEach((t) => el.addEventListener(t, (e) => e.stopPropagation()));
+      return el;
+    },
+  });
+  new Schalter({ position: 'topright' }).addTo(map);
   const parcelLyr = parcel ? L.polygon(polys, STIL_FLURSTUECK).addTo(map) : null;
   const hl = L.layerGroup().addTo(map);
   const fit = (lyr) => setTimeout(() => { map.invalidateSize(); const b = (lyr || parcelLyr)?.getBounds(); if (b?.isValid()) map.fitBounds(b, { padding: [20, 20], maxZoom: 18 }); }, 60);

@@ -56,12 +56,12 @@ export function gassenLinien(ring, g) {
   return out;
 }
 /** Pflanzreihen: Lage (y) und Abschnitte innerhalb der Fläche, ohne Gassen */
-function reihen(R, g) {
+function reihen(R, g, RA = REIHE) {
   const ys = [];
   if (g?.abstand) {
-    const m = gassenMitten(R, g), halb = (g.breite || 4) / 2 + REIHE / 2;
-    for (let k = 0; k + 1 < m.length; k++) for (let y = m[k] + halb; y <= m[k + 1] - halb + 1e-6; y += REIHE) if (y > R.minY && y < R.maxY) ys.push(y);
-  } else for (let y = R.minY + REIHE / 2; y < R.maxY; y += REIHE) ys.push(y);
+    const m = gassenMitten(R, g), halb = (g.breite || 4) / 2 + RA / 2;
+    for (let k = 0; k + 1 < m.length; k++) for (let y = m[k] + halb; y <= m[k + 1] - halb + 1e-6; y += RA) if (y > R.minY && y < R.maxY) ys.push(y);
+  } else for (let y = R.minY + RA / 2; y < R.maxY; y += RA) ys.push(y);
   return ys.map((y, i) => ({ y, i, seg: schnitt(R.P, y).map(([a, b]) => [a + RAND, b - RAND]).filter(([a, b]) => b - a >= 0.5) }));
 }
 function rng(seed) {
@@ -77,9 +77,10 @@ const memo = { key: '' };
  * @param {boolean} mitPunkten  Pflanzplätze erzeugen (für Karte und PDF)
  */
 export function pflanzLayout(p, mitPunkten = false) {
-  const key = JSON.stringify([p.ring, p.arten.map((a) => [a.name, a.anteil, a.nHa, a.gruppeHa]), p.gassen, p.form, p.seed, p.mal]);
+  const key = JSON.stringify([p.ring, p.arten.map((a) => [a.name, a.anteil, a.nHa, a.gruppeHa]), p.gassen, p.form, p.seed, p.mal, p.reihe]);
   const M = memo;
   if (M.key === key) return M.wert;
+  const RA = Number(p.reihe) > 0 ? Number(p.reihe) : REIHE;
   const form = FORMEN[p.form] ? p.form : 'einzeln';
   const F = FORMEN[form];
   const R = rahmen(p.ring, p.gassen?.winkel || 0);
@@ -93,7 +94,7 @@ export function pflanzLayout(p, mitPunkten = false) {
   // Reihenabschnitte an den Zellgrenzen teilen
   const pieces = [];
   const c = F.zelle;
-  for (const row of reihen(R, p.gassen)) {
+  for (const row of reihen(R, p.gassen, RA)) {
     for (const [a, b] of row.seg) {
       let x = a;
       while (x < b - 1e-6) {
@@ -121,7 +122,7 @@ export function pflanzLayout(p, mitPunkten = false) {
   else {
     // Zellen zu Gruppen in Mindestgröße der Baumart wachsen lassen (z. B. Eiche ab 0,3 ha)
     const offen = new Set(gruppen.keys());
-    const gruppeLen = Object.fromEntries(p.arten.map((a) => [a.name, ((a.gruppeHa || 0) * 10000) / REIHE]));
+    const gruppeLen = Object.fromEntries(p.arten.map((a) => [a.name, ((a.gruppeHa || 0) * 10000) / RA]));
     for (const k of mischen([...gruppen.keys()], r)) {
       if (!offen.has(k)) continue;
       const n = defizit(); if (!n) break;
@@ -139,8 +140,9 @@ export function pflanzLayout(p, mitPunkten = false) {
   // Längen und Stückzahlen
   const len = Object.fromEntries(namen.map((n) => [n, 0])); let Lmix = 0;
   for (const pc of pieces) { if (pc.art === 'mix') Lmix += pc.len; else if (pc.art) len[pc.art] += pc.len; }
-  const reinStk = Object.fromEntries(namen.map((n) => [n, Math.round((len[n] * REIHE * nHa[n]) / 10000)]));
-  const mixStk = Object.fromEntries(namen.map((n) => [n, Math.round((anteil[n] * Lmix * REIHE * nHa[n]) / 10000)]));
+  const reinStk = Object.fromEntries(namen.map((n) => [n, Math.round((len[n] * RA * nHa[n]) / 10000)]));
+  // Gesamtzahl je Baumart einmal runden, damit eine eingegebene Stückzahl genau herauskommt
+  const mixStk = Object.fromEntries(namen.map((n) => [n, Math.max(0, Math.round(((len[n] + anteil[n] * Lmix) * RA * nHa[n]) / 10000) - reinStk[n])]));
   const stueck = Object.fromEntries(namen.map((n) => [n, reinStk[n] + mixStk[n]]));
   const lenEff = Object.fromEntries(namen.map((n) => [n, len[n] + anteil[n] * Lmix]));
   const gesamtLen = pieces.reduce((a, pc) => a + pc.len, 0);
@@ -160,14 +162,18 @@ export function pflanzLayout(p, mitPunkten = false) {
   const mixListe = pieces.filter((pc) => pc.art === 'mix');
   const folge = mischen(namen.flatMap((n) => Array(mixStk[n]).fill(n)), r);
   verteile(mixListe, folge.length, (k) => folge[k]);
+  // Stand vor dem Übermalen: Grundlänge und Stückzahl je Baumart (für die Umrechnung Stückzahl ↔ Pflanzen je ha)
+  const basisLen = { ...lenEff };
+  const basisStk = { ...stueck };
   // Einzeln übermalte Pflanzen
   for (const q of punkte) { const m = mal[q[4]]; if (m && namen.includes(m)) q[2] = m; }
   for (const n of namen) { stueck[n] = 0; lenEff[n] = 0; }
-  for (const q of punkte) { stueck[q[2]]++; lenEff[q[2]] += q[3]; }
+  // Fläche je Pflanze nach dem Verband ihrer Baumart (nicht nach dem Abstand in der gemischten Reihe)
+  for (const q of punkte) { stueck[q[2]]++; lenEff[q[2]] += 10000 / (nHa[q[2]] * RA); }
   // Raster für die Suche beim Malen (2-m-Zellen)
   const index = new Map();
   punkte.forEach((q, i) => { const k = `${Math.floor(q[0] / 2)},${Math.floor(q[1] / 2)}`; (index.get(k) || index.set(k, []).get(k)).push(i); });
-  const wert = { R, form, pieces, stueck, lenEff, gesamtLen: punkte.reduce((a, q) => a + q[3], 0) || gesamtLen, Lmix, ha: areaHa(p.ring), nettoHa: (gesamtLen * REIHE) / 10000, punkte, index };
+  const wert = { R, form, pieces, stueck, lenEff, gesamtLen: namen.reduce((a, n) => a + lenEff[n], 0) || gesamtLen, Lmix, ha: areaHa(p.ring), nettoHa: (gesamtLen * RA) / 10000, punkte, index, reihe: RA, basisLen, basisStk };
   M.key = key; M.wert = wert;
   return wert;
 }
@@ -196,7 +202,7 @@ export function streifen(lay, minLaenge = 0) {
     if (cur && cur.y === y && cur.art === art && x1 - cur.x2 < 0.05) { cur.x2 = x2; continue; }
     cur = { y, x1, x2, art }; out.push(cur);
   }
-  return out.filter((st) => st.x2 - st.x1 >= minLaenge).map((st) => ({ art: st.art, ring: [[st.x1, st.y - REIHE / 2], [st.x2, st.y - REIHE / 2], [st.x2, st.y + REIHE / 2], [st.x1, st.y + REIHE / 2]].map(lay.R.toLL) }));
+  return out.filter((st) => st.x2 - st.x1 >= minLaenge).map((st) => ({ art: st.art, ring: [[st.x1, st.y - lay.reihe / 2], [st.x2, st.y - lay.reihe / 2], [st.x2, st.y + lay.reihe / 2], [st.x1, st.y + lay.reihe / 2]].map(lay.R.toLL) }));
 }
 /** Größe der zusammenhängenden Flächen je Baumart (m²) – für die Hinweise zur Gruppengröße */
 export function gruppenGroessen(lay) {
@@ -207,7 +213,7 @@ export function gruppenGroessen(lay) {
     if (gesehen.has(k)) continue;
     let flaeche = 0; const q = [k]; gesehen.add(k);
     while (q.length) {
-      const a = zelle.get(q.pop()); flaeche += a.len * REIHE;
+      const a = zelle.get(q.pop()); flaeche += a.len * lay.reihe;
       for (const [x, y] of [[a.ix + 1, a.iy], [a.ix - 1, a.iy], [a.ix, a.iy + 1], [a.ix, a.iy - 1]]) { const nk = `${x},${y}`; const nz = zelle.get(nk); if (nz && nz.art === z.art && !gesehen.has(nk)) { gesehen.add(nk); q.push(nk); } }
     }
     (out[z.art] ||= []).push(flaeche);
@@ -219,5 +225,5 @@ export function gruppenGroessen(lay) {
 export function gespeichertesLayout(m) {
   const pp = m?.pflanzplan;
   if (!pp?.vert || !pp.vorgabe?.length || !m.flaeche?.ring?.length) return null;
-  return pflanzLayout({ ring: m.flaeche.ring, arten: pp.vorgabe, gassen: pp.gassen, form: pp.vert.form, seed: pp.vert.seed, mal: pp.vert.mal });
+  return pflanzLayout({ ring: m.flaeche.ring, arten: pp.vorgabe, gassen: pp.gassen, form: pp.vert.form, seed: pp.vert.seed, mal: pp.vert.mal, reihe: pp.reihe });
 }

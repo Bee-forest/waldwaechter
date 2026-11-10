@@ -9,6 +9,7 @@ import { areaHa, formatHa, centroid, pointInPolygon } from './geo.js';
 import { miniKarte } from './flaeche.js';
 import { umlaufSteuerung, vereinfachen } from './umlauf.js';
 import { Pdf, herunterladen } from './pdf.js';
+import { kartenBild, KARTEN_QUELLE } from './kartenbild.js';
 import { pflanzLayout, gassenLinien, rahmen, FORMEN, punkteNahe, streifen, gruppenGroessen } from './pflanzlayout.js';
 import { angebote, angebot, sortimentText, angebotText, eigenerPreis, eigenenPreisMerken, vorgabe as preisVorgabe, eigeneBaumarten, eigeneBaumartMerken, WBS_QUELLE } from './pflanzpreise.js';
 
@@ -546,7 +547,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   }
 
   // ---------- Pflanzplanungskarte (PDF) ----------
-  function pdfPlan(b) {
+  async function pdfPlan(b) {
     const doc = new Pdf();
     const L0 = 50, R = 545;
     let y = 50;
@@ -563,8 +564,18 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     const ox = L0 + (BB - (maxX - minX) * sk) / 2, oy = y + (BH - (maxY - minY) * sk) / 2;
     const tr = (ll) => { const [a, c] = xy(ll); return [ox + (a - minX) * sk, oy + (maxY - c) * sk]; };
     const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-    doc.rechteck(L0, y, BB, BH, { stroke: [170, 180, 170], fill: [248, 250, 246] });
-    doc.polygon([s.ring.map(tr)], { fill: [236, 242, 232], stroke: [46, 125, 50], w: 1.5 });
+    // Hintergrund wie in der Karte (OSM oder Luftbild)
+    const basemap = store.get().settings?.basemap === 'dop' ? 'dop' : 'osm';
+    const { ll: zuLL } = lokal(s.ring);
+    const ecke = (u, v) => zuLL([(u - ox) / sk + minX, maxY - (v - oy) / sk]);
+    const [nord, west] = ecke(L0, y), [sued, ost] = ecke(L0 + BB, y + BH);
+    toast('Hintergrundkarte wird geladen …');
+    const hg = await kartenBild({ nord, sued, west, ost, basemap }).catch(() => null);
+    doc.rechteck(L0, y, BB, BH, { fill: [248, 250, 246] });
+    if (hg) doc.bild(L0, y, BB, BH, hg);
+    doc.rechteck(L0, y, BB, BH, { stroke: [170, 180, 170] });
+    doc.polygon([s.ring.map(tr)], hg ? { stroke: [255, 255, 255], w: 3 } : { fill: [236, 242, 232], stroke: [46, 125, 50], w: 1.5 });
+    if (hg) doc.polygon([s.ring.map(tr)], { stroke: [46, 125, 50], w: 1.5 });
     const lay = layout(true);
     if (lay.punkte.length <= 20000) {
       const d = Math.max(0.7, Math.min(3, sk * 1.2));
@@ -574,7 +585,9 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     doc.linie(R - 20, y + 40, R - 20, y + 16, { w: 1.4, farbe: [40, 50, 40] }); doc.text(R - 23, y + 12, 'N', { bold: true, size: 9 });
     const meter = [10, 20, 50, 100, 200, 500].find((m) => m * sk >= 50) || 500;
     doc.linie(L0 + 14, y + BH - 14, L0 + 14 + meter * sk, y + BH - 14, { w: 2, farbe: [40, 50, 40] }); doc.text(L0 + 14, y + BH - 20, `${meter} m`, { size: 8 });
-    y += BH + 16;
+    y += BH + 10;
+    doc.text(L0, y, hg ? `Hintergrund: ${KARTEN_QUELLE[basemap]}` : 'Ohne Hintergrund: Die Karte konnte nicht geladen werden (keine Verbindung?).', { size: 7, farbe: [110, 120, 110] });
+    y += 14;
     // Tabelle
     const sp = [L0, L0 + 118, L0 + 160, L0 + 212, L0 + 262, L0 + 330, L0 + 420];
     ['Baumart', 'Anteil', 'Fläche', 'Stück', 'Verband', 'Sortiment', 'Kosten netto'].forEach((t, i) => doc.text(sp[i], y, t, { bold: true, size: 8.5 }));

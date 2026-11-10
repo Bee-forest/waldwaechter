@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v2.36.0';
+const VERSION = 'v2.37.0';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -20,7 +20,7 @@ const SHELL_FILES = [
   './js/app.js', './js/ui.js', './js/store.js', './js/geo.js', './js/mascot.js',
   './js/home.js', './js/profile.js', './js/measures.js', './js/placeholders.js',
   './js/map/basemap.js', './js/map/thueringen.js', './js/data/source.js', './js/data/demo-data.js',
-  './js/thinning/wizard.js', './js/thinning/plan.js', './js/thinning/wald.js', './js/thinning/gps.js', './js/thinning/feedback.js', './js/thinning/methode.js', './js/thinning/ertragstafeln.js', './js/map/geoinfo.js', './js/map/bestand.js', './js/map/besonderheiten.js', './js/map/baumartenkarte.js', './js/map/lrt.js', './js/schutzgebiete.js', './js/vertraeglichkeit.js', './js/flaeche.js', './js/historie.js', './js/polter.js', './js/zaun.js', './js/pflanzung.js', './js/umlauf.js', './js/foerderung.js', './js/foerder-formular.js', './js/bzt.js', './js/formfill.js', './js/pdf.js', './js/pflanzlayout.js', './js/pflanzpreise.js', './js/erinnerung.js', './js/einzelschutz.js',
+  './js/thinning/wizard.js', './js/thinning/plan.js', './js/thinning/wald.js', './js/thinning/gps.js', './js/thinning/feedback.js', './js/thinning/methode.js', './js/thinning/ertragstafeln.js', './js/map/geoinfo.js', './js/map/bestand.js', './js/map/besonderheiten.js', './js/map/baumartenkarte.js', './js/map/lrt.js', './js/schutzgebiete.js', './js/vertraeglichkeit.js', './js/flaeche.js', './js/historie.js', './js/polter.js', './js/zaun.js', './js/pflanzung.js', './js/umlauf.js', './js/foerderung.js', './js/foerder-formular.js', './js/bzt.js', './js/formfill.js', './js/pdf.js', './js/pflanzlayout.js', './js/pflanzpreise.js', './js/erinnerung.js', './js/einzelschutz.js', './js/kartenbild.js',
 ];
 
 const TILE_HOSTS = ['tile.openstreetmap.org', 'sgx.geodatenzentrum.de', 'basemaps.cartocdn.com'];

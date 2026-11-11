@@ -733,11 +733,22 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     const K = await pdfKarte(doc, { x: L0, y, w: R - L0, h: BH, ringe: alle(), basemap });
     alle().forEach((r) => { doc.polygon([r.map(K.tr)], K.hg ? { stroke: [255, 255, 255], w: 3 } : { fill: [236, 242, 232], stroke: [46, 125, 50], w: 1.5 }); if (K.hg) doc.polygon([r.map(K.tr)], { stroke: [46, 125, 50], w: 1.5 }); });
     const lay = layout(true);
+    // Pflanzplätze so klein und durchscheinend, dass das Luftbild darunter sichtbar bleibt
+    if (K.hg) doc.transparenz(0.75);
     if (lay.punkte.length <= 20000) {
-      const d = s.vert.form === 'frei' ? Math.max(4, Math.min(8, K.sk * 2)) : Math.max(0.7, Math.min(3, K.sk * 1.2));
-      for (const [px, py, art] of lay.punkte) { const [u, v] = K.tr(lay.R.toLL([px, py])); doc.rechteck(u - d / 2, v - d / 2, d, d, { fill: rgb(farbe(art)) }); }
-    } else for (const st of streifen(lay)) doc.polygon([st.ring.map(K.tr)], { fill: rgb(farbe(st.art)), stroke: null });
+      for (const [px, py, art, dReihe] of lay.punkte) {
+        const d = s.vert.form === 'frei' ? Math.max(4, Math.min(8, K.sk * 2)) : Math.max(0.5, Math.min(2.4, 0.45 * Math.min(dReihe || 1, s.reihe) * K.sk));
+        const [u, v] = K.tr(lay.R.toLL([px, py])); doc.rechteck(u - d / 2, v - d / 2, d, d, { fill: rgb(farbe(art)) });
+      }
+    } else {
+      // sehr viele Pflanzen: Reihen als schmale Streifen statt Fläche, damit Lücken bleiben
+      if (K.hg) doc.transparenz(0.55);
+      for (const st of streifen(lay)) doc.polygon([st.ring.map(K.tr)], { fill: rgb(farbe(st.art)), stroke: null });
+    }
+    doc.transparenz(1);
+    if (K.hg) doc.transparenz(0.6);
     gassenLinien(alle(), s.gassen).forEach(({ linie }) => linienZeichnen(doc, K.tr, linie, { w: Math.max(1, s.gassen.breite * K.sk), farbe: [205, 180, 150] }));
+    doc.transparenz(1);
     K.nordpfeil(); K.massstab();
     y += BH + 9;
     doc.text(L0, y, K.hg ? `Hintergrund: ${KARTEN_QUELLE[basemap]}` : 'Ohne Hintergrund: Die Karte konnte nicht geladen werden (keine Verbindung?).', { size: 7, farbe: [110, 120, 110] });
@@ -747,7 +758,9 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     const flRinge = p ? polysOf(p).map((poly) => poly[0]) : [];
     const U = await pdfKarte(doc, { x: L0, y, w: UW, h: UH, ringe: [...flRinge, ...alle()], rand: flRinge.length ? 14 : 60, basemap });
     flRinge.forEach((r) => { doc.polygon([r.map(U.tr)], { stroke: [255, 255, 255], w: 3.2 }); doc.polygon([r.map(U.tr)], { stroke: [230, 160, 0], w: 1.8 }); });
-    alle().forEach((r) => doc.polygon([r.map(U.tr)], { fill: [46, 125, 50], stroke: [255, 255, 255], w: 1 }));
+    if (U.hg) doc.transparenz(0.55, 1);
+    alle().forEach((r) => doc.polygon([r.map(U.tr)], { fill: [46, 125, 50], stroke: [255, 255, 255], w: 1.2 }));
+    doc.transparenz(1);
     U.nordpfeil(); U.massstab();
     const tx = L0 + UW + 16;
     let ty = y + 12;

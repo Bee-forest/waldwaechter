@@ -20,7 +20,7 @@ function ladeBild(url, ms = 10000) {
  * @param {{ nord, sued, west, ost, basemap: 'osm'|'dop', breitePx?: number }} o
  * @returns {Promise<{ jpeg: Uint8Array, w: number, h: number } | null>}  null, wenn keine Kachel geladen werden konnte
  */
-export async function kartenBild({ nord, sued, west, ost, basemap = 'osm', breitePx = 1400 }) {
+export async function kartenBild({ nord, sued, west, ost, basemap = 'osm', breitePx = 1400, beschriftung = false }) {
   const maxZ = basemap === 'osm' ? 19 : 20;
   let z = Math.ceil(Math.log2(breitePx / (((ost - west) / 360) * 256)));
   z = Math.max(10, Math.min(maxZ, z));
@@ -38,7 +38,8 @@ export async function kartenBild({ nord, sued, west, ost, basemap = 'osm', breit
   }
   let geladen = 0;
   // Ebenen nacheinander (Luftbild, dann Beschriftung), Kacheln je Ebene parallel
-  const ebenen = tileUrls(basemap, z, 0, 0, { alkis: false }).length;
+  // Luftbild ohne Beschriftung (Ortsnamen) – nur die unterste Ebene
+  const ebenen = beschriftung ? tileUrls(basemap, z, 0, 0, { alkis: false }).length : 1;
   for (let e = 0; e < ebenen; e++) {
     const bilder = await Promise.all(kacheln.map(([tx, ty]) => ladeBild(tileUrls(basemap, z, tx, ty, { alkis: false })[e])));
     bilder.forEach((img, i) => { if (img) { ctx.drawImage(img, kacheln[i][0] * 256 - x0, kacheln[i][1] * 256 - y0, 256, 256); if (e === 0) geladen++; } });
@@ -50,4 +51,4 @@ export async function kartenBild({ nord, sued, west, ost, basemap = 'osm', breit
     return { jpeg: new Uint8Array(await blob.arrayBuffer()), w, h };
   } catch { return null; } // Leinwand durch fremde Kacheln gesperrt
 }
-export const KARTEN_QUELLE = { osm: '© OpenStreetMap-Mitwirkende', dop: 'Luftbild © GDI-Th, dl-de/by-2-0; Beschriftung © CARTO, © OpenStreetMap-Mitwirkende' };
+export const KARTEN_QUELLE = { osm: '© OpenStreetMap-Mitwirkende', dop: 'Digitales Orthophoto (Luftbild) © GDI-Th, Datenlizenz Deutschland – Namensnennung 2.0 (dl-de/by-2-0)' };

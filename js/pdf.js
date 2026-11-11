@@ -46,6 +46,14 @@ export class Pdf {
     const p = ringe.map((r) => r.map(([x, y], i) => `${n(x)} ${n(this.H - y)} ${i ? 'l' : 'm'}`).join(' ') + ' h').join(' ');
     this.ops.push(`${n(w)} w [] 0 d ${p} ${fill && stroke ? 'B*' : fill ? 'f*' : 'S'}`);
   }
+  /** Transparenz für die folgenden Zeichnungen (1 = deckend); mit transparenz(1) zurücksetzen */
+  transparenz(fuellung = 1, linie = fuellung) {
+    const key = `${n(fuellung)}/${n(linie)}`;
+    this.zustaende ||= [];
+    let k = this.zustaende.indexOf(key);
+    if (k < 0) k = this.zustaende.push(key) - 1;
+    this.ops.push(`/GS${k + 1} gs`);
+  }
   /** JPEG-Bild einfügen: bild = { jpeg: Uint8Array, w, h } (Pixel); x, y, b, h in Punkten (y nach unten) */
   bild(x, y, b, h, bild) {
     const k = this.bilder.push(bild);
@@ -62,13 +70,15 @@ export class Pdf {
       for (let i = 0; i < b.jpeg.length; i += 8192) bin += String.fromCharCode.apply(null, b.jpeg.subarray(i, i + 8192));
       return add(`<< /Type /XObject /Subtype /Image /Width ${b.w} /Height ${b.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${b.jpeg.length} >>\nstream\n${bin}\nendstream`);
     });
+    const gs = (this.zustaende || []).map((key, i) => { const [ca, CA] = key.split('/'); return `/GS${i + 1} << /Type /ExtGState /ca ${ca} /CA ${CA} >>`; });
+    const extg = gs.length ? ` /ExtGState << ${gs.join(' ')} >>` : '';
     const xobj = bildIds.length ? ` /XObject << ${bildIds.map((id, i) => `/Im${i + 1} ${id} 0 R`).join(' ')} >>` : '';
     const pagesId = objs.length + 1; objs.push(null);
     const kids = [];
     for (const ops of this.seiten) {
       const s = ops.join('\n');
       const c = add(`<< /Length ${s.length} >>\nstream\n${s}\nendstream`);
-      kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${n(this.B)} ${n(this.H)}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xobj} >> /Contents ${c} 0 R >>`));
+      kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${n(this.B)} ${n(this.H)}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xobj}${extg} >> /Contents ${c} 0 R >>`));
     }
     objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;
     const cat = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);

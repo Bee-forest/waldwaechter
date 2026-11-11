@@ -118,7 +118,7 @@ export function flaecheVon(m, parcel) {
       label: t.label,
     };
   }
-  if (m.flaeche?.ring?.length) return { polys: [[m.flaeche.ring]], ganz: false, art: 'Eingezeichnete Teilfläche', ha: m.flaeche.ha ?? areaHa(m.flaeche.ring) };
+  if (m.flaeche?.ring?.length) return { polys: (m.flaeche.ringe?.length ? m.flaeche.ringe : [m.flaeche.ring]).map((r) => [r]), ganz: false, art: 'Eingezeichnete Teilfläche', ha: m.flaeche.ha ?? areaHa(m.flaeche.ring) };
   if (parcel) return { polys: polysOf(parcel), ganz: true, art: 'Ganzes Flurstück', ha: amtlicheFlaecheHa(parcel) };
   return null;
 }

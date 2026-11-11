@@ -77,7 +77,7 @@ export function createBaumartenLayer({ minZoom = 13 } = {}) {
     {
       const pp = m.pflanzplan || {};
       const pf = pflanzungAm(centroid(m.flaeche.ring));
-      const teile = [{ ring: m.flaeche.ring, name: pp.grund || pf?.text }, ...(pp.zonen || [])];
+      const teile = [...(m.flaeche.ringe?.length ? m.flaeche.ringe : [m.flaeche.ring]).map((ring) => ({ ring, name: pp.grund || pf?.text })), ...(pp.zonen || [])];
       const tip = `<b>Eigene Pflanzung ${new Date(pflanzZeit(m)).getFullYear()}</b> · ${(pf?.arten || []).map((a) => `${a.name} ${Math.round(a.anteil || 0)} %`).join(', ')}${pf?.alter != null ? ` · ca. ${pf.alter} J.` : ''}`;
       for (const t of teile) {
         const poly = L.polygon(t.ring, { color: '#1B5E20', weight: 1.6, dashArray: '4 3', fillColor: farbeVon(`${gruppeFarbe(t.name)} 1-40 Jahre`), fillOpacity: 0.7, interactive: true, bubblingMouseEvents: true });

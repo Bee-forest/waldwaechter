@@ -95,7 +95,7 @@ export function openEinzelschutzPlanung({ pflanzung, foerdern = false, onSaved, 
     store.update((st) => st.measures.push({
       id, type: 'einzelschutz', parcelId: pflanzung.parcelId, date: s.date ? new Date(s.date).getTime() : null, status: 'geplant', createdAt: Date.now(), note: s.note.trim(),
       details: { art: s.art, species: geschuetzt.map((a) => a.name).join(', '), count: String(b.stueck), hoehe: SCHUTZ_HOEHEN.find(([, cm]) => cm === s.hoehe)[0], stab: s.stab, preis: s.preis != null ? String(s.preis).replace('.', ',') : '', material: s.material },
-      flaeche: pflanzung.flaeche ? { ring: [...pflanzung.flaeche.ring], ha: pflanzung.flaeche.ha } : undefined,
+      flaeche: pflanzung.flaeche ? JSON.parse(JSON.stringify(pflanzung.flaeche)) : undefined,
       schutz: { pflanzungId: pflanzung.id, material: s.material, hoeheCm: s.hoehe, arten: geschuetzt.map((a) => ({ name: a.name, stueck: a.stueck })) },
       kosten: b.kosten != null ? Math.round(b.kosten * 100) / 100 : undefined,
     }));

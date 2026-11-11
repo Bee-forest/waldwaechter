@@ -15,20 +15,25 @@ export const FORMEN = {
 };
 const mod = (a, n) => ((a % n) + n) % n;
 
-/** Lokales, um die Gassenrichtung gedrehtes Koordinatensystem in Metern */
-export function rahmen(ring, winkel = 0) {
+/** Eine Fläche (Ring) oder mehrere Einzelflächen (Liste von Ringen) → immer Liste von Ringen */
+export const ringeVon = (r) => (!r?.length ? [] : Array.isArray(r[0]?.[0]) ? r : [r]);
+/** Ringe einer gespeicherten Fläche (ältere Pflanzungen haben nur „ring“) */
+export const flaechenRinge = (fl) => (fl?.ringe?.length ? fl.ringe : fl?.ring?.length ? [fl.ring] : []);
+/** Lokales, um die Gassenrichtung gedrehtes Koordinatensystem in Metern (für eine oder mehrere Flächen) */
+export function rahmen(ringOderRinge, winkel = 0) {
+  const ringe = ringeVon(ringOderRinge), ring = ringe.flat();
   const lat0 = ring.reduce((a, p) => a + p[0], 0) / ring.length, lon0 = ring.reduce((a, p) => a + p[1], 0) / ring.length;
   const kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110540;
   const t = (-winkel * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);
   const toXY = ([la, lo]) => { const x = (lo - lon0) * kx, y = (la - lat0) * ky; return [x * c - y * s, x * s + y * c]; };
   const toLL = ([x, y]) => { const a = x * c + y * s, b = -x * s + y * c; return [lat0 + b / ky, lon0 + a / kx]; };
-  const P = ring.map(toXY);
-  const xs = P.map((p) => p[0]), ys = P.map((p) => p[1]);
+  const P = ringe.map((r) => r.map(toXY));
+  const xs = P.flat().map((p) => p[0]), ys = P.flat().map((p) => p[1]);
   return { toXY, toLL, P, minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
 }
-function schnitt(P, y) {
+function schnitt(Ps, y) {
   const xs = [];
-  for (let i = 0; i < P.length; i++) {
+  for (const P of Ps) for (let i = 0; i < P.length; i++) {
     const [x1, y1] = P[i], [x2, y2] = P[(i + 1) % P.length];
     if ((y1 > y) !== (y2 > y)) xs.push(x1 + ((y - y1) * (x2 - x1)) / (y2 - y1));
   }
@@ -48,7 +53,7 @@ export function gassenMitten(R, g) {
 /** Rückegassen als Linien (Mittelachsen) innerhalb der Fläche */
 export function gassenLinien(ring, g) {
   if (g?.modus === 'frei') return (g.linien || []).filter((l) => l.length >= 2).map((l) => ({ y: null, linie: l, mitte: l[Math.floor((l.length - 1) / 2)] }));
-  if (!g?.abstand || ring.length < 3) return [];
+  if (!g?.abstand || !ringeVon(ring).length) return [];
   const R = rahmen(ring, g.winkel || 0);
   const out = [];
   for (const y of gassenMitten(R, g)) {
@@ -207,7 +212,7 @@ export function pflanzLayout(p, mitPunkten = false) {
   // Raster für die Suche beim Malen (2-m-Zellen)
   const index = new Map();
   punkte.forEach((q, i) => { const k = `${Math.floor(q[0] / 2)},${Math.floor(q[1] / 2)}`; (index.get(k) || index.set(k, []).get(k)).push(i); });
-  const wert = { R, form, pieces, stueck, lenEff, gesamtLen: namen.reduce((a, n) => a + lenEff[n], 0) || gesamtLen, Lmix, ha: areaHa(p.ring), nettoHa: (gesamtLen * RA) / 10000, punkte, index, reihe: RA, basisLen, basisStk };
+  const wert = { R, form, pieces, stueck, lenEff, gesamtLen: namen.reduce((a, n) => a + lenEff[n], 0) || gesamtLen, Lmix, ha: ringeVon(p.ring).reduce((a, r) => a + areaHa(r), 0), nettoHa: (gesamtLen * RA) / 10000, punkte, index, reihe: RA, basisLen, basisStk };
   M.key = key; M.wert = wert;
   return wert;
 }
@@ -221,7 +226,7 @@ function freiLayout(p, R, RA, key) {
   const index = new Map();
   punkte.forEach((q, i) => { const k = `${Math.floor(q[0] / 2)},${Math.floor(q[1] / 2)}`; (index.get(k) || index.set(k, []).get(k)).push(i); });
   const gesamtLen = namen.reduce((a, n) => a + lenEff[n], 0);
-  const wert = { R, form: 'frei', pieces: [], stueck, lenEff, gesamtLen, Lmix: 0, ha: areaHa(p.ring), nettoHa: areaHa(p.ring), punkte, index, reihe: RA, basisLen: { ...lenEff }, basisStk: { ...stueck } };
+  const wert = { R, form: 'frei', pieces: [], stueck, lenEff, gesamtLen, Lmix: 0, ha: ringeVon(p.ring).reduce((a, r) => a + areaHa(r), 0), nettoHa: ringeVon(p.ring).reduce((a, r) => a + areaHa(r), 0), punkte, index, reihe: RA, basisLen: { ...lenEff }, basisStk: { ...stueck } };
   memo.key = key; memo.wert = wert;
   return wert;
 }
@@ -272,6 +277,6 @@ export function gruppenGroessen(lay) {
 /** Pflanzlayout einer gespeicherten Pflanzung (für Bestandeskarte und Bestand am Punkt) */
 export function gespeichertesLayout(m) {
   const pp = m?.pflanzplan;
-  if (!pp?.vert || !pp.vorgabe?.length || !m.flaeche?.ring?.length) return null;
-  return pflanzLayout({ ring: m.flaeche.ring, arten: pp.vorgabe, gassen: pp.gassen, form: pp.vert.form, seed: pp.vert.seed, mal: pp.vert.mal, reihe: pp.reihe, frei: pp.vert.frei });
+  if (!pp?.vert || !pp.vorgabe?.length || !flaechenRinge(m.flaeche).length) return null;
+  return pflanzLayout({ ring: flaechenRinge(m.flaeche), arten: pp.vorgabe, gassen: pp.gassen, form: pp.vert.form, seed: pp.vert.seed, mal: pp.vert.mal, reihe: pp.reihe, frei: pp.vert.frei });
 }

@@ -130,17 +130,24 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   s.reihe ??= REIHE;
   s.gassen.modus ??= 'raster'; s.gassen.linien ??= [];
   s.vert.frei ??= [];
+  s.flaechen ??= [];
+  // Pflanzfläche aus einer oder mehreren Einzelflächen: fertige Flächen + die gerade gezeichnete
+  const alle = () => [...s.flaechen, s.ring].filter((r) => r.length >= 3);
+  const allePunkte = () => alle().flat();
+  const flHa = () => alle().reduce((a, r) => a + areaHa(r), 0);
+  const inFlaeche = (pt) => alle().some((r) => pointInPolygon(pt, r));
+  const groesste = () => [...alle()].sort((a, b) => areaHa(b) - areaHa(a))[0];
   let schritt = 0, letzterSchritt = -1, weitereOffen = false;
   const SCHRITTE = ['Pflanzfläche', 'Baumarten', 'Pflanzenzahl und Verband', 'Baumarten verteilen', 'Pflanzplan und Kosten'];
   const body = h('div', { class: 'pflanzung' });
-  let karte = null, umlauf = null, weiterBtn = null, griff = null, pinsel = null, malt = false, geplant = false, marker = [], warteschlange = [], pinselGroesse = 'einzeln', gasseNeu = null, zieht = null;
+  let karte = null, umlauf = null, weiterBtn = null, griff = null, pinsel = null, malt = false, geplant = false, marker = [], warteschlange = [], pinselGroesse = 'einzeln', gasseNeu = null, zieht = null, weitereBtn = null;
   // Zurück (Pfeil oben, Handy-Taste, Wischgeste): einen Schritt zurück; im ersten Schritt vor dem Verwerfen fragen
   let verwerfenOk = false;
   const page = openPage('Pflanzung planen', body, { onClose: () => { umlauf?.stop(); karte?.remove(); },
     onBack: () => {
       if (gasseNeu != null) { gasseFertig(); return true; }
       if (schritt > 0) { schritt--; pinselSetzen(null); render(); return true; }
-      if (verwerfenOk || (!s.ring.length && !s.arten.length)) return false;
+      if (verwerfenOk || (!s.ring.length && !s.flaechen.length && !s.arten.length)) return false;
       confirmDialog('Planung verwerfen?', { ok: 'Verwerfen', danger: true, body: 'Die eingezeichnete Fläche und die Angaben gehen verloren.' }).then((ja) => { if (ja) { verwerfenOk = true; page.close(); } });
       return true;
     } });
@@ -157,14 +164,14 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   const nHaVon = (x) => { if (x.nHa == null) { const V = verbandVon(x.name); x.nHa = Math.round((V[0] + V[1]) / 2 / 100) * 100; } return x.nHa; };
   const verbandVon = (name) => VERBAND[artInfo(name)?.verband || 'elb'][s.art === 'voranbau' ? 'voranbau' : 'frei'];
   // Übermalte Pflanzen gehören zu festen Pflanzplätzen; ändern sich Fläche, Baumarten, Verband, Gassen oder Mischung, gilt die Übermalung nicht mehr
-  const basis = () => JSON.stringify([s.ring, s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed, s.reihe]);
+  const basis = () => JSON.stringify([alle(), s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed, s.reihe]);
   const layoutArten = () => s.arten.map((x) => ({ name: x.name, anteil: Number(x.anteil) || 0, nHa: nHaVon(x), gruppeHa: artInfo(x.name)?.gruppeHa || 0 }));
   function layout(mitPunkten = false) {
-    if (s.gassen.winkel == null && s.ring.length >= 3) s.gassen.winkel = Math.round(hauptRichtung(s.ring));
+    if (s.gassen.winkel == null && alle().length) s.gassen.winkel = Math.round(hauptRichtung(groesste()));
     const b = basis();
     if (s.vert.basis && s.vert.basis !== b && Object.keys(s.vert.mal).length) { s.vert.mal = {}; toast('Übermalung zurückgesetzt, weil sich die Pflanzung geändert hat.'); }
     s.vert.basis = b;
-    return pflanzLayout({ ring: s.ring, arten: layoutArten(), gassen: s.gassen, form: s.vert.form, seed: s.vert.seed, mal: s.vert.mal, reihe: s.reihe, frei: s.vert.frei }, mitPunkten);
+    return pflanzLayout({ ring: alle(), arten: layoutArten(), gassen: s.gassen, form: s.vert.form, seed: s.vert.seed, mal: s.vert.mal, reihe: s.reihe, frei: s.vert.frei }, mitPunkten);
   }
 
   // ---------- Karte ----------
@@ -197,14 +204,14 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     el.addEventListener('pointermove', (e) => {
       if (zieht && aktiv.size === 1) {
         const ll = map.mouseEventToLatLng(e);
-        if (pointInPolygon([ll.lat, ll.lng], s.ring)) { s.vert.frei[zieht.orig][0] = ll.lat; s.vert.frei[zieht.orig][1] = ll.lng; marker[zieht.i]?.setLatLng(ll); }
+        if (inFlaeche([ll.lat, ll.lng])) { s.vert.frei[zieht.orig][0] = ll.lat; s.vert.frei[zieht.orig][1] = ll.lng; marker[zieht.i]?.setLatLng(ll); }
         return;
       }
       if (malt && aktiv.size === 1) malen(e); else if (aktiv.size > 1) { malt = false; zieht = null; }
     });
     const ende = (e) => { aktiv.delete(e.pointerId); if (zieht) { zieht = null; zeichnePunkte(); aktualisieren(); } if (malt) { malt = false; aktualisieren(); } };
     el.addEventListener('pointerup', ende); el.addEventListener('pointercancel', ende);
-    if (s.ring.length >= 3) setTimeout(() => map.fitBounds(L.latLngBounds(s.ring), { padding: [20, 20], maxZoom: 18 }), 120);
+    if (alle().length) setTimeout(() => map.fitBounds(L.latLngBounds(allePunkte()), { padding: [20, 20], maxZoom: 18 }), 120);
   }
   function klick(ll) {
     if (schritt === 0) { s.ring.push(ll); s.standort = null; s.bzt = null; s.vert.mal = {}; zeichne(); renderStatus(); }
@@ -213,7 +220,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   }
   /** Einzeln setzen: neue Pflanze, Baumart ändern oder entfernen */
   function freiTipp(ll) {
-    if (!pointInPolygon(ll, s.ring)) { toast('Bitte innerhalb der Pflanzfläche tippen.'); return; }
+    if (!inFlaeche(ll)) { toast('Bitte innerhalb der Pflanzfläche tippen.'); return; }
     const lay = layout(true);
     const mProPx = 40075016 * Math.cos((ll[0] * Math.PI) / 180) / (256 * 2 ** karte.map.getZoom());
     const q = punkteNahe(lay, lay.R.toXY(ll), Math.max(0.5, 14 * mProPx))[0];
@@ -235,16 +242,17 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   }
   function zeichne() {
     lyr.clearLayers();
-    if (s.ring.length >= 2) L.polygon(s.ring, { color: '#2E7D32', weight: 3, fillColor: '#2E7D32', fillOpacity: schritt >= 2 ? 0.05 : 0.12, interactive: false }).addTo(lyr);
+    s.flaechen.forEach((r) => L.polygon(r, { color: '#2E7D32', weight: 3, fillColor: '#2E7D32', fillOpacity: schritt >= 2 ? 0.05 : 0.12, interactive: false }).addTo(lyr));
+    if (s.ring.length >= 2) L.polygon(s.ring, { color: schritt === 0 && s.flaechen.length ? '#E65100' : '#2E7D32', weight: 3, fillColor: '#2E7D32', fillOpacity: schritt >= 2 ? 0.05 : 0.12, interactive: false }).addTo(lyr);
     if (schritt === 0) s.ring.forEach((ll) => L.circleMarker(ll, { radius: 6, color: '#fff', weight: 2, fillColor: '#2E7D32', fillOpacity: 1, interactive: false }).addTo(lyr));
     zeichneGassen(); griffSetzen(); zeichnePunkte();
   }
   function zeichneGassen() {
     lyrGassen.clearLayers();
-    if (schritt < 2 || s.ring.length < 3) return;
+    if (schritt < 2 || !alle().length) return;
     layout();
     const frei = s.gassen.modus === 'frei';
-    const linien = frei ? s.gassen.linien : gassenLinien(s.ring, s.gassen).map((l) => l.linie);
+    const linien = frei ? s.gassen.linien : gassenLinien(alle(), s.gassen).map((l) => l.linie);
     linien.forEach((l, gi) => {
       if (!l.length) return;
       const pl = L.polyline(l, { color: gi === gasseNeu ? '#E65100' : '#8D6E63', weight: 4, opacity: 0.9, dashArray: '8 6', interactive: false }).addTo(lyrGassen);
@@ -269,8 +277,8 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   function griffSetzen() {
     griff?.remove(); griff = null;
     if (schritt !== 2 || !s.gassen.abstand || s.gassen.modus === 'frei' || !karte) return;
-    const R = rahmen(s.ring, s.gassen.winkel || 0), mitte = (R.minY + R.maxY) / 2;
-    const l = gassenLinien(s.ring, s.gassen).sort((a, b) => Math.abs(a.y - mitte) - Math.abs(b.y - mitte))[0];
+    const R = rahmen(alle(), s.gassen.winkel || 0), mitte = (R.minY + R.maxY) / 2;
+    const l = gassenLinien(alle(), s.gassen).sort((a, b) => Math.abs(a.y - mitte) - Math.abs(b.y - mitte))[0];
     if (!l) return;
     griff = L.marker(l.mitte, { draggable: true, keyboard: true, title: 'Rückegassen verschieben', icon: L.divIcon({ className: 'gassen-griff', html: '<span aria-hidden="true">⇅</span>', iconSize: [36, 36] }) }).addTo(karte.map);
     const v0 = s.gassen.versatz || 0;
@@ -279,7 +287,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   }
   function zeichnePunkte() {
     lyrPunkte.clearLayers(); marker = [];
-    if (!karte || schritt < 2 || s.ring.length < 3 || !s.arten.length) return;
+    if (!karte || schritt < 2 || !alle().length || !s.arten.length) return;
     const lay = layout(true);
     if (lay.punkte.length > 40000) {
       for (const st of streifen(lay)) L.polygon(st.ring, { renderer: canvas, stroke: false, fillColor: farbe(st.art === 'mix' ? s.grund : st.art), fillOpacity: 0.7, interactive: false }).addTo(lyrPunkte);
@@ -328,15 +336,18 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   const farbe = (name) => artInfo(name)?.farbe || '#2E7D32';
   function renderStatus() {
     // „Weiter“ freigeben, sobald die Fläche drei Punkte hat (ohne die Seite neu aufzubauen)
-    if (schritt === 0 && weiterBtn) weiterBtn.disabled = s.ring.length < 3;
-    if (schritt === 0) status.textContent = s.ring.length >= 3 ? `Pflanzfläche ${formatHa(areaHa(s.ring))} · ${s.ring.length} Eckpunkte` : `${s.ring.length} von mindestens 3 Eckpunkten – tippe die Ecken in die Karte oder lauf die Fläche mit dem GPS ab.`;
-    else if (s.ring.length >= 3) status.textContent = `Pflanzfläche ${formatHa(areaHa(s.ring))}`;
+    if (schritt === 0 && weiterBtn) weiterBtn.disabled = !alle().length;
+    if (schritt === 0 && weitereBtn) weitereBtn.disabled = s.ring.length < 3;
+    const anzahl = alle().length, mehr = s.flaechen.length > 0;
+    if (schritt === 0) status.textContent = (anzahl ? `Pflanzfläche ${formatHa(flHa())}${anzahl > 1 ? ` aus ${anzahl} Einzelflächen` : ''}` : '')
+      + (s.ring.length >= 3 ? `${anzahl ? ' · ' : ''}${mehr ? `Einzelfläche ${s.flaechen.length + 1}: ` : ''}${s.ring.length} Eckpunkte` : `${anzahl ? ' · ' : ''}${mehr ? `Einzelfläche ${s.flaechen.length + 1}: ` : ''}${s.ring.length} von mindestens 3 Eckpunkten – tippe die Ecken in die Karte oder lauf die Fläche mit dem GPS ab.`);
+    else if (anzahl) status.textContent = `Pflanzfläche ${formatHa(flHa())}${anzahl > 1 ? ` aus ${anzahl} Einzelflächen` : ''}`;
   }
 
   // ---------- Standort und Empfehlung ----------
   async function standortLaden() {
-    if (s.bzt || s.ring.length < 3) return;
-    const c = centroid(s.ring);
+    if (s.bzt || !alle().length) return;
+    const c = centroid(groesste());
     try {
       const [{ queryPoint, naechsterStandort }, { empfehlung }] = await Promise.all([import('./map/geoinfo.js'), import('./bzt.js')]);
       const info = await queryPoint(c);
@@ -362,7 +373,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
 
   // ---------- Berechnung ----------
   function rechnen() {
-    const ha = s.ring.length >= 3 ? areaHa(s.ring) : 0;
+    const ha = flHa();
     const lay = layout(false);
     const zeilen = s.arten.map((x) => {
       const info = artInfo(x.name) || { name: x.name, farbe: '#777', hinweis: '', codes: [] };
@@ -405,7 +416,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
 
   // ---------- Schritte ----------
   function render() {
-    if (s.arten.length && s.ring.length >= 3) rechnen();
+    if (s.arten.length && alle().length) rechnen();
     const kopf = [h('div', { class: 'q-progress' }, SCHRITTE.map((_, k) => h('span', { class: k < schritt ? 'done' : k === schritt ? 'now' : '' }))),
       h('h2', { class: 'step-title' }, SCHRITTE[schritt])];
     const nav = (weiterOk = true, weiterText = 'Weiter') => h('div', { class: 'q-nav' },
@@ -415,16 +426,20 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     if (schritt === 0) {
       inhalt = [
         foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Nach der Planung geht es direkt mit dem Förderantrag weiter.')) : null,
-        h('label', {}, 'Flurstück', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.ring = []; karteNeu(); zeichne(); render(); } },
+        h('label', {}, 'Flurstück', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.ring = []; s.flaechen = []; karteNeu(); zeichne(); render(); } },
           h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
         h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Art der Pflanzung' },
           [['wiederaufforstung', 'Freifläche / Wiederaufforstung'], ['voranbau', 'Voranbau unter Schirm']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.art === k), onclick: () => { s.art = k; s.arten.forEach((x) => { x.nHa = null; }); render(); } }, l))),
         mapEl, status, umlaufHost,
         h('div', { class: 'btn-row' },
-          h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.ring.pop(); zeichne(); render(); } }, 'Letzten Punkt entfernen'),
-          h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.ring = []; zeichne(); render(); } }, 'Neu beginnen'),
-          byId[s.parcelId] ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.ring = [...byId[s.parcelId].ring]; s.vert.mal = {}; zeichne(); render(); } }, 'Ganzes Flurstück') : null),
-        nav(s.ring.length >= 3)];
+          (weitereBtn = h('button', { type: 'button', class: 'btn btn-small btn-primary', disabled: s.ring.length < 3, onclick: () => { s.flaechen.push(s.ring); s.ring = []; s.vert.mal = {}; s.bzt = null; zeichne(); render(); } }, '+ Weitere Einzelfläche')),
+          s.ring.length || s.flaechen.length ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => { if (s.ring.length) s.ring.pop(); else s.ring = s.flaechen.pop(); zeichne(); render(); } }, s.ring.length ? 'Letzten Punkt entfernen' : 'Letzte Einzelfläche bearbeiten') : null,
+          h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.ring = []; s.flaechen = []; zeichne(); render(); } }, 'Neu beginnen'),
+          byId[s.parcelId] ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => { const r = polysOf(byId[s.parcelId]).map((poly) => [...poly[0]]); s.ring = r.pop() || []; s.flaechen = r; s.vert.mal = {}; zeichne(); render(); } }, 'Ganzes Flurstück') : null),
+        alle().length > 1 || s.flaechen.length ? h('ul', { class: 'mat-kurz' }, [...s.flaechen, ...(s.ring.length >= 3 ? [s.ring] : [])].map((r, i) => h('li', {}, `Einzelfläche ${i + 1}: ${formatHa(areaHa(r))} `,
+          h('button', { type: 'button', class: 'btn btn-small', onclick: () => { if (i < s.flaechen.length) s.flaechen.splice(i, 1); else s.ring = []; s.vert.mal = {}; zeichne(); render(); } }, 'Löschen')))) : null,
+        h('p', { class: 'hint' }, 'Mehrere getrennte Pflanzflächen? Erste Fläche einzeichnen, dann „+ Weitere Einzelfläche“ und die nächste einzeichnen.'),
+        nav(alle().length > 0)];
     } else if (schritt === 1) {
       standortLaden();
       const r = s.bzt;
@@ -470,7 +485,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
             const v = e.target.value;
             if (v === 'frei') {
               // vorhandene regelmäßige Gassen als Start übernehmen – jede lässt sich dann einzeln verschieben
-              if (!s.gassen.linien.length && s.gassen.abstand) s.gassen.linien = gassenLinien(s.ring, { ...s.gassen, modus: 'raster' }).map((l) => l.linie.map((q) => [...q]));
+              /* selbst einzeichnen beginnt ohne Gassen – Vorlage nur auf Wunsch */
               s.gassen.modus = 'frei'; if (!s.gassen.abstand) s.gassen.abstand = 20;
             } else { s.gassen.modus = 'raster'; s.gassen.abstand = Number(v); s.gassen.versatz = 0; gasseNeu = null; }
             render();
@@ -484,6 +499,15 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
             gasseNeu != null && s.gassen.linien[gasseNeu]?.length ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.gassen.linien[gasseNeu].pop(); render(); } }, 'Letzten Punkt entfernen') : null,
             h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.gassen.winkel = ((s.gassen.winkel || 0) + 15) % 180; render(); } }, 'Pflanzreihen drehen (15°)')),
           gasseNeu != null ? h('p', { class: 'hint' }, `Gasse ${gasseNeu + 1}: Tippe ihren Verlauf Punkt für Punkt in die Karte, dann „Gasse fertig“.`) : null,
+          h('div', { class: 'btn-row' },
+            !s.gassen.linien.length ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => {
+              const abstand = s.gassen.abstand || 20;
+              s.gassen.linien = gassenLinien(alle(), { ...s.gassen, abstand, modus: 'raster' }).map((l) => l.linie.map((q) => [...q]));
+              render();
+            } }, `Regelmäßige Gassen (alle ${s.gassen.abstand || 20} m) als Vorlage`) : null,
+            s.gassen.linien.length ? h('button', { type: 'button', class: 'btn btn-small', onclick: async () => {
+              if (await confirmDialog('Alle eingezeichneten Rückegassen löschen?', { ok: 'Löschen', danger: true })) { s.gassen.linien = []; gasseNeu = null; render(); }
+            } }, 'Alle Gassen löschen') : null),
           s.gassen.linien.length ? h('ul', { class: 'mat-kurz' }, s.gassen.linien.map((l, i) => h('li', {}, `Gasse ${i + 1} · ${Math.round(gassenLaenge(l))} m `,
             h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.gassen.linien.splice(i, 1); if (gasseNeu === i) gasseNeu = null; else if (gasseNeu > i) gasseNeu--; render(); } }, 'Löschen')))) : null,
           h('p', { class: 'hint' }, 'Jeden Punkt einer Gasse kannst du ziehen; mit dem Griff ✥ verschiebst du die ganze Gasse.')) : null,
@@ -577,7 +601,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     fill(body, kopf, inhalt);
     const neu = schritt !== letzterSchritt; letzterSchritt = schritt;
     if (!karte) karteNeu();
-    setTimeout(() => { karte?.map.invalidateSize(); if (neu && s.ring.length >= 3 && schritt > 0) karte.map.fitBounds(L.latLngBounds(s.ring), { padding: [16, 16], maxZoom: 18 }); }, 60);
+    setTimeout(() => { karte?.map.invalidateSize(); if (neu && alle().length && schritt > 0) karte.map.fitBounds(L.latLngBounds(allePunkte()), { padding: [16, 16], maxZoom: 18 }); }, 60);
     zeichne(); renderStatus();
     if (pb) pb.scrollTop = neu ? 0 : oben;
   }
@@ -605,7 +629,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
 
   /** Werkzeuge für „Einzeln setzen“ */
   function freiWerkzeuge(pinselChip) {
-    const anzahlRaster = () => pflanzLayout({ ring: s.ring, arten: layoutArten(), gassen: s.gassen, form: 'einzeln', seed: s.vert.seed, mal: {}, reihe: s.reihe }).punkte;
+    const anzahlRaster = () => pflanzLayout({ ring: alle(), arten: layoutArten(), gassen: s.gassen, form: 'einzeln', seed: s.vert.seed, mal: {}, reihe: s.reihe }).punkte;
     return [
       h('p', { class: 'sheet-label' }, 'Pflanzen setzen'),
       h('div', { class: 'art-chips pinsel' }, pinselChip(null, 'Karte verschieben', '#2E7D32'), s.arten.map((x) => pinselChip(x.name, x.name, farbe(x.name))),
@@ -645,7 +669,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     if (namen.some((n) => ['Traubeneiche', 'Stieleiche'].includes(n)) && !namen.some((n) => artInfo(n)?.dienend)) out.push('Zur Eiche gehört eine dienende Baumart (Hainbuche oder Linde), die die Stämme beschattet.');
     const laub = s.arten.filter((x) => !nadelArt(x.name)).reduce((a, x) => a + (Number(x.anteil) || 0), 0);
     if (laub < 40) out.push(`Laubbaumanteil ${laub} % – für die Förderung nach der Richtlinie mindestens 40 % (Landesprogramm 30 %).`);
-    if (s.arten.some((x) => Number(x.anteil) > 75) && s.ring.length >= 3 && areaHa(s.ring) > 1) out.push('Auf Flächen über 1 ha darf eine Baumart für die Förderung höchstens 75 % ausmachen.');
+    if (s.arten.some((x) => Number(x.anteil) > 75) && flHa() > 1) out.push('Auf Flächen über 1 ha darf eine Baumart für die Förderung höchstens 75 % ausmachen.');
     return out.length ? h('div', { class: 'lrt-hinweis brutzeit' }, h('strong', {}, 'Hinweise zur Mischung'), h('ul', { class: 'lrt-punkte' }, out.map((t) => h('li', {}, t)))) : null;
   }
   function verteilHinweise(b) {
@@ -706,15 +730,14 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     toast('Pflanzplan wird erstellt …');
     // Hauptkarte: Pflanzfläche mit allen Pflanzplätzen
     const BH = 330;
-    const K = await pdfKarte(doc, { x: L0, y, w: R - L0, h: BH, ringe: [s.ring], basemap });
-    doc.polygon([s.ring.map(K.tr)], K.hg ? { stroke: [255, 255, 255], w: 3 } : { fill: [236, 242, 232], stroke: [46, 125, 50], w: 1.5 });
-    if (K.hg) doc.polygon([s.ring.map(K.tr)], { stroke: [46, 125, 50], w: 1.5 });
+    const K = await pdfKarte(doc, { x: L0, y, w: R - L0, h: BH, ringe: alle(), basemap });
+    alle().forEach((r) => { doc.polygon([r.map(K.tr)], K.hg ? { stroke: [255, 255, 255], w: 3 } : { fill: [236, 242, 232], stroke: [46, 125, 50], w: 1.5 }); if (K.hg) doc.polygon([r.map(K.tr)], { stroke: [46, 125, 50], w: 1.5 }); });
     const lay = layout(true);
     if (lay.punkte.length <= 20000) {
       const d = s.vert.form === 'frei' ? Math.max(4, Math.min(8, K.sk * 2)) : Math.max(0.7, Math.min(3, K.sk * 1.2));
       for (const [px, py, art] of lay.punkte) { const [u, v] = K.tr(lay.R.toLL([px, py])); doc.rechteck(u - d / 2, v - d / 2, d, d, { fill: rgb(farbe(art)) }); }
     } else for (const st of streifen(lay)) doc.polygon([st.ring.map(K.tr)], { fill: rgb(farbe(st.art)), stroke: null });
-    gassenLinien(s.ring, s.gassen).forEach(({ linie }) => linienZeichnen(doc, K.tr, linie, { w: Math.max(1, s.gassen.breite * K.sk), farbe: [205, 180, 150] }));
+    gassenLinien(alle(), s.gassen).forEach(({ linie }) => linienZeichnen(doc, K.tr, linie, { w: Math.max(1, s.gassen.breite * K.sk), farbe: [205, 180, 150] }));
     K.nordpfeil(); K.massstab();
     y += BH + 9;
     doc.text(L0, y, K.hg ? `Hintergrund: ${KARTEN_QUELLE[basemap]}` : 'Ohne Hintergrund: Die Karte konnte nicht geladen werden (keine Verbindung?).', { size: 7, farbe: [110, 120, 110] });
@@ -722,9 +745,9 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     // Übersicht: ganzes Flurstück, Pflanzfläche markiert
     const UW = 245, UH = 170;
     const flRinge = p ? polysOf(p).map((poly) => poly[0]) : [];
-    const U = await pdfKarte(doc, { x: L0, y, w: UW, h: UH, ringe: flRinge.length ? [...flRinge, s.ring] : [s.ring.map((q) => q)], rand: flRinge.length ? 14 : 60, basemap });
+    const U = await pdfKarte(doc, { x: L0, y, w: UW, h: UH, ringe: [...flRinge, ...alle()], rand: flRinge.length ? 14 : 60, basemap });
     flRinge.forEach((r) => { doc.polygon([r.map(U.tr)], { stroke: [255, 255, 255], w: 3.2 }); doc.polygon([r.map(U.tr)], { stroke: [230, 160, 0], w: 1.8 }); });
-    doc.polygon([s.ring.map(U.tr)], { fill: [46, 125, 50], stroke: [255, 255, 255], w: 1 });
+    alle().forEach((r) => doc.polygon([r.map(U.tr)], { fill: [46, 125, 50], stroke: [255, 255, 255], w: 1 }));
     U.nordpfeil(); U.massstab();
     const tx = L0 + UW + 16;
     let ty = y + 12;
@@ -735,7 +758,8 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
       const flHa = areaHa(p.ring);
       zeile(`Flurstück ${formatHa(flHa)}, davon Pflanzfläche ${formatHa(b.ha)} (${Math.round((b.ha / Math.max(flHa, 1e-9)) * 100)} %)`);
     } else zeile(`Pflanzfläche ${formatHa(b.ha)} (ohne Flurstückszuordnung)`);
-    const c = centroid(s.ring);
+    const c = centroid(allePunkte());
+    if (alle().length > 1) zeile(`${alle().length} Einzelflächen: ${alle().map((r) => formatHa(areaHa(r))).join(', ')}`);
     zeile(`Mittelpunkt ${c[0].toFixed(5)} N, ${c[1].toFixed(5)} O`);
     if (s.date) zeile(`Geplanter Pflanztermin ${new Date(s.date).toLocaleDateString('de-DE')}`);
     ty += 4;
@@ -775,7 +799,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     store.update((st) => st.measures.push({
       id: neuId, type: 'pflanzung', parcelId: s.parcelId, date: s.date ? new Date(s.date).getTime() : null, status: 'geplant', createdAt: Date.now(), note: s.note.trim(),
       details: { species: haupt?.name || '', count: String(b.stueck), area: dez(b.ha, 2), verband: b.zeilen.map((z) => `${z.name} ${z.verband}`).join('; ') },
-      flaeche: { ring: [...s.ring], ha: b.ha },
+      flaeche: { ring: [...groesste()], ringe: alle().map((r) => [...r]), ha: b.ha },
       pflanzplan: { art: s.art, reihe: s.reihe, gassen: JSON.parse(JSON.stringify(s.gassen)), netto: b.ha ? b.nettoHa / b.ha : 1, grund: s.grund, zonen: [],
         vert: { form: s.vert.form, seed: s.vert.seed, mal: { ...s.vert.mal }, frei: s.vert.form === 'frei' ? s.vert.frei.map((q) => [...q]) : undefined },
         vorgabe: s.arten.map((x) => ({ name: x.name, anteil: Number(x.anteil) || 0, nHa: x.nHa, gruppeHa: artInfo(x.name)?.gruppeHa || 0 })),
@@ -797,7 +821,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     page.close();
     if (wahl === 'zaun') {
       const { openZaunPlanung } = await import('./zaun.js');
-      openZaunPlanung({ parcelId: s.parcelId, pts: s.ring, foerdern, quelle: 'Zaunverlauf aus der Pflanzfläche übernommen – Punkte lassen sich anpassen.',
+      openZaunPlanung({ parcelId: s.parcelId, pts: groesste(), foerdern, quelle: alle().length > 1 ? `Zaunverlauf der größten Einzelfläche übernommen (${alle().length} Einzelflächen) – für die übrigen bitte jeweils einen eigenen Zaun planen.` : 'Zaunverlauf aus der Pflanzfläche übernommen – Punkte lassen sich anpassen.',
         onSaved: (zid) => onSaved?.([neuId, zid]), onAbbruch: () => onSaved?.([neuId]) });
     } else if (wahl === 'einzel') {
       const { openEinzelschutzPlanung } = await import('./einzelschutz.js');
@@ -809,9 +833,13 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   /** Grober Vergleich Zaun – Einzelschutz für diese Fläche (Material netto, Förderung nach der Richtlinie) */
   async function schutzVergleich(b) {
     const [{ materialListe }, { SAETZE }] = await Promise.all([import('./zaun.js'), import('./foerder-formular.js')]);
-    const ml = materialListe({ pts: s.ring, geschlossen: true, hoehe: 160 });
-    const zaunMat = ml.posten.reduce((a, x) => a + (x.preise?.length ? Math.min(...x.preise.map((q) => q.preis)) * x.menge : 0), 0);
-    const lfm = Math.round(ml.geo.laenge);
+    let zaunMat = 0, lfm = 0;
+    for (const r of alle()) {
+      const ml = materialListe({ pts: r, geschlossen: true, hoehe: 160 });
+      zaunMat += ml.posten.reduce((a, x) => a + (x.preise?.length ? Math.min(...x.preise.map((q) => q.preis)) * x.menge : 0), 0);
+      lfm += ml.geo.laenge;
+    }
+    lfm = Math.round(lfm);
     const es = b.zeilen.filter((z) => !['Gemeine Fichte', 'Gemeine Kiefer', 'Schwarzkiefer', 'Schwarzerle', 'Sandbirke', 'Aspe', 'Robinie', 'Blaufichte'].includes(z.name)).reduce((a, z) => a + z.stueck, 0) || b.stueck;
     const proHa = b.ha ? Math.round(b.stueck / b.ha) : 0;
     return h('div', { class: 'dialog-body' },

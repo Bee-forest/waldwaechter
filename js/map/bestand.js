@@ -161,7 +161,7 @@ export function eigenePflanzungen() {
 }
 /** Bestand aus der jüngsten abgeschlossenen Pflanzung am Punkt (Alter = Jahre seit der Pflanzung + Alter des Sortiments, sonst + 2) */
 export function pflanzungAm(pt) {
-  const treffer = eigenePflanzungen().filter((m) => pointInPolygon(pt, m.flaeche.ring)).sort((a, b) => pflanzZeit(b) - pflanzZeit(a))[0];
+  const treffer = eigenePflanzungen().filter((m) => (m.flaeche.ringe?.length ? m.flaeche.ringe : [m.flaeche.ring]).some((r) => pointInPolygon(pt, r))).sort((a, b) => pflanzZeit(b) - pflanzZeit(a))[0];
   if (!treffer) return null;
   const pp = treffer.pflanzplan || {};
   const ts = pflanzZeit(treffer);

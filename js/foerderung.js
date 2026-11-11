@@ -551,7 +551,7 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
   let lageplanDetail = false;
   function lageplan(doc, parcels, liste, y, fest) {
     // Flurstücke grau, Maßnahmenflächen farbig; lokale Projektion in Metern
-    const flaechen = liste.map((m, k) => ({ k, polys: m.flaeche?.ring ? [[m.flaeche.ring]] : m.thinning?.ring ? polysOf(m.thinning) : null, linie: m.zaun && !m.zaun.geschlossen ? m.zaun.pts : null })).filter((f) => f.polys || f.linie);
+    const flaechen = liste.map((m, k) => ({ k, polys: m.flaeche?.ring ? (m.flaeche.ringe?.length ? m.flaeche.ringe : [m.flaeche.ring]).map((r) => [r]) : m.thinning?.ring ? polysOf(m.thinning) : null, linie: m.zaun && !m.zaun.geschlossen ? m.zaun.pts : null })).filter((f) => f.polys || f.linie);
     const allePunkte = [...parcels.flatMap((p) => polysOf(p).flat(2)), ...flaechen.flatMap((f) => (f.polys ? f.polys.flat(2) : f.linie))];
     if (!allePunkte.length) return y;
     const lat0 = allePunkte.reduce((a, p) => a + p[0], 0) / allePunkte.length;

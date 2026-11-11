@@ -69,6 +69,12 @@ export function createBaumartenLayer({ minZoom = 13 } = {}) {
     for (const m of eigenePflanzungen()) {
       const key = `eigen|${m.id}|${m.finishedAt || ''}`;
       if (drawn.has(key)) continue;
+      drawn.set(key, true);
+      try { eigeneEine(group, m); } catch (e) { console.warn('Pflanzung nicht darstellbar', m.id, e); }
+    }
+  }
+  function eigeneEine(group, m) {
+    {
       const pp = m.pflanzplan || {};
       const pf = pflanzungAm(centroid(m.flaeche.ring));
       const teile = [{ ring: m.flaeche.ring, name: pp.grund || pf?.text }, ...(pp.zonen || [])];
@@ -79,9 +85,9 @@ export function createBaumartenLayer({ minZoom = 13 } = {}) {
         group.addLayer(poly);
       }
       // Gruppen, Trupps und Reihen der Pflanzplanung
-      const lay = gespeichertesLayout(m);
+      let lay = null;
+      try { lay = gespeichertesLayout(m); } catch (e) { console.warn('Pflanzplan nicht darstellbar', e); }
       if (lay) for (const st of streifen(lay, 4)) if (st.art && st.art !== pp.grund) group.addLayer(L.polygon(st.ring, { stroke: false, fillColor: farbeVon(`${gruppeFarbe(st.art)} 1-40 Jahre`), fillOpacity: 0.85, interactive: false }));
-      drawn.set(key, true);
     }
   }
   return new Layer();

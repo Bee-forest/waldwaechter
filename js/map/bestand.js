@@ -167,7 +167,8 @@ export function pflanzungAm(pt) {
   const ts = pflanzZeit(treffer);
   const jahr = new Date(ts).getFullYear();
   const arten = (pp.arten?.length ? pp.arten : [{ name: treffer.details?.species || '', anteil: 100, sortiment: '' }]).map((a) => ({ ...a, alter: heute() - jahr + sortAlter(a.sortiment) }));
-  const lay = gespeichertesLayout(treffer);
+  let lay = null;
+  try { lay = gespeichertesLayout(treffer); } catch (e) { console.warn('Pflanzplan nicht darstellbar', e); }
   const amPunkt = lay ? artAm(lay, pt) : null;
   const zone = lay ? null : (pp.zonen || []).slice().reverse().find((z) => pointInPolygon(pt, z.ring));
   const hier = arten.find((a) => a.name === (amPunkt && amPunkt !== 'mix' ? amPunkt : zone?.name || pp.grund)) || [...arten].sort((a, b) => (b.anteil || 0) - (a.anteil || 0))[0];

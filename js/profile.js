@@ -85,6 +85,8 @@ export async function openProfile() {
       h('section', { class: 'card' },
         h('h2', {}, 'Einstellungen'),
         h('div', { class: 'form' },
+          h('button', { class: 'btn', onclick: datenSichern }, 'Daten sichern (Datei)'),
+          h('p', { class: 'hint' }, 'Speichert alle Flächen, Maßnahmen und Einstellungen als Datei – zur Sicherung oder um ein Problem nachzustellen.'),
           h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Darstellung' },
             [['auto', 'Automatisch'], ['light', 'Hell'], ['dark', 'Dunkel']].map(([k, l]) => h('button', {
               role: 'radio', 'aria-checked': String(s.settings.theme === k),
@@ -104,6 +106,19 @@ export async function openProfile() {
       ),
       h('p', { class: 'hint center' }, 'Karten und Flurstücke: Geoportal Thüringen (© GDI-Th, dl-de/by-2-0), TopPlusOpen (© BKG), OpenStreetMap.'),
     );
+  }
+
+  /** Alle App-Daten als JSON-Datei teilen oder speichern */
+  async function datenSichern() {
+    const roh = localStorage.getItem('waldwaechter.v1') || '{}';
+    const inhalt = JSON.stringify({ app: 'WaldWächter', erstellt: new Date().toISOString(), version: (await caches.keys().catch(() => [])).join(','), daten: JSON.parse(roh) }, null, 1);
+    const name = `WaldWaechter-Daten-${new Date().toISOString().slice(0, 10)}.json`;
+    const datei = new File([inhalt], name, { type: 'application/json' });
+    if (navigator.canShare?.({ files: [datei] })) { try { await navigator.share({ files: [datei], title: name }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
+    const url = URL.createObjectURL(datei);
+    const a = Object.assign(document.createElement('a'), { href: url, download: name }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 600000);
+    toast('Daten gespeichert');
   }
 
   /** Erinnerungen an anstehende Maßnahmen */

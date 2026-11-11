@@ -129,7 +129,8 @@ export function pflanzLayout(p, mitPunkten = false) {
     for (const [a, b] of row.seg) {
       let x = a;
       while (x < b - 1e-6) {
-        const x2 = Math.min(b, (Math.floor(x / c) + 1) * c);
+        let x2 = Math.min(b, (Math.floor(x / c) + 1) * c);
+        if (!(x2 > x + 1e-9)) x2 = Math.min(b, x + c); // Rundung: nie auf der Stelle treten
         const ix = Math.floor((x + 1e-6) / c), iy = Math.floor(row.y / c);
         const pk = `${ix},${iy}`;
         const gk = form === 'einzeln' ? 'mix' : form === 'reihen' ? `r${Math.floor(row.i / F.reihen)}` : pk;
@@ -189,6 +190,8 @@ export function pflanzLayout(p, mitPunkten = false) {
       basis += pc.len;
     }
   };
+  const MAX = 250000; // Schutz gegen Einfrieren bei unplausiblen Eingaben
+  if (Object.values(reinStk).reduce((a, v) => a + v, 0) + Object.values(mixStk).reduce((a, v) => a + v, 0) > MAX) throw new Error('Zu viele Pflanzplätze für die Darstellung');
   for (const n of namen) verteile(pieces.filter((pc) => pc.art === n), reinStk[n], () => n);
   const mixListe = pieces.filter((pc) => pc.art === 'mix');
   const folge = mischen(namen.flatMap((n) => Array(mixStk[n]).fill(n)), r);

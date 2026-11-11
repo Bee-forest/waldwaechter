@@ -1,10 +1,22 @@
 // Einstiegspunkt: Navigation, Darstellung, PWA-Installation, Service Worker.
-import { h, icon } from './ui.js';
+import { h, icon, toast } from './ui.js';
 import { store } from './store.js';
 import { initHome, invalidateMap } from './home.js';
 import { initMeasures } from './measures.js';
 import { initErinnerungen } from './erinnerung.js';
 import { renderPlaceholder } from './placeholders.js';
+
+// Unerwartete Fehler sichtbar machen (statt dass einfach nichts passiert) – je Meldung höchstens alle 20 s
+const gemeldet = new Map();
+const fehlerZeigen = (e) => {
+  const msg = String(e?.message || e || '');
+  if (!msg || /abort|Load failed|NetworkError|Failed to fetch|ResizeObserver/i.test(msg)) return;
+  if (Date.now() - (gemeldet.get(msg) || 0) < 20000) return;
+  gemeldet.set(msg, Date.now());
+  toast(`Da ist etwas schiefgegangen: ${msg.slice(0, 140)}`);
+};
+window.addEventListener('error', (e) => fehlerZeigen(e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => fehlerZeigen(e.reason));
 import { startTour, say } from './mascot.js';
 
 const TABS = [

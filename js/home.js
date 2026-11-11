@@ -145,14 +145,22 @@ export async function initHome(root) {
     const latlng = [e.latlng.lat, e.latlng.lng];
     const ticket = ++busy;
     const marker = L.circleMarker(latlng, { radius: 9, color: '#fff', weight: 3, fillColor: '#888', fillOpacity: 1, interactive: false, className: 'probing' }).addTo(map);
-    const p = await source.parcelAt(latlng);
-    marker.remove();
-    if (ticket !== busy) return; // inzwischen erneut getippt
-    if (p) { ALL = await source.allParcels(); select(p, latlng); return; }
-    clearSelection();
-    if (source.lastError && map.getZoom() >= ALKIS_MIN_ZOOM - 1) {
-      renderWmsInfo(latlng);
-    } else if (map.getZoom() < ALKIS_MIN_ZOOM) toast('Zoom näher heran, um ein Flurstück anzutippen.');
+    try {
+      const p = await source.parcelAt(latlng);
+      marker.remove();
+      if (ticket !== busy) return; // inzwischen erneut getippt
+      if (p) { ALL = await source.allParcels(); await select(p, latlng); return; }
+      clearSelection();
+      if (source.lastError && map.getZoom() >= ALKIS_MIN_ZOOM - 1) {
+        renderWmsInfo(latlng);
+      } else if (map.getZoom() < ALKIS_MIN_ZOOM) toast('Zoom näher heran, um ein Flurstück anzutippen.');
+      else toast('An dieser Stelle wurde kein Flurstück gefunden.');
+    } catch (err) {
+      // nie stumm bleiben: Ursache anzeigen, damit sich der Fehler finden lässt
+      marker.remove();
+      console.error(err);
+      toast(`Flurstück konnte nicht angezeigt werden: ${err?.message || err}`);
+    }
   });
 
   ALL = await source.allParcels();

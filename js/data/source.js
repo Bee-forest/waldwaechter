@@ -44,7 +44,8 @@ export const source = {
       if (d) return d;
     }
     const own = stored().find((p) => inPolys(latlng, polysOf(p)));
-    const loc = await localParcelAt(latlng); // mitgelieferte ALKIS-Daten (data/alkis)
+    // mitgelieferte ALKIS-Daten (data/alkis); hängt das Laden, nach 8 s mit dem Dienst weitermachen
+    const loc = await Promise.race([localParcelAt(latlng).catch(() => null), new Promise((r) => setTimeout(() => r(null), 8000))]);
     if (loc) { source.lastError = null; remember([loc]); return loc; }
     try {
       const p = await wfsParcelAt(latlng);

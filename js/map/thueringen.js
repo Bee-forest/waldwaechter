@@ -63,7 +63,8 @@ async function wfsGet(params) {
       ...params(w),
     });
     try {
-      const res = await fetch(`${w.url}?${q}`, { mode: 'cors' });
+      // Zeitgrenze: hängt der Dienst, nicht ewig warten
+      const res = await fetch(`${w.url}?${q}`, { mode: 'cors', signal: AbortSignal.timeout?.(12000) });
       const text = await res.text();
       if (!res.ok || /ExceptionReport/.test(text.slice(0, 600))) {
         notes.push(`${w.proxy ? 'Proxy' : 'direkt'} ${w.url.split('/').pop()}: HTTP ${res.status} ${text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140)}`);

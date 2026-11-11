@@ -755,7 +755,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   async function requestCompass() {
     try {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return;
+        await DeviceOrientationEvent.requestPermission().catch(() => 'denied'); // ohne Zusage kommen einfach keine Daten
       }
       window.addEventListener('deviceorientationabsolute', onOrient);
       window.addEventListener('deviceorientation', onOrient);

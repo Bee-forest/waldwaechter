@@ -81,7 +81,7 @@ export async function initHome(root) {
         mapEl,
         h('div', { class: 'map-side' },
           h('button', { class: 'fab small', 'aria-label': 'Flurstück suchen', html: icon.search, onclick: openSearch }),
-          h('button', { class: 'fab small', 'aria-label': 'Mein Standort', html: icon.locate, onclick: locateMe }),
+          h('button', { class: `fab small ortung-btn ortung-${ortung}`, 'aria-label': ORTUNG_LABEL[ortung], title: ORTUNG_LABEL[ortung], 'aria-pressed': String(ortung !== 'aus'), html: icon.locate, onclick: ortungKlick }),
         ),
       ),
       h('div', { class: 'map-actions' },
@@ -123,6 +123,8 @@ export async function initHome(root) {
   // Fachebenen (Standortkarte, Schutzgebiete, …)
   for (const o of OVERLAYS) if (!o.pending) overlays[o.key] = overlayLayer(o);
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+  // Verschiebt man die Karte von Hand, läuft sie nicht mehr mit (Verfolgung bleibt an)
+  map.on('dragstart', () => { if (ortung === 'folgen') { ortung = 'an'; ortBtn(); } });
   map.on('moveend', () => {
     try { const c = map.getCenter(); localStorage.setItem('waldwaechter.view', JSON.stringify({ c: [c.lat, c.lng], z: map.getZoom() })); } catch { /* egal */ }
   });
@@ -844,16 +846,81 @@ function openLayerSheet() {
   });
 }
 
-function locateMe() {
+// ---------- Live-Standort mit Blickrichtung ----------
+// Zustände: aus → folgen (Karte läuft mit) → an (verfolgt, Karte frei verschiebbar) → Tipp: wieder folgen; Tipp beim Folgen: aus
+let ortung = 'aus', ortWatch = null, ortLetzte = null, ortKreis = null, kompass = false, blickRaf = 0, blickGrad = null, ortFehlerGemeldet = false;
+const ORTUNG_LABEL = { aus: 'Mein Standort live verfolgen', folgen: 'Standortverfolgung beenden', an: 'Karte wieder auf meinen Standort ausrichten' };
+function ortBtn() {
+  document.querySelectorAll('.ortung-btn').forEach((b) => {
+    b.classList.remove('ortung-aus', 'ortung-folgen', 'ortung-an'); b.classList.add(`ortung-${ortung}`);
+    b.setAttribute('aria-pressed', String(ortung !== 'aus')); b.setAttribute('aria-label', ORTUNG_LABEL[ortung]); b.title = ORTUNG_LABEL[ortung];
+  });
+}
+function ortungKlick() {
   if (!('geolocation' in navigator)) { toast('Dein Browser kann keinen Standort bestimmen.'); return; }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const ll = [pos.coords.latitude, pos.coords.longitude];
-      posMarker?.remove();
-      posMarker = L.circleMarker(ll, { radius: 9, color: '#fff', weight: 3, fillColor: '#1F74B8', fillOpacity: 1 }).addTo(map);
-      map.flyTo(ll, Math.max(map.getZoom(), 16));
-    },
-    (err) => toast(err.code === 1 ? 'Standort freigeben: in den Browser-Einstellungen für diese Seite erlauben.' : 'Standort nicht verfügbar. Versuch es unter freiem Himmel erneut.'),
-    { enableHighAccuracy: true, timeout: 15000 },
-  );
+  if (ortung === 'aus') { ortung = 'folgen'; ortStart(); kompassStart(); toast('Standort wird live verfolgt – erneut tippen beendet.'); }
+  else if (ortung === 'an') { ortung = 'folgen'; if (ortLetzte) map.flyTo(ortLetzte, Math.max(map.getZoom(), 17)); }
+  else { ortung = 'aus'; ortStop(); }
+  ortBtn();
+}
+function ortStart() {
+  ortFehlerGemeldet = false;
+    ortWatch = navigator.geolocation.watchPosition(ortPos, (err) => {
+    if (err.code === 1) { toast('Standort freigeben: in den Browser-Einstellungen für diese Seite erlauben.'); ortung = 'aus'; ortStop(); ortBtn(); return; }
+    if (!ortFehlerGemeldet) { ortFehlerGemeldet = true; toast('Standort gerade ungenau oder nicht verfügbar – es wird weiter gesucht.'); }
+  }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+}
+function ortStop() {
+  if (ortWatch != null) navigator.geolocation.clearWatch(ortWatch);
+  ortWatch = null; ortLetzte = null;
+  posMarker?.remove(); posMarker = null; ortKreis?.remove(); ortKreis = null;
+  window.removeEventListener('deviceorientationabsolute', ortKompass); window.removeEventListener('deviceorientation', ortKompass);
+  kompass = false; blickGrad = null;
+}
+function ortPos(pos) {
+  const ll = [pos.coords.latitude, pos.coords.longitude];
+  const erstes = !ortLetzte;
+  ortLetzte = ll;
+  const acc = pos.coords.accuracy || 0;
+  if (!posMarker || !map.hasLayer(posMarker)) {
+    posMarker = L.marker(ll, { interactive: false, zIndexOffset: 1000, keyboard: false,
+      icon: L.divIcon({ className: 'me', html: '<span class="me-dot"></span><span class="me-cone"></span>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+    ortKreis = L.circle(ll, { radius: acc, color: '#1F74B8', weight: 1, opacity: 0.5, fillColor: '#1F74B8', fillOpacity: 0.08, interactive: false }).addTo(map);
+    if (blickGrad != null) blickZeigen(blickGrad);
+  } else { posMarker.setLatLng(ll); ortKreis.setLatLng(ll).setRadius(acc); }
+  // ohne Kompass: Bewegungsrichtung aus dem GPS, wenn man geht
+  if (!kompass && pos.coords.heading != null && !Number.isNaN(pos.coords.heading) && (pos.coords.speed || 0) > 0.7) blickZeigen(pos.coords.heading);
+  if (ortung === 'folgen') {
+    if (erstes) map.flyTo(ll, Math.max(map.getZoom(), 17));
+    else if (!map.getBounds().pad(-0.25).contains(ll)) map.panTo(ll, { animate: true });
+  }
+}
+function blickZeigen(grad) {
+  blickGrad = grad;
+  if (blickRaf) return;
+  blickRaf = requestAnimationFrame(() => {
+    blickRaf = 0;
+    const cone = posMarker?.getElement()?.querySelector('.me-cone');
+    if (cone) { cone.style.transform = `rotate(${blickGrad}deg)`; cone.style.opacity = 1; }
+  });
+}
+async function kompassStart() {
+  try {
+    // iPhone: Erlaubnis muss im Tipp erfragt werden
+    // iPhone und neuere Chrome-Versionen fragen um Erlaubnis; ohne Zusage kommen einfach keine Kompassdaten
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission().catch(() => 'denied');
+      if (r !== 'granted') toast('Ohne Kompass-Freigabe zeigt der Pfeil die Laufrichtung (beim Gehen).');
+    }
+    window.addEventListener('deviceorientationabsolute', ortKompass);
+    window.addEventListener('deviceorientation', ortKompass);
+  } catch { /* kein Kompass */ }
+}
+function ortKompass(e) {
+  let hd = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null);
+  if (hd == null) return;
+  kompass = true;
+  // Querformat: Bildschirmdrehung ausgleichen
+  hd = (hd + (screen.orientation?.angle ?? window.orientation ?? 0) + 360) % 360;
+  blickZeigen(hd);
 }

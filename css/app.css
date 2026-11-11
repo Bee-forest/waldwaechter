@@ -942,3 +942,6 @@ table.vergleich th { font-weight: 700; }
 .verband-felder { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .verband-felder label { font-size: .8rem; }
 .zaun-summe .summe-feld { width: 9em; text-align: right; font-weight: 700; }
+.fab.ortung-folgen { background: #1F74B8; color: #fff; }
+.fab.ortung-an { color: #1F74B8; box-shadow: 0 0 0 2px #1F74B8 inset, 0 2px 8px rgba(0,0,0,.25); }
+.me .me-cone { transition: transform .15s linear; }

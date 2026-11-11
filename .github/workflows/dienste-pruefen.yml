@@ -1,0 +1,24 @@
+name: Geoportal-Dienste prüfen (Erreichbarkeit)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dienste abfragen
+        run: |
+          GP=https://www.geoproxy.geoportal-th.de/geoproxy/services
+          BB="50.670,12.040,50.673,12.043"
+          for u in \
+            "$GP/adv_alkis_wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ave:Flurstueck&COUNT=1&BBOX=$BB,urn:ogc:def:crs:EPSG::4326" \
+            "$GP/adv_alkis_v2_wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ave:Flurstueck&COUNT=1&BBOX=$BB,urn:ogc:def:crs:EPSG::4326" \
+            "$GP/adv_alkis_wms?SERVICE=WMS&REQUEST=GetCapabilities" \
+            "$GP/DOP?SERVICE=WMS&REQUEST=GetCapabilities" ; do
+            echo "== $u" | cut -c1-140
+            curl -s -o /tmp/r -w "HTTP %{http_code} in %{time_total}s, %{size_download} Bytes\n" -m 30 -H "Origin: https://bee-forest.github.io" -D /tmp/h "$u" || echo "FEHLER/TIMEOUT"
+            grep -i "access-control-allow-origin" /tmp/h || echo "kein CORS-Header"
+            head -c 300 /tmp/r; echo
+          done

@@ -138,7 +138,8 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
   const MT = (await import('./measures.js')).MEASURE_TYPES;
   let i = schritt ? SCHRITTE.indexOf(schritt) : nurLesen ? SCHRITTE.length - 1 : 0;
   const body = h('div', { class: 'antrag' });
-  const page = openPage('Förderantrag', body);
+  // Zurück (Pfeil, Handy-Taste, Wischgeste): einen Schritt zurück, im ersten Schritt schließen (Antrag bleibt gespeichert)
+  const page = openPage('Förderantrag', body, { onBack: () => { if (i > 0 && !nurLesen) { i--; render(); return true; } return false; } });
   const a0 = antragVon(antragId);
   if (!a0) { page.close(); toast('Antrag nicht gefunden'); return; }
   const d = structuredClone(a0.daten);

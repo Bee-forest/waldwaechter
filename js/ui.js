@@ -93,19 +93,41 @@ export function toast(text) {
 }
 
 /** Vollbild-Seite (z. B. Profil, Assistent), die von rechts hereinkommt. */
-export function openPage(title, content, { onClose } = {}) {
+// Offene Seiten als Stapel – die Zurück-Taste bzw. Wischgeste des Handys schließt die oberste Seite
+// (oder geht in einer Planung mit Schritten einen Schritt zurück), statt die App zu verlassen.
+const SEITEN = [];
+let seitenNr = 0;
+window.addEventListener('popstate', () => {
+  const top = SEITEN[SEITEN.length - 1];
+  if (!top) return;
+  // offenes Fenster (Dialog): nur dieses schließen
+  const scrim = [...document.querySelectorAll('.scrim:not(.closing)')].pop();
+  if (scrim) { scrim.click(); history.pushState({ ww: top.id }, ''); return; }
+  if (top.onBack?.()) { history.pushState({ ww: top.id }, ''); return; }
+  top.close(true);
+});
+export function openPage(title, content, { onClose, onBack } = {}) {
+  const id = ++seitenNr;
+  const zurueck = () => { if (!onBack?.()) close(); };
   const page = h('section', { class: 'page', role: 'dialog', 'aria-label': title },
     h('header', { class: 'page-head' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Zurück', html: icon.back, onclick: () => close() }),
+      h('button', { class: 'icon-btn', 'aria-label': 'Zurück', html: icon.back, onclick: zurueck }),
       h('h1', {}, title),
     ),
     h('div', { class: 'page-body' }, content),
   );
+  let zu = false;
   function close() {
+    if (zu) return; zu = true;
+    const i = SEITEN.findIndex((x) => x.id === id);
+    if (i >= 0) SEITEN.splice(i, 1);
     page.classList.add('closing');
     setTimeout(() => page.remove(), 200);
     onClose?.();
   }
+  const eintrag = { id, close, onBack };
+  SEITEN.push(eintrag);
+  try { history.pushState({ ww: id }, ''); } catch { /* z. B. in eingebetteten Ansichten */ }
   document.getElementById('app').append(page);
   page.querySelector('.icon-btn').focus();
   return { el: page, close };

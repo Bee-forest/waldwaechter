@@ -134,7 +134,16 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   const SCHRITTE = ['Pflanzfläche', 'Baumarten', 'Pflanzenzahl und Verband', 'Baumarten verteilen', 'Pflanzplan und Kosten'];
   const body = h('div', { class: 'pflanzung' });
   let karte = null, umlauf = null, weiterBtn = null, griff = null, pinsel = null, malt = false, geplant = false, marker = [], warteschlange = [], pinselGroesse = 'einzeln', gasseNeu = null, zieht = null;
-  const page = openPage('Pflanzung planen', body, { onClose: () => { umlauf?.stop(); karte?.remove(); } });
+  // Zurück (Pfeil oben, Handy-Taste, Wischgeste): einen Schritt zurück; im ersten Schritt vor dem Verwerfen fragen
+  let verwerfenOk = false;
+  const page = openPage('Pflanzung planen', body, { onClose: () => { umlauf?.stop(); karte?.remove(); },
+    onBack: () => {
+      if (gasseNeu != null) { gasseFertig(); return true; }
+      if (schritt > 0) { schritt--; pinselSetzen(null); render(); return true; }
+      if (verwerfenOk || (!s.ring.length && !s.arten.length)) return false;
+      confirmDialog('Planung verwerfen?', { ok: 'Verwerfen', danger: true, body: 'Die eingezeichnete Fläche und die Angaben gehen verloren.' }).then((ja) => { if (ja) { verwerfenOk = true; page.close(); } });
+      return true;
+    } });
   const mapEl = h('div', { class: 'mini-map zaun-map' });
   const status = h('p', { class: 'draw-status', 'aria-live': 'polite' });
   const umlaufHost = h('div');

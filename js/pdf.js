@@ -5,6 +5,8 @@ const CP = { '€': 0x80, '‚': 0x82, '„': 0x84, '…': 0x85, '‘': 0x91, '�
 const code = (ch) => { const c = ch.codePointAt(0); if (CP[ch] != null) return CP[ch]; return c >= 32 && c <= 255 && !(c >= 0x80 && c < 0xA0) ? c : 0x3F; };
 export const breite = (s, bold, size) => [...String(s)].reduce((a, ch) => a + (W[bold ? 1 : 0][code(ch) - 32] || 556), 0) * size / 1000;
 export const esc = (s) => [...String(s)].map((ch) => { const c = code(ch); const t = String.fromCharCode(c); return t === '(' || t === ')' || t === '\\' ? '\\' + t : c > 126 ? '\\' + c.toString(8).padStart(3, '0') : t; }).join('');
+import { dialog, h, toast } from './ui.js';
+
 const n = (v) => (Math.round(v * 100) / 100).toString();
 
 export class Pdf {
@@ -82,9 +84,56 @@ export class Pdf {
   }
 }
 
-export function herunterladen(blob, name) {
+/**
+ * Datei ausgeben. PDFs öffnen ein Fenster mit „Teilen“, „Öffnen / Drucken“ und „Speichern“ –
+ * jeder Knopf ist ein eigener Tipp. So blockiert der Browser auch den zweiten und dritten Export nicht
+ * (ein Download nach längerer Erzeugung zählt sonst nicht mehr als Nutzeraktion).
+ */
+export function herunterladen(blob, name, { titel } = {}) {
+  if (/\.pdf$/i.test(name) || blob.type === 'application/pdf') { pdfFenster(blob, name, titel); return; }
+  speichernAls(blob, name);
+}
+function speichernAls(blob, name) {
   const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  const a = Object.assign(document.createElement('a'), { href: url, download: name, rel: 'noopener' });
   document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000); // lange gültig lassen: Vorschau, Teilen oder Druck greifen später darauf zu
+}
+export function pdfFenster(blob, name, titel = 'PDF ist fertig') {
+  const pdf = blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+  const datei = typeof File === 'function' ? new File([pdf], name, { type: 'application/pdf' }) : null;
+  const url = URL.createObjectURL(pdf);
+  setTimeout(() => URL.revokeObjectURL(url), 30 * 60 * 1000);
+  const teilenOk = !!(datei && navigator.canShare?.({ files: [datei] }));
+  const mobil = matchMedia('(pointer: coarse)').matches;
+  let teilt = false;
+  const oeffnen = () => {
+    const w = window.open(url, '_blank', 'noopener');
+    if (!w) { const a = Object.assign(document.createElement('a'), { href: url, target: '_blank', rel: 'noopener' }); document.body.append(a); a.click(); a.remove(); }
+  };
+  const drucken = () => {
+    // Desktop: im unsichtbaren Rahmen laden und den Druckdialog öffnen; klappt das nicht, im neuen Tab öffnen
+    document.querySelectorAll('iframe.pdf-druck').forEach((f) => f.remove());
+    const f = Object.assign(document.createElement('iframe'), { className: 'pdf-druck', src: url });
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;';
+    f.onload = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch { oeffnen(); } };
+    document.body.append(f);
+    setTimeout(() => f.remove(), 10 * 60 * 1000);
+  };
+  dialog({
+    title: titel,
+    body: (close) => h('div', { class: 'pdf-fenster' },
+      h('p', { class: 'muted' }, `${name} · ${Math.max(1, Math.round(pdf.size / 1024)).toLocaleString('de-DE')} KB`),
+      teilenOk ? h('button', { type: 'button', class: 'btn btn-primary btn-large', onclick: async () => {
+        if (teilt) return; teilt = true;
+        try { await navigator.share({ files: [datei], title: name }); close(true); }
+        catch (e) { if (e?.name !== 'AbortError') toast('Teilen hat nicht geklappt – bitte „Speichern“ nutzen.'); }
+        finally { teilt = false; }
+      } }, 'Teilen / senden') : null,
+      h('button', { type: 'button', class: `btn btn-large ${teilenOk ? '' : 'btn-primary'}`, onclick: oeffnen }, mobil ? 'Öffnen' : 'Öffnen'),
+      mobil ? null : h('button', { type: 'button', class: 'btn btn-large', onclick: drucken }, 'Drucken'),
+      h('button', { type: 'button', class: 'btn btn-large', onclick: () => { speichernAls(pdf, name); toast('PDF wird gespeichert'); } }, 'Speichern (Download)'),
+      mobil ? h('p', { class: 'hint' }, teilenOk ? 'Drucken am Handy: „Teilen / senden“ und dann „Drucken“ wählen.' : 'Drucken am Handy: PDF öffnen und im Menü „Drucken“ wählen.') : null),
+    actions: [{ label: 'Schließen', value: null }],
+  });
 }

@@ -452,7 +452,7 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
         } else if (art === 'pi') {
           herunterladen(await formularAusfuellen('pi', werteVergabePI()), `Antrag_PI_Forst_${dateiName()}.pdf`);
         }
-        status.textContent = 'Heruntergeladen. Ausdrucken, prüfen, unterschreiben und beim Forstamt einreichen.';
+        status.textContent = 'Fertig. Ausdrucken, prüfen, unterschreiben und beim Forstamt einreichen.';
       } catch (e) {
         console.error(e);
         status.textContent = 'Das Formular konnte nicht geladen werden – bitte mit Internetverbindung erneut versuchen.';

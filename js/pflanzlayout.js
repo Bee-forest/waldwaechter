@@ -11,6 +11,7 @@ export const FORMEN = {
   trupp: { label: 'Truppweise', zelle: 10, text: 'Trupps von etwa 10 × 10 m.' },
   gruppe: { label: 'Gruppenweise', zelle: 20, text: 'Gruppen von etwa 20 × 20 m.' },
   horst: { label: 'Horstweise', zelle: 40, text: 'Horste von etwa 40 × 40 m.' },
+  frei: { label: 'Einzeln setzen', zelle: 5, text: 'Du setzt jede Pflanze selbst: Baumart wählen und auf die Fläche tippen.' },
 };
 const mod = (a, n) => ((a % n) + n) % n;
 
@@ -46,6 +47,7 @@ export function gassenMitten(R, g) {
 }
 /** Rückegassen als Linien (Mittelachsen) innerhalb der Fläche */
 export function gassenLinien(ring, g) {
+  if (g?.modus === 'frei') return (g.linien || []).filter((l) => l.length >= 2).map((l) => ({ y: null, linie: l, mitte: l[Math.floor((l.length - 1) / 2)] }));
   if (!g?.abstand || ring.length < 3) return [];
   const R = rahmen(ring, g.winkel || 0);
   const out = [];
@@ -55,10 +57,38 @@ export function gassenLinien(ring, g) {
   }
   return out;
 }
+/** x-Bereich, in dem die waagerechte Linie y den Gassenkorridor (Strecke a–b, Radius r) schneidet */
+function kapsel([x1, y1], [x2, y2], r, y) {
+  const xs = [];
+  for (const [cx, cy] of [[x1, y1], [x2, y2]]) { const d = r * r - (y - cy) ** 2; if (d >= 0) { const w = Math.sqrt(d); xs.push(cx - w, cx + w); } }
+  const L = Math.hypot(x2 - x1, y2 - y1);
+  if (L > 1e-9) {
+    const nx = (-(y2 - y1) / L) * r, ny = ((x2 - x1) / L) * r;
+    const Q = [[x1 + nx, y1 + ny], [x2 + nx, y2 + ny], [x2 - nx, y2 - ny], [x1 - nx, y1 - ny]];
+    for (let i = 0; i < 4; i++) {
+      const [ax, ay] = Q[i], [bx, by] = Q[(i + 1) % 4];
+      if ((ay - y) * (by - y) <= 0 && ay !== by) xs.push(ax + ((y - ay) * (bx - ax)) / (by - ay));
+    }
+  }
+  return xs.length >= 2 ? [Math.min(...xs), Math.max(...xs)] : null;
+}
+/** Intervalle minus gesperrte Intervalle */
+function abziehen(frei, gesperrt) {
+  let out = frei;
+  for (const [g1, g2] of gesperrt) out = out.flatMap(([a, b]) => (g2 <= a || g1 >= b ? [[a, b]] : [[a, Math.min(b, g1)], [Math.max(a, g2), b]].filter(([u, v]) => v - u > 1e-6)));
+  return out;
+}
 /** Pflanzreihen: Lage (y) und Abschnitte innerhalb der Fläche, ohne Gassen */
 function reihen(R, g, RA = REIHE) {
   const ys = [];
-  if (g?.abstand) {
+  if (g?.modus === 'frei') {
+    // frei eingezeichnete Gassen: Reihen über die ganze Fläche, an den Gassen unterbrochen
+    for (let y = R.minY + RA / 2; y < R.maxY; y += RA) ys.push(y);
+    const r = (g.breite || 4) / 2 + 1;
+    const korridore = (g.linien || []).filter((l) => l.length >= 2).flatMap((l) => { const P = l.map(R.toXY); return P.slice(1).map((q, i) => [P[i], q]); });
+    return ys.map((y, i) => ({ y, i, seg: abziehen(schnitt(R.P, y).map(([a, b]) => [a + RAND, b - RAND]), korridore.map(([a, b]) => kapsel(a, b, r, y)).filter(Boolean)).filter(([a, b]) => b - a >= 0.5) }));
+  }
+  if (g?.abstand && g?.modus !== 'frei') {
     const m = gassenMitten(R, g), halb = (g.breite || 4) / 2 + RA / 2;
     for (let k = 0; k + 1 < m.length; k++) for (let y = m[k] + halb; y <= m[k + 1] - halb + 1e-6; y += RA) if (y > R.minY && y < R.maxY) ys.push(y);
   } else for (let y = R.minY + RA / 2; y < R.maxY; y += RA) ys.push(y);
@@ -77,7 +107,7 @@ const memo = { key: '' };
  * @param {boolean} mitPunkten  Pflanzplätze erzeugen (für Karte und PDF)
  */
 export function pflanzLayout(p, mitPunkten = false) {
-  const key = JSON.stringify([p.ring, p.arten.map((a) => [a.name, a.anteil, a.nHa, a.gruppeHa]), p.gassen, p.form, p.seed, p.mal, p.reihe]);
+  const key = JSON.stringify([p.ring, p.arten.map((a) => [a.name, a.anteil, a.nHa, a.gruppeHa]), p.gassen, p.form, p.seed, p.mal, p.reihe, p.form === 'frei' ? p.frei : null]);
   const M = memo;
   if (M.key === key) return M.wert;
   const RA = Number(p.reihe) > 0 ? Number(p.reihe) : REIHE;
@@ -85,6 +115,7 @@ export function pflanzLayout(p, mitPunkten = false) {
   const F = FORMEN[form];
   const R = rahmen(p.ring, p.gassen?.winkel || 0);
   const r = rng(p.seed || 1);
+  if (form === 'frei') return freiLayout(p, R, RA, key);
   const namen = p.arten.map((a) => a.name);
   const summe = p.arten.reduce((a, x) => a + (Number(x.anteil) || 0), 0) || 1;
   const anteil = Object.fromEntries(p.arten.map((a) => [a.name, (Number(a.anteil) || 0) / summe]));
@@ -177,6 +208,20 @@ export function pflanzLayout(p, mitPunkten = false) {
   M.key = key; M.wert = wert;
   return wert;
 }
+/** Einzeln gesetzte Pflanzen: genau die Punkte der Nutzerin, Fläche je Pflanze nach dem Verband der Baumart */
+function freiLayout(p, R, RA, key) {
+  const namen = p.arten.map((a) => a.name);
+  const nHa = Object.fromEntries(p.arten.map((a) => [a.name, a.nHa || 2500]));
+  const punkte = (p.frei || []).filter((q) => namen.includes(q[2])).map((q, i) => { const [x, y] = R.toXY([q[0], q[1]]); return [x, y, q[2], 10000 / (nHa[q[2]] * RA), `f:${i}`, i]; });
+  const stueck = Object.fromEntries(namen.map((n) => [n, 0])), lenEff = Object.fromEntries(namen.map((n) => [n, 0]));
+  for (const q of punkte) { stueck[q[2]]++; lenEff[q[2]] += q[3]; }
+  const index = new Map();
+  punkte.forEach((q, i) => { const k = `${Math.floor(q[0] / 2)},${Math.floor(q[1] / 2)}`; (index.get(k) || index.set(k, []).get(k)).push(i); });
+  const gesamtLen = namen.reduce((a, n) => a + lenEff[n], 0);
+  const wert = { R, form: 'frei', pieces: [], stueck, lenEff, gesamtLen, Lmix: 0, ha: areaHa(p.ring), nettoHa: areaHa(p.ring), punkte, index, reihe: RA, basisLen: { ...lenEff }, basisStk: { ...stueck } };
+  memo.key = key; memo.wert = wert;
+  return wert;
+}
 /** Baumart an einem Punkt ('mix' = Einzelmischung) */
 export function artAm(lay, ll) {
   const [x, y] = lay.R.toXY(ll);
@@ -225,5 +270,5 @@ export function gruppenGroessen(lay) {
 export function gespeichertesLayout(m) {
   const pp = m?.pflanzplan;
   if (!pp?.vert || !pp.vorgabe?.length || !m.flaeche?.ring?.length) return null;
-  return pflanzLayout({ ring: m.flaeche.ring, arten: pp.vorgabe, gassen: pp.gassen, form: pp.vert.form, seed: pp.vert.seed, mal: pp.vert.mal, reihe: pp.reihe });
+  return pflanzLayout({ ring: m.flaeche.ring, arten: pp.vorgabe, gassen: pp.gassen, form: pp.vert.form, seed: pp.vert.seed, mal: pp.vert.mal, reihe: pp.reihe, frei: pp.vert.frei });
 }

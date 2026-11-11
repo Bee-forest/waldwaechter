@@ -945,3 +945,6 @@ table.vergleich th { font-weight: 700; }
 .fab.ortung-folgen { background: #1F74B8; color: #fff; }
 .fab.ortung-an { color: #1F74B8; box-shadow: 0 0 0 2px #1F74B8 inset, 0 2px 8px rgba(0,0,0,.25); }
 .me .me-cone { transition: transform .15s linear; }
+.pdf-fenster { display: grid; gap: 10px; margin: 4px 0 8px; }
+.pdf-fenster .btn-large { width: 100%; }
+.gassen-punkt { border-radius: 4px; background: #fff; border: 3px solid #8D6E63; box-shadow: 0 1px 4px rgba(0,0,0,.35); cursor: grab; }

@@ -5,7 +5,7 @@ import { source } from './data/source.js';
 import { formatHa } from './geo.js';
 import { amtlicheFlaecheHa } from './map/thueringen.js';
 import { miniKarte, flaecheVon, betrifftFlurstueck } from './flaeche.js';
-import { openVerlauf } from './vertraeglichkeit.js';
+import { openVerlauf, anhangOeffnen } from './vertraeglichkeit.js';
 import { openThinningWizard } from './thinning/wizard.js';
 import { fmt, bLabel, HOEHENKLASSEN } from './thinning/methode.js';
 
@@ -125,6 +125,7 @@ function openDetail(p, T) {
       h('label', { class: 'kosten-feld' }, 'Kosten (€)', kostenIn),
       h('div', { class: 'measure-actions' },
         m.type === 'durchforstung' ? h('button', { class: 'btn', onclick: () => { page.close(); openThinningWizard({ measureId: m.id }); } }, m.status === 'fertig' ? 'Durchforstung ansehen' : 'Durchforstung öffnen') : null,
-        h('button', { class: 'btn', onclick: () => openVerlauf(m.id) }, m.anhaenge?.length ? `Verlauf · ${m.anhaenge.length} Anhang${m.anhaenge.length > 1 ? 'e' : ''}` : 'Verlauf')));
+        h('button', { class: 'btn', onclick: () => openVerlauf(m.id) }, m.anhaenge?.length ? `Verlauf · ${m.anhaenge.length} Anhang${m.anhaenge.length > 1 ? 'e' : ''}` : 'Verlauf'),
+        m.anhaenge?.some((a) => a.typ === 'pflanzplan') ? h('button', { class: 'btn', onclick: () => anhangOeffnen(m.id, [...m.anhaenge].reverse().find((a) => a.typ === 'pflanzplan')) }, 'Pflanzplan (PDF)') : null));
   }
 }

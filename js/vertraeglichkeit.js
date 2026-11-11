@@ -97,6 +97,18 @@ function vorbelegen(m, k) {
   };
 }
 
+/** Anhang öffnen: Förderantrag, Verträglichkeitsbogen oder gespeicherte Datei (PDF) */
+export async function anhangOeffnen(measureId, a) {
+  if (a.typ === 'foerderantrag') return import('./foerderung.js').then((f) => f.openFoerderantrag({ antragId: a.antragId, nurLesen: true }));
+  if (a.datei) {
+    const [{ dateiLaden }, { herunterladen }] = await Promise.all([import('./dateien.js'), import('./pdf.js')]);
+    const blob = await dateiLaden(a.datei).catch(() => null);
+    if (!blob) { toast('Die Datei ist auf diesem Gerät nicht (mehr) gespeichert.'); return; }
+    return herunterladen(blob, a.name || `${a.titel}.pdf`, { titel: a.titel });
+  }
+  return openVertraeglichkeit(measureId, { anhangId: a.id, nurLesen: true });
+}
+
 /** Verlauf und Anhänge einer Maßnahme */
 export function openVerlauf(measureId) {
   const body = h('div', { class: 'verlauf' });
@@ -111,7 +123,7 @@ export function openVerlauf(measureId) {
       m.anhaenge?.length
         ? h('ul', { class: 'anhang-list' }, m.anhaenge.map((a) => h('li', {},
             h('div', {}, h('strong', {}, a.titel), h('small', {}, `erstellt ${new Date(a.erstellt).toLocaleDateString('de-DE')}${a.daten?.ergebnis === 'offen' ? ' · Behörde einschalten' : ''}`)),
-            h('button', { class: 'btn btn-small', onclick: () => (a.typ === 'foerderantrag' ? import('./foerderung.js').then((f) => f.openFoerderantrag({ antragId: a.antragId, nurLesen: true })) : openVertraeglichkeit(measureId, { anhangId: a.id, nurLesen: true })) }, 'Öffnen'))))
+            h('button', { class: 'btn btn-small', onclick: () => anhangOeffnen(measureId, a) }, 'Öffnen'))))
         : h('p', { class: 'muted' }, 'Keine Anhänge.'),
       h('h2', { class: 'section-title' }, 'Verlauf'),
       h('ul', { class: 'verlauf-list' }, eintraege.map((e) => h('li', {}, h('span', { class: 'cal-date' }, new Date(e.ts).toLocaleDateString('de-DE')), h('span', {}, e.text)))),

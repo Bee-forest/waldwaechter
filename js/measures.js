@@ -1,7 +1,7 @@
 // Reiter 2: Maßnahmen – Übersicht, neue Maßnahme anlegen.
 import { h, fill, icon, openPage, confirmDialog, toast, fmtDate, dialog } from './ui.js';
 import { inBrutzeit, nachBrutzeit, schutzzeitVon, schutzzeitText, datumText } from './schutzgebiete.js';
-import { openVertraeglichkeit, openVerlauf, protokoll } from './vertraeglichkeit.js';
+import { openVertraeglichkeit, openVerlauf, anhangOeffnen, protokoll } from './vertraeglichkeit.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { CATEGORIES } from './map/basemap.js';
@@ -280,6 +280,7 @@ function measureCard(m, byId) {
     h('div', { class: 'measure-actions' },
       action,
       h('button', { class: 'btn', onclick: () => openVerlauf(m.id) }, m.anhaenge?.length ? `Verlauf · ${m.anhaenge.length} Anhang${m.anhaenge.length > 1 ? 'e' : ''}` : 'Verlauf'),
+      m.anhaenge?.some((a) => a.typ === 'pflanzplan') ? h('button', { class: 'btn', onclick: () => anhangOeffnen(m.id, [...m.anhaenge].reverse().find((a) => a.typ === 'pflanzplan')) }, 'Pflanzplan (PDF)') : null,
       m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn', onclick: () => {
         store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = x.status === 'geplant' ? 'arbeit' : 'fertig'; if (x.status === 'fertig') x.finishedAt = Date.now(); });
       } }, m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren') : null,

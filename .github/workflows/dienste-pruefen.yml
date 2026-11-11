@@ -6,19 +6,29 @@ on:
 jobs:
   pruefen:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Dienste abfragen
+      - name: Flurstücksabfrage wie die App (WFS, UTM 32, BBOX 8 m)
         run: |
-          GP=https://www.geoproxy.geoportal-th.de/geoproxy/services
-          BB="50.670,12.040,50.673,12.043"
-          for u in \
-            "$GP/adv_alkis_wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ave:Flurstueck&COUNT=1&BBOX=$BB,urn:ogc:def:crs:EPSG::4326" \
-            "$GP/adv_alkis_v2_wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ave:Flurstueck&COUNT=1&BBOX=$BB,urn:ogc:def:crs:EPSG::4326" \
-            "$GP/adv_alkis_wms?SERVICE=WMS&REQUEST=GetCapabilities" \
-            "$GP/DOP?SERVICE=WMS&REQUEST=GetCapabilities" ; do
-            echo "== $u" | cut -c1-140
-            curl -s -o /tmp/r -w "HTTP %{http_code} in %{time_total}s, %{size_download} Bytes\n" -m 30 -H "Origin: https://bee-forest.github.io" -D /tmp/h "$u" || echo "FEHLER/TIMEOUT"
-            grep -i "access-control-allow-origin" /tmp/h || echo "kein CORS-Header"
-            head -c 300 /tmp/r; echo
-          done
+          pip install -q pyproj
+          python3 - <<'PY'
+          import time, urllib.request, urllib.parse, re
+          from pyproj import Transformer
+          t = Transformer.from_crs(4326, 25832, always_xy=True)
+          GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services'
+          NS = {'adv_alkis_wfs': 'http://repository.gdi-de.org/schemas/adv/produkt/alkis-vereinfacht/1.0', 'adv_alkis_v2_wfs': 'http://repository.gdi-de.org/schemas/adv/produkt/alkis-vereinfacht/2.0'}
+          for name, (lat, lon) in {'Triebes': (50.67161, 12.04144), 'Gotha': (50.9497, 10.7085), 'Ilmenau Wald': (50.668, 10.93), 'Langenwolschendorf': (50.64025, 11.97029)}.items():
+              x, y = t.transform(lon, lat)
+              for dienst, ns in NS.items():
+                  q = urllib.parse.urlencode({'SERVICE': 'WFS', 'VERSION': '2.0.0', 'REQUEST': 'GetFeature', 'TYPENAMES': 'ave:Flurstueck', 'NAMESPACES': f'xmlns(ave,{ns})', 'SRSNAME': 'urn:ogc:def:crs:EPSG::25832', 'COUNT': '30', 'BBOX': f'{x-4},{y-4},{x+4},{y+4},urn:ogc:def:crs:EPSG::25832'})
+                  t0 = time.time()
+                  try:
+                      r = urllib.request.urlopen(urllib.request.Request(f'{GP}/{dienst}?{q}', headers={'Origin': 'https://bee-forest.github.io'}), timeout=30)
+                      body = r.read().decode('utf-8', 'replace')
+                      n = re.search(r'numberReturned="(\d+)"', body)
+                      fl = re.findall(r'<ave:flstkennz>([^<]+)', body)[:3]
+                      print(f'{name:20} {dienst:17} HTTP {r.status} {time.time()-t0:.2f}s  Treffer {n.group(1) if n else "?"}  {fl}  CORS={r.headers.get("Access-Control-Allow-Origin")}')
+                      if not fl: print('   ', body[:400].replace('\n', ' '))
+                  except Exception as e:
+                      print(f'{name:20} {dienst:17} FEHLER nach {time.time()-t0:.1f}s: {e}')
+          PY

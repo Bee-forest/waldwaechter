@@ -460,38 +460,14 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       ];
       canNext = f.b != null && f.b > 0;
     } else if (q === 'probe') {
-      // Schritt 3: Szenario per Probezählung an drei gleichmäßig verteilten Probepunkten
-      if (!f.probePunkte?.length) {
-        const fein = generateGrid(st.sel.ring, 5, { polys: selPolys() }).filter((pt) => inPolys(pt, selPolys()));
-        const n = fein.length;
-        f.probePunkte = n ? [Math.floor(n / 6), Math.floor(n / 2), Math.floor((5 * n) / 6)].map((i) => fein[Math.min(n - 1, i)]) : [];
-      }
+      // Schritt 3: Szenario – vor Ort eingeschätzt, welche Stärke die meisten Bäume stellt (ohne Probezählung)
       probeLayer.clearLayers();
-      f.probePunkte.forEach((pt, i) => {
-        probeLayer.addLayer(L.circle(pt, { radius: F4.parameter().raster.pruefkreis_m, color: '#1F74B8', weight: 2, dashArray: '4 4', fillOpacity: 0.06, interactive: false }));
-        probeLayer.addLayer(L.circleMarker(pt, { radius: 9, color: '#fff', weight: 2, fillColor: '#1F74B8', fillOpacity: 1 }).bindTooltip(`P${i + 1}`, { permanent: true, direction: 'center', className: 'pt-tip' }));
-      });
-      const sum = f.probe.reduce((a, x) => ({ duenn: a.duenn + x.duenn, mittel: a.mittel + x.mittel, dick: a.dick + x.dick }), { duenn: 0, mittel: 0, dick: 0 });
-      const n = sum.duenn + sum.mittel + sum.dick;
-      const r = F4.szenarioMitRueckfall(sum.duenn, sum.mittel, sum.dick);
-      if (!f.szManuell) f.sz = r.szenario;
-      const zaehl = (pi, k) => h('div', { class: 'counter' },
-        h('button', { class: 'count-btn', 'aria-label': `${F4.KLASSE_NAME[k]} weniger`, disabled: f.probe[pi][k] <= 0, onclick: () => { f.probe[pi][k]--; f.szManuell = false; renderParams(); } }, '−'),
-        h('span', { class: 'count' }, h('b', {}, f.probe[pi][k])),
-        h('button', { class: 'count-btn plus', 'aria-label': `${F4.KLASSE_NAME[k]} gezählt`, onclick: () => { f.probe[pi][k]++; f.szManuell = false; buzz('tick'); renderParams(); } }, '+'));
-      title = 'Probezählung: Welche Stärke stellt die meisten Bäume?';
-      help = `Geh zu den drei Probepunkten P1–P3 (blau in der Karte) und tippe dort alle Bäume ab 7 cm BHD im Umkreis von ${F4.parameter().raster.pruefkreis_m} m an – nur die Stärkeklasse: dünn 7–25 cm, mittel über 25–50 cm, dick über 50 cm.`;
+      const opt = [[3, 'duenn', 'Vor allem dünne Bäume', 'BHD 7–25 cm – Stangenholz, viele schlanke Stämme'], [2, 'mittel', 'Vor allem mittlere Bäume', 'BHD über 25 bis 50 cm'], [1, 'dick', 'Vor allem dicke Bäume', 'BHD über 50 cm – starkes Baumholz']];
+      title = 'Welche Stärke stellt die meisten Bäume?';
+      help = 'Schau dich beim Gang durch den Bestand um und wähle die Stärke, die du am häufigsten siehst. Der BHD wird in 1,30 m Höhe gemessen. Bei einer Mischung zählt die Stärke, die deutlich überwiegt.';
       content = [
-        f.probePunkte.map((pt, pi) => h('div', { class: 'probe-punkt' },
-          h('div', { class: 'mat-kopf' }, h('strong', {}, `Probepunkt P${pi + 1}`), h('button', { type: 'button', class: 'link-btn', onclick: () => map.flyTo(pt, 18) }, 'auf der Karte zeigen')),
-          h('ul', { class: 'removals' }, ['duenn', 'mittel', 'dick'].map((k) => h('li', { class: 'removal' },
-            h('div', { class: 'removal-text' }, h('strong', {}, F4.KLASSE_NAME[k]), h('span', {}, F4.parameter().staerkeklassen[k].replace('BHD', 'BHD').replace('≤', '≤'))), zaehl(pi, k)))))),
-        h('div', { class: 'calc-box' },
-          h('strong', {}, n ? `Gezählt: ${n} Bäume – dünn ${Math.round((sum.duenn / n) * 100)} %, mittel ${Math.round((sum.mittel / n) * 100)} %, dick ${Math.round((sum.dick / n) * 100)} %` : 'Noch keine Bäume gezählt'),
-          n ? h('small', {}, r.eindeutig ? `Ergebnis: Szenario ${r.szenario} – ${F4.parameter().szenarien[r.szenario]}` : `Kein eindeutiges Ergebnis (keine Klasse mit mindestens 40 % und 10 Prozentpunkten Vorsprung). Vorschlag: Szenario ${r.szenario} nach der Klasse mit dem größten Anteil – bei Bedarf ändern.`) : null),
-        h('p', { class: 'sheet-label' }, 'Szenario (bei Bedarf ändern)'),
-        h('div', { class: 'q-cards' }, [1, 2, 3].map((z) => choice(f.sz === z, () => { f.sz = z; f.szManuell = true; renderParams(); },
-          h('span', { class: 'q-text' }, h('strong', {}, `Szenario ${z}${!f.szManuell || r.szenario !== z ? '' : ''}${r.szenario === z && n ? ' (gezählt)' : ''}`), h('small', {}, F4.parameter().szenarien[z]))))),
+        h('div', { class: 'q-cards' }, opt.map(([z, k, t, u]) => choice(f.sz === z, () => { f.sz = z; f.szManuell = true; renderParams(); },
+          h('span', { class: 'q-text' }, h('strong', {}, t), h('small', {}, u))))),
       ];
       canNext = f.sz != null;
     } else {
@@ -825,7 +801,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       } else {
         when = new Date(erster); when.setFullYear(when.getFullYear() + 10); when.setHours(9, 0, 0, 0);
         thinning = { ...base, params: null, plan: null };
-        note = 'Nächste Durchforstung – Bestand neu ansprechen (Höhe, B°, Probezählung).';
+        note = 'Nächste Durchforstung – Bestand neu ansprechen (Höhe, B°, überwiegende Stärke).';
       }
     } else if (ei.nr < ei.anzahl) {
       const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0, termin: when.getTime() };
@@ -1362,7 +1338,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       ['Durchforstungsprotokoll', `Durchforstungshilfe ${st.plan.version}`],
       ['Datum', new Date().toLocaleString('de-DE')], ['Bestand', st.sel?.label || ''], ['Fläche (ha)', zahl(st.plan.areaHa, 4)],
       ['Hauptbaumart', f.art], ['Baumartengruppe', pl.gruppe], ['Oberhöhe ho (m)', zahl(f.ho, 1)], ['Alter (Jahre)', f.alter ?? st.auto?.bestand?.alter ?? ''], ['B°', zahl(f.b, 2)],
-      ['Probezählung dünn/mittel/dick', f.probe.map((x) => `${x.duenn}/${x.mittel}/${x.dick}`).join(' | ')],
+      ['Überwiegende Stärke', { 1: 'dick', 2: 'mittel', 3: 'dünn' }[f.sz] || ''],
       ['Feld', `${pl.gruppe} | ${pl.hoehenklasse} | ${pl.bstufe} | ${pl.szenario}`], ['Zielmenge (m³/ha)', zahl(pl.zielmenge, 1)], ['Eingriff', `${st.plan.eingriffe.nr} von ${pl.eingriffe}`],
       ['Menge (m³/ha)', zahl(pl.mengeHa, 3)], ['Budget (m³)', zahl(z.budget, 3)], ['Gezählt (m³)', zahl(z.gezaehlt, 3)], ['Gezählt (m³/ha)', zahl(e.gezaehltHa, 3)],
       ['Hinweis', 'Gezählt ist eine vorsichtige Schätzung. Das tatsächlich geerntete Volumen liegt meist etwas darunter.'],
@@ -1390,8 +1366,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     zeile('Fläche', `${formatHa(st.plan.areaHa)}`); zeile('Hauptbaumart / Gruppe', `${f.art} / ${pl.gruppe}`);
     zeile('Oberhöhe ho', `${fmt(f.ho, 1)} m (${f.hoQuelle === 'lidar' ? 'LiDAR' : f.hoQuelle === 'alter' ? 'aus dem Alter geschätzt' : 'eigene Angabe'})`);
     zeile('Alter', f.alter ?? st.auto?.bestand?.alter ?? 'unbekannt'); zeile('Bestockungsgrad B°', `${fmt(f.b, 2)} (Stufe ${pl.bstufe})`);
-    zeile('Probezählung P1–P3 (dünn/mittel/dick)', f.probe.map((x) => `${x.duenn}/${x.mittel}/${x.dick}`).join('  ·  '));
-    zeile('Szenario', `${pl.szenario}${f.szManuell ? ' (von Hand gewählt)' : ''}`);
+    zeile('Überwiegende Stärke', `${{ 1: 'dick', 2: 'mittel', 3: 'dünn' }[f.sz] || '–'} (vor Ort eingeschätzt)`);
+    zeile('Szenario', `${pl.szenario}`);
     y += 6; doc.text(L0, y, 'Feld und Menge', { bold: true, size: 11 }); y += 14;
     zeile('Feld', `${pl.gruppe} · ${pl.hoehenklasse} · ${pl.bstufe} · Szenario ${pl.szenario}`);
     zeile('Zielmenge im Jahrzehnt', `${fmt(pl.zielmenge, 1)} m³/ha, ${pl.eingriffe} Eingriff${pl.eingriffe > 1 ? 'e' : ''}`);

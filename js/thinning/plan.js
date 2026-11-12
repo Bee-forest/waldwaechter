@@ -129,3 +129,66 @@ export function computePlanMethode(sel, p, wald = null) {
     auswahl: AUSWAHL_TEXT.replace('bis 15 m', `bis ${r.ausweichen || 15} m`),
   };
 }
+
+// ---------- Fassung 4: Mengenzähler (siehe f4.js) ----------
+import { parameter, planung as planungF4 } from './f4.js';
+
+/** Fläche (ha) der Auswahl: amtlich, Waldanteil oder geometrisch */
+export function flaecheDerAuswahl(sel, wald = null) {
+  const sh = Array.isArray(sel) ? { ring: sel } : sel;
+  const polys = polysOf(sh);
+  const clip = sh.clip?.length ? sh.clip : null;
+  const geoHa = clip ? generateGrid(sh.ring, 5, { polys }).filter((pt) => inPolys(pt, clip)).length * 25 / 10000 : areaM2Polys(polys) / 10000;
+  const flaeche = clip ? geoHa : sh.flaecheHa ?? geoHa;
+  const ha = wald?.status === 'teil' ? wald.waldHa : wald?.status === 'kein' ? 0 : flaeche;
+  return { sh, polys, clip, geoHa, flaeche, ha };
+}
+
+/** Rasterpunkte nach Fassung 4: quadratisches Raster, zufälliger Versatz 0–Abstand in x und y, Schlangenlinie, nur Punkte im Polygon */
+export function rasterF4(sel, wald, offsetRel) {
+  const { sh, polys, clip } = flaecheDerAuswahl(sel, wald);
+  const R = parameter().raster;
+  const punkteBei = (abstand) => {
+    let g = generateGrid(sh.ring, abstand, { offset: offsetRel.map((v) => v * abstand), polys });
+    if (clip) g = g.filter((pt) => inPolys(pt, clip));
+    if (wald?.status === 'kein') g = [];
+    else if (wald?.status === 'teil') g = g.filter((pt) => imWald(wald, pt));
+    return g.filter((pt) => inPolys(pt, clip || polys)); // nur Punkte innerhalb des Polygons (kein Ersatzpunkt)
+  };
+  let abstand = R.abstand_m;
+  let grid = punkteBei(abstand);
+  // FESTLEGUNG: Kleine Flächen – weniger als 8 Punkte → Abstand verkleinern, bis mindestens 8 Punkte im Polygon liegen, aber nicht unter 15 m.
+  // Prüfkreis und Ausweichradius bleiben gleich. (Regel nicht simuliert.)
+  const MIN_PUNKTE = 8, MIN_ABSTAND = 15;
+  while (grid.length < MIN_PUNKTE && abstand > MIN_ABSTAND) { abstand = Math.max(MIN_ABSTAND, abstand - 1); grid = punkteBei(abstand); }
+  return { grid, abstand, verkleinert: abstand < R.abstand_m };
+}
+
+/**
+ * Plan eines Eingriffs nach Fassung 4.
+ * f: { art, nadel, ho, b, sz, eingriffNr, bisherGezaehltHa, offset? }
+ */
+export function computePlanF4(sel, f, wald = null) {
+  const { flaeche, ha, geoHa, sh, clip } = flaecheDerAuswahl(sel, wald);
+  f.eingriffNr ??= 1;
+  // Versatz in x und y zufällig zwischen 0 und Rasterabstand, je Eingriff neu – einmal gewählt bleibt er für diesen Eingriff fest
+  f.offset ??= [Math.random(), Math.random()];
+  const r = rasterF4(sel, wald, f.offset);
+  const pl = planungF4({ art: f.art, nadel: f.nadel, ho: f.ho, b: f.b, sz: f.sz, flaecheHa: ha, eingriffNr: f.eingriffNr, bisherGezaehltHa: f.bisherGezaehltHa || 0 });
+  const R = parameter().raster;
+  return {
+    methode: 'f4',
+    version: parameter().version,
+    areaHa: ha,
+    areaAmtlich: !clip && sh.flaecheHa != null && wald?.status !== 'teil',
+    flaecheGesamtHa: flaeche,
+    areaGeoHa: geoHa,
+    wald: wald ? { status: wald.status, waldHa: wald.waldHa ?? null, gesamtHa: wald.gesamtHa ?? flaeche, quelle: wald.quelle || null } : null,
+    planung: pl,
+    eingriffe: { nr: f.eingriffNr, anzahl: pl.eingriffe, abstandJahre: pl.abstandJahre },
+    raster: r.abstand, rasterVerkleinert: r.verkleinert, kreis: R.pruefkreis_m, ausweichen: R.ausweich_m,
+    offset: f.offset,
+    points: r.grid.map((at, i) => ({ id: i + 1, at, status: 'open' })),
+    auswahl: parameter().auswahl_rangfolge_baumart,
+  };
+}

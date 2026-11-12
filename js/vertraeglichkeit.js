@@ -90,7 +90,7 @@ function vorbelegen(m, k) {
     massnahme: pl?.eingriffe?.anzahl > 1 ? `Durchforstung, Eingriff ${pl.eingriffe.nr} von ${pl.eingriffe.anzahl}` : 'Durchforstung',
     flaeche: m?.thinning?.label || '', ha: pl ? pl.areaHa.toFixed(2).replace('.', ',') : '',
     von: ymd(m?.date || Date.now()), bis: '',
-    entnahme: pl ? `ca. ${Math.round(pl.eingriffe?.vEingriff || 0)} Fm/ha, ${pl.total} Bäume (${pl.regel} je Rasterpunkt)` : '',
+    entnahme: pl?.methode === 'f4' ? `höchstens ${Math.round((pl.planung?.mengeHa || 0) * 10) / 10} m³/ha in diesem Eingriff (Obergrenze 50 m³/ha), einzelstammweise an zufällig gelegten Rasterpunkten` : pl ? `ca. ${Math.round(pl.eingriffe?.vEingriff || 0)} Fm/ha, ${pl.total} Bäume (${pl.regel} je Rasterpunkt)` : '',
     gebiet: ffh.map((g) => `${g.art}: ${g.name}`).join('; '), gebietsnr: ffh.map((g) => g.code).filter(Boolean).join(', '),
     lrt: (m?.thinning?.lrt || k.lrt || []).map((l) => l.titel).join('; '),
     name: store.get().profile.name || '', datum: ymd(Date.now()),

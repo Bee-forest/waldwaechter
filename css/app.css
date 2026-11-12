@@ -948,3 +948,22 @@ table.vergleich th { font-weight: 700; }
 .pdf-fenster { display: grid; gap: 10px; margin: 4px 0 8px; }
 .pdf-fenster .btn-large { width: 100%; }
 .gassen-punkt { border-radius: 4px; background: #fff; border: 3px solid #8D6E63; box-shadow: 0 1px 4px rgba(0,0,0,.35); cursor: grab; }
+
+/* Durchforstung Fassung 4: Mengenzähler */
+.zaehler-leiste { display: grid; gap: 6px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); margin: 8px 0; }
+.zaehler-balken { height: 8px; border-radius: 99px; background: rgba(0,0,0,.08); overflow: hidden; }
+.zaehler-balken span { display: block; height: 100%; background: var(--ok, #2E9E4F); transition: width .25s; }
+.zaehler-werte { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .9rem; }
+.vorschlag { display: grid; gap: 2px; padding: 10px 12px; border-radius: 14px; border: 2px solid var(--ok, #2E9E4F); margin: 6px 0; }
+.vorschlag small { color: var(--muted, #667); }
+.stufen-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stufe-btn { display: grid; gap: 2px; min-height: 64px; padding: 10px; border-radius: 14px; border: 2px solid var(--line, #cfd6cc); background: var(--surface, #fff); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.stufe-btn strong { font-size: 1.1rem; }
+.stufe-btn small { color: var(--muted, #667); }
+.stufe-btn:active { transform: scale(.98); background: var(--surface-2); }
+.stufe-btn.passt-nicht { opacity: .5; border-style: dashed; }
+.dick-zeile { display: flex; gap: 8px; }
+.dick-zeile input { flex: 1; min-width: 0; }
+.baum-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.baum-liste li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 10px; background: var(--surface-2); }
+.probe-punkt { padding: 10px 12px; border-radius: 14px; background: var(--surface-2); margin: 6px 0; display: grid; gap: 6px; }

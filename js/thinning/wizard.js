@@ -16,11 +16,17 @@ import { openVertraeglichkeit, protokoll } from '../vertraeglichkeit.js';
 import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
 import { say, WANZE_SVG } from '../mascot.js';
+import * as F4 from './f4.js';
+import { computePlanF4 } from './plan.js';
+import { standSpeichern, standLaden } from './speicher.js';
+import { dateiSpeichern, dateiLaden } from '../dateien.js';
+import { Pdf, herunterladen } from '../pdf.js';
 
 const STEPS = ['Fläche', 'Angaben', 'Raster', 'Im Bestand'];
 const COLORS = { open: '#D7263D', done: '#2E9E4F', skipped: '#8A948C', target: '#D7263D' };
 
 export async function openThinningWizard({ parcelId, measureId } = {}) {
+  await F4.ladeParameter(); // Durchforstungshilfe Fassung 4: alle Werte aus data/durchforstung_parameter_f4.json
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const myIds = store.get().parcels.map((p) => p.id).filter((id) => byId[id]);
@@ -34,6 +40,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     params: null,
     plan: null,
     measureId: measureId || null,
+    zaehler: null,   // Mengenzähler (Fassung 4)
+    spur: [],        // GPS-Spur im Bestand
+    auffuellen: null, // Rückweg nach dem letzten Punkt
+    mindest: false,  // Mindestnutzung aktiv
   };
 
   const existing = measureId ? store.get().measures.find((m) => m.id === measureId) : null;
@@ -168,6 +178,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   const gridLayer = L.layerGroup().addTo(map);
   const navLayer = L.layerGroup().addTo(map);
   const userLayer = L.layerGroup().addTo(map);
+  const probeLayer = L.layerGroup().addTo(map);
   map.on('click', onMapClick);
 
   let gps = null, follow = true, heading = null, prompted = new Set(), working = null, lastPos = null;
@@ -189,7 +200,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     st.step = step;
     page.classList.toggle('q-mode', step === 1); // bei den Fragen: Karte klein, Fragen groß
     renderStepper();
-    ctxLayer.clearLayers(); gridLayer.clearLayers(); navLayer.clearLayers();
+    ctxLayer.clearLayers(); gridLayer.clearLayers(); navLayer.clearLayers(); probeLayer.clearLayers();
     if (step !== 3) stopNav();
     [renderSelect, renderParams, renderGrid, renderNav][step]();
     // Kartengröße ändert sich je Schritt → Größe neu messen und Fläche wieder einpassen
@@ -312,14 +323,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const s = st.sel?.stand;
     const art = s?.info?.art || s?.species || '';
     const dim = s ? (s.dg < 25 ? 'duenn' : s.dg < 50 ? 'mittel' : 'dick') : null;
-    return { v: 4, art, gruppe: art ? gruppeVon(art) : null, dim, b: null, hoKlasse: null, alter: null, spacing: null, q: 0 };
+    return { v: 5, art, nadel: null, ho: null, hoQuelle: null, b: null, probe: [{ duenn: 0, mittel: 0, dick: 0 }, { duenn: 0, mittel: 0, dick: 0 }, { duenn: 0, mittel: 0, dick: 0 }], sz: null, szManuell: false, alter: null, eingriffNr: 1, bisherGezaehltHa: 0, q: 0 };
   }
 
-  const QUESTIONS = ['termin', 'art', 'dim', 'b', 'hoehe', 'ergebnis'];
+  const QUESTIONS = ['termin', 'art', 'hoehe', 'b', 'probe', 'ergebnis'];
 
   function renderParams() {
     drawSelection();
-    if (!st.params || st.params.main || st.params.v !== 4) st.params = defaultParams(); // alte Angaben (vorherige Version) verwerfen
+    if (!st.params || st.params.main || st.params.v !== 5) st.params = defaultParams(); // alte Angaben (vorherige Version) verwerfen
+    if (QUESTIONS[st.params.q] !== 'probe') probeLayer.clearLayers();
     const f = st.params;
     // Baumart, Alter (Waldverzeichnis) und Oberhöhe (LiDAR) einmal je Fläche laden
     if (!st.auto || st.auto.ring !== st.sel.ring) {
@@ -330,7 +342,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         if (pf && !(korr?.haupt?.art && (korr.erfasst || 0) > pf.ts)) bestand = { ...(bestand || {}), art: pf.art, text: pf.text, alter: pf.alter, alterStichtag: pf.alterStichtag, stichtag: pf.jahr, quelle: 'eigen' };
         else if (korr?.haupt?.art) bestand = mitKorrektur(bestand, korr);
         st.auto = { ring: st.sel.ring, loading: false, bestand, oberhoehe, lrt, natura, wald };
-        if (bestand?.art && !f.art) { f.art = bestand.art; f.gruppe = gruppeVon(bestand.art); f.artQuelle = bestand.quelle === 'eigen' ? 'eigen' : 'waldverzeichnis'; }
+        if (bestand?.art && !f.art) { f.art = bestand.art; f.artQuelle = bestand.quelle === 'eigen' ? 'eigen' : 'waldverzeichnis'; }
+        if (f.ho == null && oberhoehe?.oberhoehe != null) { f.ho = Math.round(oberhoehe.oberhoehe * 10) / 10; f.hoQuelle = 'lidar'; }
         if (st.step === 1) renderParams();
       });
     }
@@ -375,107 +388,170 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       ];
       canNext = !a.loading && !!f.termin;
     } else if (q === 'art') {
-      title = 'Welche Baumart prägt den Bestand?';
+      // Schritt 1: Bestand – Fläche und Hauptbaumart (daraus die Baumartengruppe)
+      title = 'Welche Hauptbaumart hat der Bestand?';
       const b = st.auto?.bestand;
       help = b?.art
-        ? (b.quelle === 'eigen' ? `Laut deinen Angaben zum Flurstück: ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.` : `Laut Waldverzeichnis von ThüringenForst (Stand ${b.stichtag || '?'}): ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.`)
-        : st.auto?.loading ? 'Suche Baumart im Waldverzeichnis …' : 'Wähle die Hauptbaumart. Daraus ergibt sich die Baumartengruppe der Methode.';
-      content = Object.entries(GRUPPEN).map(([g, grp]) => h('div', { class: 'q-group' },
-        h('p', { class: 'sheet-label' }, grp.label),
-        h('div', { class: 'q-chips' }, grp.arten.map((a) => choice(f.art === a, () => { f.art = a; f.gruppe = gruppeVon(a); renderParams(); }, a))),
-      ));
+        ? (b.quelle === 'eigen' ? `Laut deinen Angaben zum Flurstück: ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.` : `Laut Baumartenkarte (Waldverzeichnis ThüringenForst, Stand ${b.stichtag || '?'}): ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.`)
+        : st.auto?.loading ? 'Suche die Baumart in der Baumartenkarte …' : 'Wähle die Hauptbaumart (größter Flächen- oder Grundflächenanteil). Daraus ergibt sich die Baumartengruppe.';
+      const gruppen = F4.parameter().baumartengruppen;
+      const gelistet = Object.values(gruppen).flat();
+      const ha = st.auto?.wald?.status === 'teil' ? st.auto.wald.waldHa : selHa();
+      content = [
+        h('div', { class: 'auto-grid' }, h('div', { class: 'auto-card' }, h('span', {}, 'Fläche'), h('strong', {}, formatHa(ha)), h('small', {}, st.auto?.wald?.status === 'teil' ? 'Waldfläche im Bestand' : 'aus dem Flurstücks- bzw. Bestandspolygon')),
+          f.art ? h('div', { class: 'auto-card' }, h('span', {}, 'Baumartengruppe'), h('strong', {}, F4.gruppe(f.art, { nadel: f.nadel })), h('small', {}, f.art)) : null),
+        // FESTLEGUNG: Flächen über 5 ha – die Rechnung stammt aus Beständen von 0,5 ha, deshalb Aufteilung empfehlen
+        ha > 5 ? h('div', { class: 'lrt-hinweis brutzeit' }, h('strong', {}, `Große Fläche (${formatHa(ha)})`), h('p', {}, 'Die Methode ist an Beständen von etwa 0,5 ha geprüft. Teile die Fläche am besten in mehrere Bestände auf (Fläche selbst einzeichnen) und plane sie einzeln.'),
+          h('button', { type: 'button', class: 'btn btn-small', onclick: selbstEinzeichnen }, 'Teilfläche einzeichnen')) : null,
+        f.art && !gelistet.includes(f.art) && !f.nadel ? h('p', { class: 'hint' }, `„${f.art}“ steht so nicht in der Liste – zugeordnet zur Gruppe ${F4.gruppe(f.art)}. Wähle sonst die passende Art.`) : null,
+        // FESTLEGUNG: Mischbestände – die Hauptbaumart (größter Flächen- oder Grundflächenanteil) bestimmt die Gruppe
+        h('p', { class: 'muted' }, 'Mischbestand? Dann zählt die Art mit dem größten Flächen- bzw. Grundflächenanteil.'),
+        Object.entries(gruppen).map(([g, arten]) => h('div', { class: 'q-group' },
+          h('p', { class: 'sheet-label' }, g),
+          h('div', { class: 'q-chips' }, arten.map((a) => choice(f.art === a, () => { f.art = a; f.nadel = null; renderParams(); }, a))))),
+        h('div', { class: 'q-group' }, h('p', { class: 'sheet-label' }, 'Andere Nadelbaumart'),
+          h('label', { class: 'q-own' }, 'Name der Nadelbaumart (z. B. Strobe, Küstentanne)',
+            h('input', { value: f.nadel ? f.art : '', placeholder: 'Nadelbaumart', onchange: (e) => { const v = e.target.value.trim(); if (v) { f.art = v; f.nadel = true; } renderParams(); } })),
+          h('small', { class: 'muted' }, 'Wird der Gruppe Fi/Ta/Dgl zugeordnet, Kiefernarten der Gruppe Ki/Lä.')),
+      ];
       canNext = !!f.art;
-    } else if (q === 'dim') {
-      title = 'Welche Stärkeklasse stellt die meisten Bäume?';
-      help = 'Zähle grob die Stämme: Die Klasse mit mindestens 40 % der Bäume und 10 Prozentpunkten Vorsprung bestimmt das Szenario. Durchmesser in 1,3 m Höhe; ohne Kluppe den Umfang messen.';
-      content = h('div', { class: 'q-cards' }, Object.entries(DIMENSION).map(([k, d]) => choice(f.dim === k, () => { f.dim = k; renderParams(); },
-        [h('span', { class: `stem stem-${k}`, 'aria-hidden': 'true' }), h('span', { class: 'q-text' }, h('strong', {}, `${d.viele} – Szenario ${SZENARIO[k]}`), h('span', {}, `Durchmesser ${d.bhd}`), h('small', {}, d.umfang))])));
-      canNext = !!f.dim;
-    } else if (q === 'b') {
-      title = 'Wie dicht stehen die Kronen?';
-      help = 'Schau im Bestand nach oben: Wie viel Himmel siehst du zwischen den Kronen? Das entspricht dem Bestockungsgrad B° (in Stufen von 0,1).';
-      content = h('div', { class: 'q-cards two' }, KRONENSCHLUSS.map((k) => choice(f.b === k.b, () => { f.b = k.b; renderParams(); },
-        [crownSvg(Math.min(k.b, 1.15)), h('span', { class: 'q-text' }, h('strong', {}, `B° ${bLabel(k.b)} – ${k.label}`), h('small', {}, k.text))])));
-      canNext = f.b != null;
     } else if (q === 'hoehe') {
+      // Oberhöhe aus LiDAR (korrigierbar, plausibel 5–45 m), Alter nur zur Anzeige
       const a = st.auto || {};
       const loading = a.loading;
       const alter = f.alter ?? a.bestand?.alter ?? null;
       const lidar = a.oberhoehe?.oberhoehe ?? null;
-      const geschaetzt = lidar == null && alter ? oberhoeheAusAlter(f.art, alter) : null;
-      const ho = lidar ?? geschaetzt;
-      if (!f.hoKlasseManuell) f.hoKlasse = ho != null ? hoeheKlasse(ho) : null;
-      f.ho = ho != null && f.hoKlasse === hoeheKlasse(ho) ? ho : null; // sonst Klassenmitte
-      title = 'Wie hoch ist der Bestand?';
-      help = 'Gemeint ist die Oberhöhe, die Höhe der höchsten Bäume. Die App ermittelt sie für dich.';
+      if (f.ho == null && !loading) {
+        if (lidar != null) { f.ho = Math.round(lidar * 10) / 10; f.hoQuelle = 'lidar'; }
+        else if (alter) { const est = oberhoeheAusAlter(f.art, alter); if (est) { f.ho = Math.round(est * 10) / 10; f.hoQuelle = 'alter'; } }
+      }
+      title = 'Wie hoch ist der Bestand (Oberhöhe)?';
+      help = 'Gemeint ist die Oberhöhe ho, die Höhe der höchsten Bäume. Sie kommt aus den Laserscan-Daten (LiDAR) Thüringens und lässt sich korrigieren. Das Alter wird nur angezeigt und gespeichert.';
       content = [
         h('div', { class: 'auto-grid' },
-          h('div', { class: 'auto-card' }, h('span', {}, 'Oberhöhe'),
-            h('strong', {}, loading ? '…' : ho != null ? `${lidar != null ? '' : 'ca. '}${fmt(ho, 0)} m` : 'unbekannt'),
-            h('small', {}, lidar != null ? `gemessen: Laserscanning (${a.oberhoehe.zellen} Höhenzellen)` : geschaetzt != null ? `geschätzt aus dem Alter (${alter} J.) mit der Ertragstafel, mittlere Bonität` : loading ? 'wird ermittelt' : 'kein Höhenmodell und kein Alter')),
+          h('div', { class: 'auto-card' }, h('span', {}, 'Oberhöhe ho'),
+            h('strong', {}, loading ? '…' : f.ho != null ? `${fmt(f.ho, 1)} m` : 'unbekannt'),
+            h('small', {}, f.hoQuelle === 'lidar' ? `LiDAR Thüringen (${a.oberhoehe?.zellen || '?'} Höhenzellen)` : f.hoQuelle === 'alter' ? `geschätzt aus dem Alter (${alter} J.) – bitte prüfen` : f.hoQuelle === 'eigen' ? 'von dir angegeben' : loading ? 'wird ermittelt' : 'bitte eingeben')),
+          h('div', { class: 'auto-card' }, h('span', {}, 'Höhenklasse'), h('strong', {}, f.ho != null ? F4.hoehenklasse(f.ho) : '–'), h('small', {}, 'ergibt sich aus ho')),
           h('div', { class: 'auto-card' }, h('span', {}, 'Alter'),
             h('strong', {}, alter != null ? `${alter} Jahre` : loading ? '…' : 'unbekannt'),
-            h('small', {}, f.alter != null ? 'von dir angegeben' : a.bestand?.alter != null ? (a.bestand.quelle === 'eigen' ? `deine Angabe von ${a.bestand.stichtag}${a.bestand.stichtag !== new Date().getFullYear() ? ', hochgerechnet' : ''}` : `Waldverzeichnis, Stand ${a.bestand.stichtag}, hochgerechnet`) : 'nicht im Waldverzeichnis')),
-        ),
-        lidar == null && !loading ? h('label', { class: 'q-own' }, alter == null ? 'Kein Alter hinterlegt. Wie alt ist der Bestand ungefähr? (Jahre)' : 'Alter weicht ab? Hier anpassen (Jahre)',
-          h('input', { type: 'number', inputmode: 'numeric', min: 5, max: 250, value: alter ?? '', onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; f.hoKlasseManuell = false; renderParams(); } })) : null,
-        loading ? null : h('p', { class: 'sheet-label' }, ho != null ? 'Höhenklasse (bei Bedarf korrigieren)' : 'Höhenklasse wählen'),
-        loading ? null : h('div', { class: 'q-cards' }, HOEHENKLASSEN.map((k) => choice(f.hoKlasse === k.key, () => { f.hoKlasse = k.key; f.hoKlasseManuell = true; renderParams(); },
-          h('span', { class: 'q-text' }, h('strong', {}, `${k.label}${ho != null && hoeheKlasse(ho) === k.key ? ' (ermittelt)' : ''}`), h('small', {}, k.text))))),
+            h('small', {}, f.alter != null ? 'von dir geschätzt' : a.bestand?.alter != null ? `Baumartenkarte, Stand ${a.bestand.stichtag}, hochgerechnet` : 'nur zur Dokumentation'))),
+        loading ? null : h('label', { class: 'q-own' }, 'Oberhöhe korrigieren (m)',
+          h('input', { type: 'number', inputmode: 'decimal', step: 0.1, min: 1, max: 60, value: f.ho ?? '', onchange: (e) => { const v = Number(String(e.target.value).replace(',', '.')); f.ho = v > 0 ? v : null; f.hoQuelle = 'eigen'; renderParams(); } })),
+        loading ? null : h('label', { class: 'q-own' }, alter == null ? 'Alter schätzen (Jahre, nur zur Dokumentation)' : 'Alter weicht ab? (Jahre)',
+          h('input', { type: 'number', inputmode: 'numeric', min: 1, max: 300, value: f.alter ?? '', onchange: (e) => { const v = Number(e.target.value); f.alter = v > 0 ? v : null; renderParams(); } })),
+        f.ho != null && (f.ho < 5 || f.ho > 45) ? h('p', { class: 'warn-line' }, `Eine Oberhöhe von ${fmt(f.ho, 1)} m ist ungewöhnlich (plausibel 5–45 m). Bitte prüfen.`) : null,
       ];
-      canNext = !loading && !!f.hoKlasse;
-    } else {
-      const plan = computePlanMethode(st.sel, f, st.auto?.wald);
-      st.plan = plan;
-      const kein = plan.wald?.status === 'kein';
-      const ei = plan.eingriffe;
-      title = ei.anzahl > 1 ? `Dein Eingriff ${ei.nr} von ${ei.anzahl}` : 'Dein Eingriff';
-      help = `${plan.gruppeLabel} · Szenario ${plan.szenario} · B° ${bLabel(f.b)} · Oberhöhe ${HOEHENKLASSEN.find((x) => x.key === f.hoKlasse).label}`;
-      const zeilen = ['dick', 'mittel', 'duenn'].filter((k) => plan.jePunkt[k] > 0);
+      canNext = !loading && f.ho > 0;
+    } else if (q === 'b') {
+      // Schritt 2: Bestockungsgrad – Stufe wählen oder Dezimalwert eingeben (abgerundet nach bstufe_regel)
+      title = 'Wie dicht ist der Bestand bestockt?';
+      help = 'Bestockungsgrad B°: 1,0 = voll bestockt, die Kronen schließen; 0,5 = halb so dicht, deutliche Lücken. Wähle die Stufe oder gib einen genauen Wert ein.';
       content = [
-        waldHinweis(plan),
-        h('div', { class: 'preview' },
-          h('div', {}, h('span', { class: 'pv-n' }, `ca. ${fmt(ei.vEingriff)}`), h('span', {}, 'Fm/ha bei diesem Eingriff')),
-          h('div', {}, h('span', { class: 'pv-n' }, ei.anzahl), h('span', {}, ei.anzahl === 1 ? 'Eingriff im Jahrzehnt' : 'Eingriffe im Jahrzehnt')),
-          h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
-          h('div', {}, h('span', { class: 'pv-n' }, plan.total), h('span', {}, 'Bäume bei diesem Eingriff')),
-        ),
-        h('div', { class: 'calc-box eingriffe-box' },
-          h('strong', {}, ei.anzahl === 1 ? `Ein Eingriff im Jahrzehnt (ca. ${fmt(ei.vZehn)} Fm/ha)` : `${ei.anzahl} Eingriffe im Jahrzehnt, etwa alle ${ei.abstandJahre} Jahre`),
-          h('small', {}, ei.anzahl === 1
-            ? `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode) – unter ${EIN_EINGRIFF_BIS} Fm/ha geht das in einem Eingriff. Beim Start trägt die App die nächste Durchforstung in ca. ${ei.abstandJahre} Jahren in den Maßnahmenkalender ein.`
-            : `Im Jahrzehnt werden ca. ${fmt(ei.vZehn)} Fm/ha entnommen (Simulation der Methode). Ab ${EIN_EINGRIFF_BIS} Fm/ha wird die Menge auf mehrere Eingriffe verteilt (höchstens ${MAX_FM_EINGRIFF} Fm/ha je Eingriff): ${ei.anzahl} Eingriffe à ca. ${fmt(ei.vEingriff)} Fm/ha. Beim Start trägt die App den nächsten Eingriff in ca. ${ei.abstandJahre} Jahren in den Maßnahmenkalender ein.`),
-          h('small', {}, 'Das Raster wird bei jedem Eingriff zufällig neu über den Bestand gelegt, damit nicht immer dieselben Stellen bearbeitet werden.')),
-        h('div', { class: 'raster-rule' },
-          h('strong', {}, `Je Rasterpunkt: ${plan.regel}`),
-          zeilen.map((k) => h('small', {}, `${DIMENSION[k].label[0].toUpperCase()}${DIMENSION[k].label.slice(1)} (${DIMENSION[k].bhd}): ${anteilSatz(plan.jePunkt[k])}`)),
-          h('small', {}, `Raster ${fmt(plan.raster || RASTER_M, 1)} m in Schlangenlinien, Lage zufällig, Entnahmekreis ca. ${plan.kreis || KREIS_M} m.${plan.eng ? ' Weil je 25-m-Punkt viele Bäume anfielen, ist das Raster auf 12,5 m verdichtet – so entstehen keine Lücken.' : ''} „An jedem n-ten Punkt“ zählt die App für dich mit.`)),
-        parcelCard(),
-        kein ? null : h('p', {}, `Auf ${formatHa(plan.areaHa)}${plan.wald?.status === 'teil' ? ' Waldfläche' : ''}${plan.areaAmtlich ? ' (amtliche Fläche)' : ''} liegen ${plan.points.length} Rasterpunkte. Du entnimmst bei diesem Eingriff ${plan.total} Bäume (ca. ${fmt(ei.vEingriff * plan.areaHa)} Fm bzw. ${fmt(ei.gEingriff * plan.areaHa, 1)} m² Grundfläche auf der ganzen Fläche).`),
-        h('div', { class: 'calc-box' },
-          h('strong', {}, 'So kommt die Baumzahl zustande'),
-          zeilen.map((k) => { const n = plan.points.reduce((a, pt) => a + (pt.removals.find((x) => x.klasse === k)?.count || 0), 0);
-            return h('small', {}, `${DIMENSION[k].baeume}: ${plan.points.length} Punkte × ${anteilText(plan.jePunkt[k])} je Punkt = ${n}`); }),
-          h('small', {}, `Bei ${fmt(plan.raster || 25, 1)} m Raster sind das ${Math.round(10000 / ((plan.raster || 25) ** 2))} Punkte je Hektar, also ${plan.areaHa ? fmt(plan.points.length / plan.areaHa, 1) : 0} Punkte je ha auf dieser Fläche. Die Gesamtzahl ergibt sich aus den Punkten, die tatsächlich auf der Fläche liegen – nicht aus einem Hektarwert.`)),
-        h('details', { class: 'calc' }, h('summary', {}, 'Was bedeutet die Ziel-Entnahme Grundfläche?'),
-          h('p', {}, `Grundfläche ist die Summe der Stammquerschnitte in 1,3 m Höhe. Ein Baum mit 30 cm Durchmesser hat etwa 0,07 m², einer mit 50 cm etwa 0,20 m². ${fmt(plan.stufe, 1)} m²/ha entsprechen also zum Beispiel rund ${Math.round(plan.stufe / 0.0707)} Bäumen mit 30 cm je Hektar.`),
-          h('p', {}, 'Der Wert ist die Eingriffsstufe aus Tabelle 1 der Methode: so viel Grundfläche soll im nächsten Jahrzehnt entnommen werden. Er ist nicht die Grundfläche deines Bestands.'),
-          h('p', {}, 'Im Wald zählt die Baumzahl je Rasterpunkt. Wie viel Grundfläche dabei tatsächlich herauskommt, hängt von den Bäumen vor Ort ab und liegt meist etwas unter dem Zielwert.')),
-        st.auto?.natura?.length ? h('div', { class: `lrt-hinweis brutzeit ${inBrutzeit(f.termin, sz) ? '' : 'ok'}` },
-          h('strong', {}, `Schutzgebiet: ${st.auto.natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}`),
-          h('ul', {}, h('li', {}, `Geplanter Termin: ${datumText(f.termin)}${inBrutzeit(f.termin, sz) ? ` – in der Brut- und Setzzeit (${schutzzeitText(sz)})` : ' – außerhalb der Brut- und Setzzeit'}.`),
-            inBrutzeit(f.termin, sz) ? h('li', {}, 'Lässt er sich nicht verschieben, ist eine Verträglichkeits-Vorprüfung nötig – die App führt dich beim Start durch das Formular.') : null)) : null,
-        (st.auto?.lrt || []).map((l) => h('div', { class: 'lrt-hinweis' },
-          h('strong', {}, `Lebensraumtyp auf der Fläche: ${l.titel}`),
-          h('ul', {}, l.punkte.map((t) => h('li', {}, t))))),
-        h('p', { class: 'hint' }, plan.auswahl),
-        h('details', { class: 'calc' }, h('summary', {}, 'So wurde bestimmt'), h('ol', {}, plan.schritte.map((t) => h('li', {}, t)))),
+        f.b != null ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), `B° ${fmt(f.b, 2)} → Stufe „${F4.bstufe(f.b)}“`) : null,
+        h('div', { class: 'q-cards two' }, KRONENSCHLUSS.map((k) => choice(f.b != null && F4.bstufe(f.b) === F4.bstufe(k.b), () => { f.b = k.b; renderParams(); },
+          [crownSvg(Math.min(k.b, 1.15)), h('span', { class: 'q-text' }, h('strong', {}, `B° ${bLabel(k.b)} – ${k.label}`), h('small', {}, k.text))]))),
+        h('label', { class: 'q-own' }, 'Genauer Wert (z. B. 0,62)',
+          h('input', { type: 'number', inputmode: 'decimal', step: 0.01, min: 0.3, max: 1.4, value: f.b ?? '', onchange: (e) => { const v = Number(String(e.target.value).replace(',', '.')); f.b = v > 0 ? v : null; renderParams(); } })),
+        h('div', { class: 'q-group' }, h('p', { class: 'sheet-label' }, 'Kronenfoto (optional, nur zur Dokumentation)'),
+          h('label', { class: 'btn btn-small' }, f.fotoId ? 'Anderes Foto aufnehmen' : 'Foto senkrecht nach oben aufnehmen',
+            h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: async (e) => { const datei = e.target.files?.[0]; if (!datei) return; const id = `kronenfoto-${uid()}`; await dateiSpeichern(id, datei).catch(() => null); f.fotoId = id; toast('Kronenfoto gespeichert'); renderParams(); } })),
+          f.fotoId ? h('small', { class: 'muted' }, 'Foto gespeichert – daraus wird nichts berechnet.') : null),
       ];
-      nextLabel = 'Raster auf die Karte legen';
-      canNext = !kein;
+      canNext = f.b != null && f.b > 0;
+    } else if (q === 'probe') {
+      // Schritt 3: Szenario per Probezählung an drei gleichmäßig verteilten Probepunkten
+      if (!f.probePunkte?.length) {
+        const fein = generateGrid(st.sel.ring, 5, { polys: selPolys() }).filter((pt) => inPolys(pt, selPolys()));
+        const n = fein.length;
+        f.probePunkte = n ? [Math.floor(n / 6), Math.floor(n / 2), Math.floor((5 * n) / 6)].map((i) => fein[Math.min(n - 1, i)]) : [];
+      }
+      probeLayer.clearLayers();
+      f.probePunkte.forEach((pt, i) => {
+        probeLayer.addLayer(L.circle(pt, { radius: F4.parameter().raster.pruefkreis_m, color: '#1F74B8', weight: 2, dashArray: '4 4', fillOpacity: 0.06, interactive: false }));
+        probeLayer.addLayer(L.circleMarker(pt, { radius: 9, color: '#fff', weight: 2, fillColor: '#1F74B8', fillOpacity: 1 }).bindTooltip(`P${i + 1}`, { permanent: true, direction: 'center', className: 'pt-tip' }));
+      });
+      const sum = f.probe.reduce((a, x) => ({ duenn: a.duenn + x.duenn, mittel: a.mittel + x.mittel, dick: a.dick + x.dick }), { duenn: 0, mittel: 0, dick: 0 });
+      const n = sum.duenn + sum.mittel + sum.dick;
+      const r = F4.szenarioMitRueckfall(sum.duenn, sum.mittel, sum.dick);
+      if (!f.szManuell) f.sz = r.szenario;
+      const zaehl = (pi, k) => h('div', { class: 'counter' },
+        h('button', { class: 'count-btn', 'aria-label': `${F4.KLASSE_NAME[k]} weniger`, disabled: f.probe[pi][k] <= 0, onclick: () => { f.probe[pi][k]--; f.szManuell = false; renderParams(); } }, '−'),
+        h('span', { class: 'count' }, h('b', {}, f.probe[pi][k])),
+        h('button', { class: 'count-btn plus', 'aria-label': `${F4.KLASSE_NAME[k]} gezählt`, onclick: () => { f.probe[pi][k]++; f.szManuell = false; buzz('tick'); renderParams(); } }, '+'));
+      title = 'Probezählung: Welche Stärke stellt die meisten Bäume?';
+      help = `Geh zu den drei Probepunkten P1–P3 (blau in der Karte) und tippe dort alle Bäume ab 7 cm BHD im Umkreis von ${F4.parameter().raster.pruefkreis_m} m an – nur die Stärkeklasse: dünn 7–25 cm, mittel über 25–50 cm, dick über 50 cm.`;
+      content = [
+        f.probePunkte.map((pt, pi) => h('div', { class: 'probe-punkt' },
+          h('div', { class: 'mat-kopf' }, h('strong', {}, `Probepunkt P${pi + 1}`), h('button', { type: 'button', class: 'link-btn', onclick: () => map.flyTo(pt, 18) }, 'auf der Karte zeigen')),
+          h('ul', { class: 'removals' }, ['duenn', 'mittel', 'dick'].map((k) => h('li', { class: 'removal' },
+            h('div', { class: 'removal-text' }, h('strong', {}, F4.KLASSE_NAME[k]), h('span', {}, F4.parameter().staerkeklassen[k].replace('BHD', 'BHD').replace('≤', '≤'))), zaehl(pi, k)))))),
+        h('div', { class: 'calc-box' },
+          h('strong', {}, n ? `Gezählt: ${n} Bäume – dünn ${Math.round((sum.duenn / n) * 100)} %, mittel ${Math.round((sum.mittel / n) * 100)} %, dick ${Math.round((sum.dick / n) * 100)} %` : 'Noch keine Bäume gezählt'),
+          n ? h('small', {}, r.eindeutig ? `Ergebnis: Szenario ${r.szenario} – ${F4.parameter().szenarien[r.szenario]}` : `Kein eindeutiges Ergebnis (keine Klasse mit mindestens 40 % und 10 Prozentpunkten Vorsprung). Vorschlag: Szenario ${r.szenario} nach der Klasse mit dem größten Anteil – bei Bedarf ändern.`) : null),
+        h('p', { class: 'sheet-label' }, 'Szenario (bei Bedarf ändern)'),
+        h('div', { class: 'q-cards' }, [1, 2, 3].map((z) => choice(f.sz === z, () => { f.sz = z; f.szManuell = true; renderParams(); },
+          h('span', { class: 'q-text' }, h('strong', {}, `Szenario ${z}${!f.szManuell || r.szenario !== z ? '' : ''}${r.szenario === z && n ? ' (gezählt)' : ''}`), h('small', {}, F4.parameter().szenarien[z]))))),
+      ];
+      canNext = f.sz != null;
+    } else {
+      // Schritt 4: Planung – wird nur angezeigt
+      // Folgeeingriff: bisher gezählte Menge aller früheren Eingriffe der Serie (m³/ha)
+      if (f.eingriffNr > 1) f.bisherGezaehltHa = bisherGezaehltHa(f.eingriffNr);
+      const plan = computePlanF4(st.sel, f, st.auto?.wald);
+      st.plan = plan;
+      const pl = plan.planung;
+      const kein = plan.wald?.status === 'kein';
+      if (!pl.feld) {
+        title = 'Keine passende Zeile in der Feldtabelle';
+        content = h('p', {}, `Für ${pl.gruppe}, Höhe ${pl.hoehenklasse}, B° ${pl.bstufe}, Szenario ${pl.szenario} gibt es keinen Eintrag. Bitte prüfe die Angaben.`);
+        canNext = false;
+      } else {
+        const E = pl.eingriffe, nr = plan.eingriffe.nr;
+        const folge = new Date(f.termin || Date.now()); folge.setMonth(folge.getMonth() + Math.round(pl.abstandJahre * 12));
+        title = E > 1 ? `Dein Eingriff ${nr} von ${E}` : 'Dein Eingriff';
+        help = `Feld: ${pl.gruppe} · Höhe ${pl.hoehenklasse} · B° ${pl.bstufe} · Szenario ${pl.szenario}`;
+        const K = (k) => F4.KLASSE_NAME[k];
+        content = [
+          waldHinweis(plan),
+          h('div', { class: 'preview' },
+            h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.zielmenge, 1)), h('span', {}, 'm³/ha Zielmenge im Jahrzehnt')),
+            h('div', {}, h('span', { class: 'pv-n' }, E), h('span', {}, E === 1 ? 'Eingriff im Jahrzehnt' : 'Eingriffe im Jahrzehnt')),
+            h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.mengeHa, 1)), h('span', {}, 'm³/ha bei diesem Eingriff')),
+            h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.budget, 2)), h('span', {}, `m³ im Bestand (${formatHa(plan.areaHa)})`))),
+          h('div', { class: 'calc-box eingriffe-box' },
+            h('strong', {}, E === 1 ? 'Ein Eingriff im Jahrzehnt' : `${E} Eingriffe im Jahrzehnt, Abstand ${fmt(pl.abstandJahre, 1)} Jahre`),
+            h('small', {}, `Zielmenge ${fmt(pl.zielmenge, 1)} m³/ha → ${E} Eingriff${E > 1 ? 'e' : ''} (unter 40 m³/ha einer, 40 bis unter 100 zwei, ab 100 drei).`),
+            nr === 1
+              ? h('small', {}, `Menge dieses Eingriffs: min(${F4.parameter().obergrenze_je_eingriff_m3ha}; ${fmt(pl.zielmenge, 1)} ÷ ${E}) = ${fmt(pl.mengeHa, 2)} m³/ha, im Bestand ${fmt(pl.mengeHa, 2)} × ${fmt(plan.areaHa, 2)} ha = ${fmt(pl.budget, 2)} m³.`)
+              : h('small', {}, `Menge dieses Eingriffs: min(${F4.parameter().obergrenze_je_eingriff_m3ha}; (${fmt(pl.zielmenge, 1)} − ${fmt(f.bisherGezaehltHa, 1)} bisher gezählt) ÷ ${E - nr + 1}) = ${fmt(pl.mengeHa, 2)} m³/ha, im Bestand ${fmt(pl.budget, 2)} m³.`),
+            E > 1 && nr < E ? h('small', {}, `Folgeeingriff: etwa ${folge.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })} – die App trägt ihn beim Start in den Maßnahmenkalender ein.`) : null,
+            h('small', {}, `Mehr als ${F4.parameter().obergrenze_je_eingriff_m3ha} m³/ha je Eingriff lassen sich nicht auszeichnen – der Zähler sperrt.`)),
+          h('div', { class: 'raster-rule' },
+            h('strong', {}, `Hauptklasse ${K(pl.hauptklasse)} (${Math.round(pl.anteilHaupt * 100)} %), Nebenklasse ${K(pl.nebenklasse)} (${Math.round((1 - pl.anteilHaupt) * 100)} %)`),
+            h('small', {}, 'Am Punkt schlägt die App vor, wie viele Bäume welcher Klasse passen. Feste Baumzahlen je Punkt gibt es nicht – verbindlich ist nur die Menge.'),
+            h('small', {}, `Raster ${fmt(plan.raster, 0)} m mit zufälligem Versatz, ${plan.points.length} Punkte in Schlangenlinie, Prüfkreis ${plan.kreis} m, Ausweichen bis ${plan.ausweichen} m.${plan.rasterVerkleinert ? ` Wegen der kleinen Fläche auf ${fmt(plan.raster, 0)} m verkleinert, damit mindestens 8 Punkte im Bestand liegen.` : ''}`)),
+          h('details', { class: 'calc' }, h('summary', {}, 'Zählvolumen je Baum'),
+            h('ul', {}, pl.stufen.map((x) => h('li', {}, `${x.name} (${K(x.klasse)}): ${fmt(x.v, 3)} m³`)),
+              h('li', {}, 'über 50 cm: BHD messen, Zählvolumen nach Tarif'))),
+          parcelCard(),
+          st.auto?.natura?.length ? h('div', { class: `lrt-hinweis brutzeit ${inBrutzeit(f.termin, sz) ? '' : 'ok'}` },
+            h('strong', {}, `Schutzgebiet: ${st.auto.natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}`),
+            h('ul', {}, h('li', {}, `Geplanter Termin: ${datumText(f.termin)}${inBrutzeit(f.termin, sz) ? ` – in der Brut- und Setzzeit (${schutzzeitText(sz)})` : ' – außerhalb der Brut- und Setzzeit'}.`),
+              inBrutzeit(f.termin, sz) ? h('li', {}, 'Lässt er sich nicht verschieben, ist eine Verträglichkeits-Vorprüfung nötig – die App führt dich beim Start durch das Formular.') : null)) : null,
+          (st.auto?.lrt || []).map((l) => h('div', { class: 'lrt-hinweis' }, h('strong', {}, `Lebensraumtyp auf der Fläche: ${l.titel}`), h('ul', {}, l.punkte.map((t) => h('li', {}, t))))),
+          h('p', { class: 'hint' }, `Auswahl: ${plan.auswahl}.`),
+          h('p', { class: 'muted' }, `Methode: Durchforstungshilfe ${plan.version}.`),
+        ];
+        nextLabel = 'Raster auf die Karte legen';
+        canNext = !kein && plan.points.length > 0;
+      }
     }
 
-    const nextBtn = h('button', { class: 'btn btn-primary btn-large', disabled: !canNext, onclick: () => (q === 'ergebnis' ? go(2) : next()) }, nextLabel);
+    const nextBtn = h('button', { class: 'btn btn-primary btn-large', disabled: !canNext, onclick: async () => {
+      if (q === 'hoehe' && (f.ho < 5 || f.ho > 45) && !(await confirmDialog(`Oberhöhe ${fmt(f.ho, 1)} m – stimmt das?`, { ok: 'Ja, stimmt', body: 'Plausibel sind 5 bis 45 m. Prüfe den Wert, bevor du weitergehst.' }))) return;
+      if (q === 'ergebnis') go(2); else next();
+    } }, nextLabel);
     fill(panel,
       progress,
       h('h2', { class: 'step-title' }, title),
@@ -522,9 +598,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function renderGrid() {
     drawSelection();
-    st.plan ??= computePlanMethode(st.sel, st.params, st.auto?.wald);
+    st.plan ??= st.params?.v === 5 ? computePlanF4(st.sel, st.params, st.auto?.wald) : computePlanMethode(st.sel, st.params, st.auto?.wald);
     const plan = st.plan;
     drawGrid(plan.points, { numbers: true });
+    if (plan.methode === 'f4') { renderGridF4(plan); return; }
     const radius = st.plan?.kreis || KREIS_M;
     const offline = h('button', { class: 'btn', onclick: (e) => prefetchTiles(st.sel.ring, base.basemap, e.currentTarget) }, h('span', { html: icon.download }), 'Karte für offline speichern');
 
@@ -546,6 +623,57 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     );
   }
 
+  // Schritt 5 (Fassung 4): Rasterpunkte – Lage gibt die Methode vor, sie ist nicht veränderbar
+  function renderGridF4(plan) {
+    const pl = plan.planung;
+    const offline = h('button', { class: 'btn', onclick: (e) => prefetchTiles(st.sel.ring, base.basemap, e.currentTarget) }, h('span', { html: icon.download }), 'Karte für offline speichern');
+    fill(panel,
+      h('h2', { class: 'step-title' }, 'Dein Raster'),
+      h('div', { class: 'preview' },
+        h('div', {}, h('span', { class: 'pv-n' }, plan.points.length), h('span', {}, 'Rasterpunkte')),
+        h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.budget, 2)), h('span', {}, 'm³ Menge dieses Eingriffs')),
+        h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.mengeHa, 1)), h('span', {}, 'm³/ha')),
+        h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.raster, 0)), h('span', {}, 'm Rasterabstand'))),
+      h('p', {}, `Die Punkte liegen im Abstand von ${fmt(plan.raster, 0)} m mit zufälligem Versatz; die Methode gibt ihre Lage vor. Die gestrichelte Linie zeigt die Laufreihenfolge in Schlangenlinie. Am Punkt zeichnest du im Umkreis von ${plan.kreis} m aus, notfalls bis ${plan.ausweichen} m.`),
+      h('p', { class: 'hint' }, 'Im Wald ist oft kein Netz. Speichere die Karte vorher, solange du noch Empfang hast. Der Zählerstand wird ohne Netz im Gerät gespeichert.'),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn', onclick: () => { st.plan = null; go(1); } }, 'Angaben ändern'),
+        offline),
+      h('button', { class: 'btn btn-primary btn-block btn-large', onclick: startThinning }, h('span', { html: icon.nav }), 'Durchforstung starten'),
+    );
+  }
+
+  // ---------- Fassung 4: Mengenzähler ----------
+  const istF4 = () => st.plan?.methode === 'f4';
+  function zaehlerNeu() {
+    const pl = st.plan.planung;
+    return new F4.Zaehler({ budget: pl.budget, punkte: st.plan.points.length, hauptklasse: pl.hauptklasse, nebenklasse: pl.nebenklasse, anteilHaupt: pl.anteilHaupt, vKlasse: pl.vKlasse });
+  }
+  /** Gespeicherten Zählerstand laden – jeder Baum läuft erneut durch die Sperre, das Budget kommt aus dem Plan */
+  async function zaehlerLaden() {
+    if (!istF4()) return;
+    const ausIdb = st.measureId ? await standLaden(st.measureId).catch(() => null) : null;
+    const quelle = ausIdb?.zaehler || measure()?.thinning?.zaehler || null;
+    st.zaehler = quelle ? F4.Zaehler.ausJSON(quelle, st.plan.planung.budget) : zaehlerNeu();
+    st.spur = ausIdb?.spur || measure()?.thinning?.spur || [];
+    st.auffuellen = ausIdb?.auffuellen ?? measure()?.thinning?.auffuellen ?? null;
+    st.mindest = ausIdb?.mindest ?? false;
+  }
+  let speicherTimer = null;
+  /** Nach jedem Tippen lokal speichern (IndexedDB) */
+  function zaehlerSpeichern() {
+    if (!st.zaehler || !st.measureId) return;
+    standSpeichern(st.measureId, { zaehler: st.zaehler.toJSON(), spur: st.spur, auffuellen: st.auffuellen, mindest: st.mindest, gespeichert: Date.now() }).catch(() => toast('Zählerstand konnte nicht gespeichert werden.'));
+  }
+  function spurSpaeter() { clearTimeout(speicherTimer); speicherTimer = setTimeout(zaehlerSpeichern, 8000); }
+  /** Bisher gezählte Menge (m³/ha) aller früheren Eingriffe derselben Serie */
+  function bisherGezaehltHa(eingriffNr) {
+    const serie = measure()?.thinning?.serie;
+    if (!serie) return 0;
+    return store.get().measures.filter((m) => m.type === 'durchforstung' && m.id !== st.measureId && (m.thinning?.serie === serie || m.id === serie) && (m.thinning?.params?.eingriffNr || 1) < eingriffNr && m.thinning?.plan?.methode === 'f4')
+      .reduce((a, m) => a + (m.thinning.f4?.gezaehltHa ?? (m.thinning.zaehler ? F4.Zaehler.ausJSON(m.thinning.zaehler, m.thinning.plan.planung.budget).gezaehlt / (m.thinning.plan.areaHa || 1) : 0)), 0);
+  }
+
   function saveMeasure(patch = {}) {
     store.update((s) => {
       let m = s.measures.find((x) => x.id === st.measureId);
@@ -555,7 +683,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         s.measures.push(m);
       }
       if (st.params?.termin && !patch.date) m.date = st.params.termin;
-      m.thinning = { ...(m.thinning || {}), ...(st.auto?.natura ? { natura2000: st.auto.natura, lrt: st.auto.lrt } : {}), schutzzeit: st.params?.schutzzeit || m.thinning?.schutzzeit || null, mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
+      m.thinning = { ...(m.thinning || {}), ...(st.zaehler ? { zaehler: st.zaehler.toJSON(), spur: st.spur, auffuellen: st.auffuellen } : {}), ...(st.auto?.natura ? { natura2000: st.auto.natura, lrt: st.auto.lrt } : {}), schutzzeit: st.params?.schutzzeit || m.thinning?.schutzzeit || null, mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, params: st.params, plan: st.plan };
       Object.assign(m, patch);
     });
   }
@@ -599,7 +727,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     unlockAudio(); // Nutzergeste → Audio für iOS-Fallback freischalten
     await requestCompass();
     const warSchon = measure()?.status === 'arbeit';
+    if (istF4() && !st.zaehler) await zaehlerLaden();
     saveMeasure({ status: 'arbeit' });
+    if (istF4()) store.update((x) => { const m = x.measures.find((y) => y.id === st.measureId); m.thinning.ersterEingriff ??= (st.plan.eingriffe.nr === 1 ? Date.now() : null); });
+    zaehlerSpeichern();
     protokoll(st.measureId, warSchon ? 'Arbeit im Bestand fortgesetzt' : 'Durchforstung im Bestand begonnen');
     legeFolgeAn();
     go(3);
@@ -650,7 +781,21 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const serie = cur.thinning?.serie || cur.id;
     const base = { natura2000: cur.thinning?.natura2000, lrt: cur.thinning?.lrt, schutzzeit: cur.thinning?.schutzzeit || null, mode: st.mode, ring: st.sel.ring, polys: st.sel.polys, clip: st.sel.clip, flaecheHa: st.sel.flaecheHa, parcel: st.sel.parcel, label: st.sel.label, vorgaenger: cur.id, serie };
     let thinning, note;
-    if (ei.nr < ei.anzahl) {
+    if (istF4()) {
+      // Fassung 4, Schritt 8: Erinnerung zum Datum des 1. Eingriffs + nr · 10/E Jahre
+      const erster = cur.thinning?.ersterEingriff || Date.now();
+      if (ei.nr < ei.anzahl) {
+        when = new Date(erster); when.setFullYear(when.getFullYear() + Math.round(ei.nr * (10 / ei.anzahl))); when.setHours(9, 0, 0, 0);
+        if (when.getTime() < Date.now()) { when = new Date(); when.setDate(when.getDate() + 1); when.setHours(9, 0, 0, 0); }
+        const params = { ...st.params, eingriffNr: ei.nr + 1, offset: null, q: QUESTIONS.indexOf('ergebnis'), termin: when.getTime() };
+        thinning = { ...base, ersterEingriff: erster, params, plan: null };
+        note = `Eingriff ${ei.nr + 1} von ${ei.anzahl} – Menge aus dem Rest der Zielmenge, neues zufällig gelegtes Raster.`;
+      } else {
+        when = new Date(erster); when.setFullYear(when.getFullYear() + 10); when.setHours(9, 0, 0, 0);
+        thinning = { ...base, params: null, plan: null };
+        note = 'Nächste Durchforstung – Bestand neu ansprechen (Höhe, B°, Probezählung).';
+      }
+    } else if (ei.nr < ei.anzahl) {
       const params = { ...st.params, eingriffNr: ei.nr + 1, lage: zufallsLage(), q: 0, termin: when.getTime() };
       thinning = { ...base, params, plan: computePlanMethode(st.sel, params, st.auto?.wald) };
       note = `Eingriff ${ei.nr + 1} von ${ei.anzahl} – neues, zufällig gelegtes Raster.`;
@@ -674,13 +819,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   const hud = h('div', { class: 'hud' });
 
-  function renderNav() {
+  async function renderNav() {
+    if (istF4() && !st.zaehler) await zaehlerLaden();
     drawSelection(false);
     drawGrid(st.plan.points, { numbers: true });
     fill(panel, hud);
     const m = measure();
     if (m?.status === 'fertig') { renderFinished(); return; }
-    targetIdx = nextOpenIndex(0);
+    targetIdx = st.auffuellen ? st.plan.points.findIndex((p) => p.id === st.auffuellen.liste[st.auffuellen.pos]) : nextOpenIndex(0);
+    if (st.mindest) { startNav(); renderWorkF4(); return; }
     if (targetIdx < 0) { finish(); return; }
     highlightTarget();
     startNav();
@@ -731,6 +878,11 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   let userDot, accCircle;
   function onPos(pos) {
     lastPos = pos;
+    // GPS-Spur für das Protokoll (alle ≥ 5 m ein Punkt)
+    if (istF4() && st.step === 3 && pos.accuracy <= 30) {
+      const l = st.spur[st.spur.length - 1];
+      if (!l || distance([l[0], l[1]], pos.latlng) >= 5) { st.spur.push([Math.round(pos.latlng[0] * 1e6) / 1e6, Math.round(pos.latlng[1] * 1e6) / 1e6, Date.now()]); spurSpaeter(); }
+    }
     if (!userDot) {
       userDot = L.marker(pos.latlng, { interactive: false, zIndexOffset: 1000, icon: L.divIcon({ className: 'me', html: '<span class="me-dot"></span><span class="me-cone"></span>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(userLayer);
       accCircle = L.circle(pos.latlng, { radius: pos.accuracy, color: '#1F74B8', weight: 1, fillOpacity: 0.1, interactive: false }).addTo(userLayer);
@@ -771,7 +923,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   function renderHud(errorMsg) {
-    if (working) return;
+    if (working || st.mindest) return;
+    if (!st.plan.points[targetIdx]) return;
     const pts = st.plan.points;
     const done = pts.filter((p) => p.status === 'done').length;
     const pt = pts[targetIdx];
@@ -791,6 +944,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('p', { class: 'hud-sub' }, brg != null ? `Richtung ${compassLabel(brg)}${heading != null ? ', Pfeil zeigt in Laufrichtung' : ', Pfeil mit Norden oben'}` : (errorMsg || 'Warte auf Standort')),
         ),
       ),
+      istF4() && st.zaehler ? zaehlerLeiste() : null,
+      st.auffuellen ? h('p', { class: 'hint' }, `Auffüllen auf dem Rückweg: Punkt ${st.auffuellen.pos + 1} von ${st.auffuellen.liste.length}.`) : null,
       h('div', { class: 'hud-meta' },
         h('span', { class: `gps-chip ${acc == null ? '' : acc <= 10 ? 'good' : acc <= 25 ? 'ok' : 'bad'}` }, sim ? 'GPS simuliert' : acc != null ? `GPS ±${Math.round(acc)} m` : 'GPS: kein Signal'),
         h('span', {}, `${done} erledigt, ${pts.length - done} offen`),
@@ -812,7 +967,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const ok = await dialog({
       mascot: true,
       title: isFirst ? 'Befindest du dich am ersten Rasterpunkt und möchtest starten?' : `Befindest du dich am Rasterpunkt ${pt.id} und möchtest starten?`,
-      body: `Hier sind ${pointTotal(pt)} ${pointTotal(pt) === 1 ? 'Baum' : 'Bäume'} zu entnehmen.`,
+      body: istF4() ? (st.auffuellen ? 'Rückweg zum Auffüllen: Hier zuerst die Hauptklasse, dann die Nebenklasse auszeichnen, solange etwas passt.' : 'Am Punkt schlägt dir die App vor, wie viele Bäume welcher Stärke passen.') : `Hier sind ${pointTotal(pt)} ${pointTotal(pt) === 1 ? 'Baum' : 'Bäume'} zu entnehmen.`,
       actions: [{ label: 'Noch nicht', value: false }, { label: 'Starten', value: true, primary: true }],
     });
     if (ok && st.step === 3) startWork(i);
@@ -824,6 +979,12 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     working = st.plan.points[i];
     highlightTarget();
     map.flyTo(working.at, Math.max(map.getZoom(), 18), { duration: 0.6 });
+    if (istF4()) {
+      if (!st.auffuellen) st.zaehler.ankunft(working.id, st.zaehler.angekommen.length + 1);
+      zaehlerSpeichern();
+      renderWorkF4();
+      return;
+    }
     renderWork();
   }
 
@@ -863,6 +1024,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   async function completePoint() {
+    if (istF4()) return punktFertigF4();
     const pt = working;
     const remaining = pointRemaining(pt);
     if (remaining > 0 && !(await confirmDialog(`Noch ${remaining} ${remaining === 1 ? 'Baum' : 'Bäume'} offen. Punkt trotzdem abschließen?`, { ok: 'Abschließen', body: 'Das ist sinnvoll, wenn hier weniger passende Bäume stehen als geplant.' }))) return;
@@ -895,6 +1057,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   function finish() {
+    if (istF4() && !st.plan.points.some((p) => p.status === 'skipped')) { endeF4(); return; }
     stopNav();
     const skipped = st.plan.points.filter((p) => p.status === 'skipped').length;
     saveMeasure(skipped ? {} : { status: 'fertig', finishedAt: Date.now() });
@@ -907,7 +1070,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('p', {}, 'Tippe einen grauen Punkt in der Karte an, um ihn nachzuholen, oder schließe die Maßnahme so ab.'),
         h('div', { class: 'btn-row' },
           h('button', { class: 'btn', onclick: () => { st.plan.points.forEach((p) => { if (p.status === 'skipped') p.status = 'open'; }); saveMeasure(); renderNav(); } }, 'Übersprungene nachholen'),
-          h('button', { class: 'btn btn-primary', onclick: () => { saveMeasure({ status: 'fertig', finishedAt: Date.now() }); renderFinished(); } }, 'Maßnahme abschließen'),
+          h('button', { class: 'btn btn-primary', onclick: () => { if (istF4()) { endeF4(); return; } saveMeasure({ status: 'fertig', finishedAt: Date.now() }); renderFinished(); } }, 'Maßnahme abschließen'),
         ),
       );
       return;
@@ -918,6 +1081,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   function renderFinished() {
+    if (istF4()) { renderFertigF4(); return; }
     const pts = st.plan.points;
     targetIdx = -1;
     navLayer.clearLayers();
@@ -943,6 +1107,264 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     return x ? h('p', { class: 'hint' }, `Die nächste Durchforstung ist für ${new Date(x.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })} im Maßnahmenkalender eingetragen. Das Datum kannst du dort ändern.`) : null;
   }
 
+
+  // ---------- Fassung 4: Auszeichnen mit Mengenzähler ----------
+  const MELDUNG_PASST_NICHT = 'Dieser Baum passt nicht mehr in die Menge.';
+  const offenePunkte = () => st.plan.points.filter((p) => p.status !== 'done').length;
+  /** Ständig sichtbar: gezählt, Rest (m³ und %), Rest je Punkt, Fortschritt */
+  function zaehlerLeiste() {
+    const z = st.zaehler, pts = st.plan.points;
+    const done = pts.filter((p) => p.status === 'done').length;
+    const proz = z.budget > 0 ? Math.round((z.rest / z.budget) * 100) : 0;
+    const jePunkt = z.rest / Math.max(1, offenePunkte());
+    return h('div', { class: 'zaehler-leiste', role: 'status', 'aria-live': 'polite' },
+      h('div', { class: 'zaehler-balken' }, h('span', { style: `width:${z.budget > 0 ? Math.min(100, (z.gezaehlt / z.budget) * 100) : 0}%` })),
+      h('div', { class: 'zaehler-werte' },
+        h('span', {}, h('b', {}, `${fmt(z.gezaehlt, 2)} m³`), ` gezählt von ${fmt(z.budget, 2)}`),
+        h('span', {}, h('b', {}, `${fmt(z.rest, 2)} m³`), ` Rest (${proz} %)`),
+        h('span', {}, `Rest je Punkt ${fmt(jePunkt, 2)} m³`),
+        h('span', {}, `Punkte ${done} / ${pts.length}`)));
+  }
+  function auszeichnen(baum) {
+    const b = st.zaehler.auszeichnen({ ...baum, punkt: working?.id ?? null });
+    if (!b) { buzz('arrive'); toast(MELDUNG_PASST_NICHT); fehlerMeldung = MELDUNG_PASST_NICHT; renderWorkF4(); return; }
+    fehlerMeldung = null;
+    buzz('tick');
+    zaehlerSpeichern();
+    renderWorkF4();
+  }
+  let fehlerMeldung = null, bhdEingabe = '';
+  function renderWorkF4() {
+    const pt = working;
+    const z = st.zaehler, pl = st.plan.planung;
+    const K = (k) => F4.KLASSE_NAME[k];
+    const vs = st.mindest || st.auffuellen ? [] : z.vorschlag();
+    const hier = z.baeume.filter((b) => (pt ? b.punkt === pt.id : b.punkt == null));
+    const passtNichts = !z.darfAuszeichnen(pl.kleinstesStufenVolumen);
+    const stufenBtn = pl.stufen.map((x) => { const passt = z.darfAuszeichnen(x.v);
+      return h('button', { type: 'button', class: `stufe-btn ${passt ? '' : 'passt-nicht'}`, 'aria-label': `Baum ${x.name} auszeichnen, ${fmt(x.v, 3)} m³`, onclick: () => auszeichnen({ v: x.v, klasse: x.klasse, stufe: x.id }) },
+        h('strong', {}, x.name), h('small', {}, `${K(x.klasse)} · ${fmt(x.v, 3)} m³`)); });
+    const bhdFeld = h('input', { type: 'number', inputmode: 'decimal', min: 50, max: 250, step: 1, placeholder: 'BHD in cm', value: bhdEingabe, oninput: (e) => { bhdEingabe = e.target.value; } });
+    const dickZaehlen = () => {
+      const bhd = Number(String(bhdFeld.value).replace(',', '.'));
+      if (!(bhd > 50)) { toast(bhd > 0 ? 'Bäume bis 50 cm BHD bitte über die Stufen zählen.' : 'Bitte den gemessenen BHD eingeben.'); return; }
+      bhdEingabe = '';
+      auszeichnen({ v: F4.zaehlvolumenDick(pl.gruppe, bhd, st.params.ho), klasse: 'dick', bhd });
+    };
+    const kopf = st.mindest ? ['Mindestnutzung', 'Bisher ist nichts gezählt. Zeichne den schwächsten passenden Baum aus: zuerst dünn, dann mittel, dann dick.']
+      : st.auffuellen ? [`Auffüllen an Punkt ${pt.id}`, `Rückweg: zuerst ${K(pl.hauptklasse)}, dann ${K(pl.nebenklasse)} auszeichnen, solange etwas passt.`]
+        : [`Rasterpunkt ${pt.id}: Auszeichnen`, `Im Umkreis von ${st.plan.kreis} m auszeichnen; steht dort kein passender Baum, darf er bis ${st.plan.ausweichen} m entfernt stehen.`];
+    fill(hud,
+      h('div', { class: 'work-head' }, h('p', { class: 'hud-label' }, kopf[0]), h('p', { class: 'muted' }, kopf[1])),
+      zaehlerLeiste(),
+      !st.mindest && !st.auffuellen ? h('div', { class: 'vorschlag' }, vs.length
+        ? h('strong', {}, `Hier etwa ${vs.map((x) => `${x.anzahl} ${x.anzahl === 1 ? 'Baum' : 'Bäume'} ${K(x.klasse)}`).join(' und ')} auszeichnen`)
+        : h('strong', {}, 'Hier ist nach dem Vorschlag kein weiterer Baum nötig.'), h('small', {}, 'Der Vorschlag ist eine Hilfe – verbindlich ist nur die Menge.')) : null,
+      fehlerMeldung ? h('p', { class: 'warn-line', role: 'alert' }, fehlerMeldung) : null,
+      passtNichts ? h('p', { class: 'warn-line' }, 'Die Menge ist ausgeschöpft – es passt kein Baum mehr.') : null,
+      h('p', { class: 'sheet-label' }, 'Baum unter 50 cm BHD: Stufe antippen'),
+      h('div', { class: 'stufen-grid' }, stufenBtn),
+      h('p', { class: 'sheet-label' }, 'Baum über 50 cm BHD: gemessenen BHD eingeben'),
+      h('div', { class: 'dick-zeile' }, bhdFeld, h('button', { type: 'button', class: 'btn', onclick: dickZaehlen }, 'Dicken Baum zählen')),
+      h('p', { class: 'hint warn' }, 'Stufen sorgfältig ansprechen und dicke Bäume wirklich messen (Maßband). Wer zu niedrig tippt oder zu klein misst, kann die 50 m³/ha im Einzelfall überschreiten.'),
+      hier.length ? h('div', {}, h('p', { class: 'sheet-label' }, `Hier ausgezeichnet (${hier.length})`),
+        h('ul', { class: 'baum-liste' }, hier.slice().reverse().map((b) => h('li', {},
+          h('span', {}, b.bhd ? `dick, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name || ''} (${K(b.klasse)})`, h('small', {}, ` · ${fmt(b.v, 3)} m³`)),
+          h('button', { type: 'button', class: 'btn btn-small', 'aria-label': 'Baum rückgängig machen', onclick: () => { st.zaehler.rueckgaengig(b.id); fehlerMeldung = null; zaehlerSpeichern(); renderWorkF4(); } }, 'Rückgängig'))))) : null,
+      h('details', { class: 'calc' }, h('summary', {}, 'Welche Bäume bevorzugt?'), h('p', {}, `${st.plan.auswahl[0].toUpperCase()}${st.plan.auswahl.slice(1)}.`)),
+      h('div', { class: 'btn-row' },
+        st.mindest
+          ? h('button', { class: 'btn btn-primary btn-large', disabled: z.gezaehlt <= 0 && !passtNichts, onclick: () => { st.mindest = false; abschlussF4(); } }, h('span', { html: icon.check }), 'Eingriff abschließen')
+          : [h('button', { class: 'btn', onclick: () => { working = null; fehlerMeldung = null; highlightTarget(); renderHud(); } }, 'Zurück zur Navigation'),
+            st.auffuellen ? h('button', { class: 'btn', onclick: () => abschlussF4() }, 'Auffüllen beenden') : null,
+            h('button', { class: 'btn btn-primary btn-large', onclick: completePoint }, h('span', { html: icon.check }), st.auffuellen ? 'Weiter auf dem Rückweg' : 'Punkt abschließen')]),
+    );
+  }
+  function punktFertigF4() {
+    const pt = working;
+    fehlerMeldung = null;
+    if (st.auffuellen) {
+      working = null;
+      st.auffuellen.pos++;
+      zaehlerSpeichern();
+      // Auffüllen endet, sobald kein Baum mehr passt oder der Rückweg zu Ende ist
+      if (!st.zaehler.darfAuszeichnen(st.plan.planung.kleinstesStufenVolumen) || st.auffuellen.pos >= st.auffuellen.liste.length) { abschlussF4(); return; }
+      targetIdx = st.plan.points.findIndex((p) => p.id === st.auffuellen.liste[st.auffuellen.pos]);
+      prompted.delete(st.plan.points[targetIdx].id);
+      highlightTarget(); renderHud();
+      return;
+    }
+    pt.status = 'done'; pt.doneAt = Date.now();
+    working = null;
+    buzz('done');
+    saveMeasure(); zaehlerSpeichern();
+    pointMarkers[targetIdx]?.setStyle({ fillColor: COLORS.done });
+    const nxt = nextOpenIndex(targetIdx + 1);
+    if (nxt < 0) { finish(); return; }
+    targetIdx = nxt;
+    highlightTarget(); renderHud();
+    const n = st.plan.points[nxt];
+    say(`Punkt ${pt.id} erledigt. Weiter zu Punkt ${n.id}: ${formatDist(distance(pt.at, n.at))} Richtung ${compassLabel(bearing(pt.at, n.at))}.`, { duration: 4500 });
+  }
+  /** Nach dem letzten Punkt: Mindestnutzung, Auffüllen oder Abschluss */
+  async function endeF4() {
+    const z = st.zaehler, klein = st.plan.planung.kleinstesStufenVolumen;
+    if (z.gezaehlt <= 0 && z.darfAuszeichnen(klein)) {
+      // Mindestnutzung: es wird immer etwas genutzt
+      st.mindest = true; working = null; zaehlerSpeichern();
+      targetIdx = -1; highlightTarget();
+      renderWorkF4();
+      return;
+    }
+    if (!st.auffuellen && z.darfAuszeichnen(klein)) {
+      const ja = await dialog({ title: 'Noch Menge übrig – auffüllen?',
+        body: h('div', {}, h('p', {}, `Es sind noch ${fmt(z.rest, 2)} m³ übrig. Die App führt dich auf dem Rückweg über die Punkte in umgekehrter Reihenfolge.`),
+          h('p', {}, `Dort zuerst ${F4.KLASSE_NAME[st.plan.planung.hauptklasse]}, dann ${F4.KLASSE_NAME[st.plan.planung.nebenklasse]} auszeichnen. Der Rückweg endet, sobald kein Baum mehr passt.`)),
+        actions: [{ label: 'Nein, abschließen', value: false }, { label: 'Rückweg starten', value: true, primary: true }] });
+      if (ja) {
+        st.auffuellen = { liste: st.plan.points.map((p) => p.id).reverse(), pos: 0 };
+        zaehlerSpeichern(); saveMeasure();
+        targetIdx = st.plan.points.findIndex((p) => p.id === st.auffuellen.liste[0]);
+        prompted.clear(); highlightTarget(); renderHud();
+        return;
+      }
+    }
+    abschlussF4();
+  }
+  /** Schritt 7: Abschluss – Ergebnis speichern, Protokoll als Anhang */
+  async function abschlussF4() {
+    stopNav();
+    working = null; st.auffuellen = st.auffuellen ? { ...st.auffuellen, fertig: true } : null; st.mindest = false;
+    const z = st.zaehler, pl = st.plan.planung;
+    const ergebnis = auswertungF4();
+    saveMeasure({ status: 'fertig', finishedAt: Date.now() });
+    store.update((x) => { const m = x.measures.find((y) => y.id === st.measureId); m.thinning.f4 = ergebnis; });
+    zaehlerSpeichern();
+    protokoll(st.measureId, `Durchforstung abgeschlossen: ${fmt(z.gezaehlt, 2)} m³ gezählt (${fmt(ergebnis.gezaehltHa, 1)} m³/ha von ${fmt(pl.mengeHa, 1)} m³/ha)`);
+    legeFolgeAn();
+    buzz('done');
+    renderFertigF4();
+    // Protokoll als PDF an die Maßnahme hängen
+    try {
+      const blob = await protokollPdf();
+      const id = uid(), name = protokollName('pdf');
+      await dateiSpeichern(id, blob);
+      store.update((x) => { const m = x.measures.find((y) => y.id === st.measureId); (m.anhaenge ||= []).push({ id, typ: 'durchforstungsprotokoll', titel: 'Durchforstungsprotokoll (PDF)', erstellt: Date.now(), datei: id, name }); });
+    } catch (e) { console.error(e); }
+  }
+  function auswertungF4() {
+    const z = st.zaehler, pl = st.plan.planung;
+    const jeStufe = pl.stufen.map((x) => { const bs = z.baeume.filter((b) => b.stufe === x.id && !b.bhd); return { stufe: x.name, klasse: x.klasse, anzahl: bs.length, m3: bs.reduce((a, b) => a + b.v, 0) }; });
+    const dicke = z.baeume.filter((b) => b.bhd);
+    const jeKlasse = ['duenn', 'mittel', 'dick'].map((k) => { const bs = z.baeume.filter((b) => b.klasse === k); return { klasse: k, anzahl: bs.length, m3: bs.reduce((a, b) => a + b.v, 0) }; });
+    return { gezaehlt: z.gezaehlt, gezaehltHa: z.gezaehlt / (st.plan.areaHa || 1), budget: z.budget, mengeHa: pl.mengeHa, baeume: z.baeume.length, jeStufe, jeKlasse, bhd: dicke.map((b) => b.bhd), abgeschlossen: Date.now() };
+  }
+  function renderFertigF4() {
+    const pts = st.plan.points;
+    targetIdx = -1; navLayer.clearLayers();
+    const e = measure()?.thinning?.f4 || auswertungF4();
+    fill(hud,
+      h('div', { class: 'finished' },
+        h('div', { class: 'finished-bug', html: WANZE_SVG }),
+        h('div', {}, h('h2', {}, 'Eingriff abgeschlossen'),
+          h('p', {}, `${fmt(e.gezaehlt, 2)} m³ gezählt (${fmt(e.gezaehltHa, 1)} m³/ha) von ${fmt(e.budget, 2)} m³ · ${e.baeume} ${e.baeume === 1 ? 'Baum' : 'Bäume'} · ${pts.filter((p) => p.status === 'done').length} von ${pts.length} Punkten`))),
+      h('ul', { class: 'mat-kurz' }, e.jeKlasse.filter((x) => x.anzahl).map((x) => h('li', {}, `${F4.KLASSE_NAME[x.klasse]}: ${x.anzahl} ${x.anzahl === 1 ? 'Baum' : 'Bäume'}, ${fmt(x.m3, 2)} m³`))),
+      h('p', { class: 'hint' }, 'Gezählt ist eine vorsichtige Schätzung. Das tatsächlich geerntete Volumen liegt meist etwas darunter.'),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn', onclick: async () => herunterladen(await protokollPdf(), protokollName('pdf'), { titel: 'Durchforstungsprotokoll' }) }, 'Protokoll als PDF'),
+        h('button', { class: 'btn', onclick: () => herunterladen(new Blob(['﻿' + protokollCsv()], { type: 'text/csv;charset=utf-8' }), protokollName('csv')) }, 'Protokoll als CSV')),
+      naechsterEingriffButton(),
+      h('button', { class: 'btn btn-primary btn-block', onclick: close }, 'Zur Maßnahmenübersicht'),
+    );
+  }
+  const protokollName = (endung) => `Durchforstung_${(st.sel?.label || 'Bestand').replace(/[^\wäöüÄÖÜß-]+/g, '_').slice(0, 60)}_${new Date().toISOString().slice(0, 10)}.${endung}`;
+  const zahl = (v, d = 3) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: false });
+  function protokollCsv() {
+    const z = st.zaehler, pl = st.plan.planung, f = st.params;
+    const e = auswertungF4();
+    const zeilen = [
+      ['Durchforstungsprotokoll', `Durchforstungshilfe ${st.plan.version}`],
+      ['Datum', new Date().toLocaleString('de-DE')], ['Bestand', st.sel?.label || ''], ['Fläche (ha)', zahl(st.plan.areaHa, 4)],
+      ['Hauptbaumart', f.art], ['Baumartengruppe', pl.gruppe], ['Oberhöhe ho (m)', zahl(f.ho, 1)], ['Alter (Jahre)', f.alter ?? st.auto?.bestand?.alter ?? ''], ['B°', zahl(f.b, 2)],
+      ['Probezählung dünn/mittel/dick', f.probe.map((x) => `${x.duenn}/${x.mittel}/${x.dick}`).join(' | ')],
+      ['Feld', `${pl.gruppe} | ${pl.hoehenklasse} | ${pl.bstufe} | ${pl.szenario}`], ['Zielmenge (m³/ha)', zahl(pl.zielmenge, 1)], ['Eingriff', `${st.plan.eingriffe.nr} von ${pl.eingriffe}`],
+      ['Menge (m³/ha)', zahl(pl.mengeHa, 3)], ['Budget (m³)', zahl(z.budget, 3)], ['Gezählt (m³)', zahl(z.gezaehlt, 3)], ['Gezählt (m³/ha)', zahl(e.gezaehltHa, 3)],
+      ['Hinweis', 'Gezählt ist eine vorsichtige Schätzung. Das tatsächlich geerntete Volumen liegt meist etwas darunter.'],
+      [],
+      ['Nr', 'Rasterpunkt', 'Stufe bzw. BHD (cm)', 'Klasse', 'Zählvolumen (m³)', 'Zeit'],
+      ...z.baeume.map((b, i) => [i + 1, b.punkt ?? 'Mindestnutzung', b.bhd ? zahl(b.bhd, 0) : pl.stufen[b.stufe]?.name, F4.KLASSE_NAME[b.klasse], zahl(b.v), new Date(b.t).toLocaleString('de-DE')]),
+      [],
+      ['Rasterpunkt', 'Breite', 'Länge', 'Status', 'Bäume', 'm³'],
+      ...st.plan.points.map((p) => { const bs = z.baeume.filter((b) => b.punkt === p.id); return [p.id, p.at[0].toFixed(6), p.at[1].toFixed(6), { done: 'erledigt', skipped: 'übersprungen', open: 'offen' }[p.status], bs.length, zahl(bs.reduce((a, b) => a + b.v, 0))]; }),
+      [],
+      ['GPS-Spur Breite', 'Länge', 'Zeit'],
+      ...st.spur.map(([la, lo, t]) => [la.toFixed(6), lo.toFixed(6), new Date(t).toLocaleString('de-DE')]),
+    ];
+    return zeilen.map((r) => r.map((c) => { const t = String(c ?? ''); return /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; }).join(';')).join('\r\n');
+  }
+  async function protokollPdf() {
+    const z = st.zaehler, pl = st.plan.planung, f = st.params, e = auswertungF4();
+    const doc = new Pdf();
+    const L0 = 50, R = 545;
+    let y = 50;
+    const zeile = (a, b) => { if (y > 790) { doc.neueSeite(); y = 50; } doc.text(L0, y, a, { size: 9, farbe: [90, 100, 90] }); doc.text(L0 + 165, y, String(b ?? '–'), { size: 9 }); y += 13; };
+    doc.text(L0, y, 'Durchforstungsprotokoll', { bold: true, size: 18, farbe: [27, 77, 46] }); y += 18;
+    doc.text(L0, y, `${st.sel?.label || 'Bestand'} · ${new Date().toLocaleDateString('de-DE')} · Durchforstungshilfe ${st.plan.version}`, { size: 9.5 }); y += 18;
+    doc.text(L0, y, 'Eingaben', { bold: true, size: 11 }); y += 14;
+    zeile('Fläche', `${formatHa(st.plan.areaHa)}`); zeile('Hauptbaumart / Gruppe', `${f.art} / ${pl.gruppe}`);
+    zeile('Oberhöhe ho', `${fmt(f.ho, 1)} m (${f.hoQuelle === 'lidar' ? 'LiDAR' : f.hoQuelle === 'alter' ? 'aus dem Alter geschätzt' : 'eigene Angabe'})`);
+    zeile('Alter', f.alter ?? st.auto?.bestand?.alter ?? 'unbekannt'); zeile('Bestockungsgrad B°', `${fmt(f.b, 2)} (Stufe ${pl.bstufe})`);
+    zeile('Probezählung P1–P3 (dünn/mittel/dick)', f.probe.map((x) => `${x.duenn}/${x.mittel}/${x.dick}`).join('  ·  '));
+    zeile('Szenario', `${pl.szenario}${f.szManuell ? ' (von Hand gewählt)' : ''}`);
+    y += 6; doc.text(L0, y, 'Feld und Menge', { bold: true, size: 11 }); y += 14;
+    zeile('Feld', `${pl.gruppe} · ${pl.hoehenklasse} · ${pl.bstufe} · Szenario ${pl.szenario}`);
+    zeile('Zielmenge im Jahrzehnt', `${fmt(pl.zielmenge, 1)} m³/ha, ${pl.eingriffe} Eingriff${pl.eingriffe > 1 ? 'e' : ''}`);
+    zeile('Dieser Eingriff', `${st.plan.eingriffe.nr} von ${pl.eingriffe}: ${fmt(pl.mengeHa, 2)} m³/ha = ${fmt(z.budget, 2)} m³ im Bestand`);
+    zeile('Gezählt', `${fmt(z.gezaehlt, 2)} m³ = ${fmt(e.gezaehltHa, 2)} m³/ha (${z.budget > 0 ? Math.round((z.gezaehlt / z.budget) * 100) : 0} % der Menge)`);
+    zeile('Rasterpunkte', `${st.plan.points.filter((p) => p.status === 'done').length} von ${st.plan.points.length} erledigt, Raster ${fmt(st.plan.raster, 0)} m`);
+    zeile('GPS-Spur', `${st.spur.length} Punkte`);
+    y += 6; doc.text(L0, y, 'Bäume je Stufe bzw. Klasse', { bold: true, size: 11 }); y += 14;
+    e.jeStufe.forEach((x) => zeile(`${x.stufe} (${F4.KLASSE_NAME[x.klasse]})`, `${x.anzahl} Bäume, ${fmt(x.m3, 3)} m³`));
+    zeile('über 50 cm (gemessen)', `${e.bhd.length} Bäume${e.bhd.length ? `, BHD ${e.bhd.map((b) => fmt(b, 0)).join(', ')} cm` : ''}, ${fmt(e.jeKlasse.find((x) => x.klasse === 'dick').m3, 3)} m³`);
+    y += 4;
+    doc.text(L0, y, 'Gezählt ist eine vorsichtige Schätzung. Das tatsächlich geerntete Volumen liegt meist etwas darunter.', { size: 8.5, bold: true }); y += 16;
+    // Karte: Fläche, Rasterpunkte, GPS-Spur
+    if (y > 520) { doc.neueSeite(); y = 50; }
+    const alle = [...st.sel.ring, ...st.spur.map((q) => [q[0], q[1]])];
+    const la0 = alle.reduce((a, q) => a + q[0], 0) / alle.length, lo0 = alle.reduce((a, q) => a + q[1], 0) / alle.length;
+    const kx = 111320 * Math.cos((la0 * Math.PI) / 180), ky = 110540;
+    const xy = ([la, lo]) => [(lo - lo0) * kx, (la - la0) * ky];
+    const P = alle.map(xy), minX = Math.min(...P.map((q) => q[0])), maxX = Math.max(...P.map((q) => q[0])), minY = Math.min(...P.map((q) => q[1])), maxY = Math.max(...P.map((q) => q[1]));
+    const BW = R - L0, BH = 250, sk = Math.min((BW - 30) / Math.max(1, maxX - minX), (BH - 30) / Math.max(1, maxY - minY));
+    const ox = L0 + (BW - (maxX - minX) * sk) / 2, oy = y + (BH - (maxY - minY) * sk) / 2;
+    const tr = (ll) => { const [a, c] = xy(ll); return [ox + (a - minX) * sk, oy + (maxY - c) * sk]; };
+    doc.rechteck(L0, y, BW, BH, { fill: [248, 250, 246], stroke: [170, 180, 170] });
+    doc.polygon([st.sel.ring.map(tr)], { fill: [236, 242, 232], stroke: [242, 107, 29], w: 1.5 });
+    for (let i = 1; i < st.spur.length; i++) { const [x1, y1] = tr(st.spur[i - 1]), [x2, y2] = tr(st.spur[i]); doc.linie(x1, y1, x2, y2, { w: 0.8, farbe: [31, 116, 184] }); }
+    st.plan.points.forEach((p) => { const [u, v] = tr(p.at); doc.rechteck(u - 2.5, v - 2.5, 5, 5, { fill: p.status === 'done' ? [46, 158, 79] : p.status === 'skipped' ? [138, 148, 140] : [215, 38, 61] }); doc.text(u + 4, v - 3, String(p.id), { size: 6 }); });
+    y += BH + 10;
+    doc.text(L0, y, 'Grün: erledigte Rasterpunkte · Grau: übersprungen · Rot: offen · Blau: GPS-Spur', { size: 7.5, farbe: [90, 100, 90] }); y += 16;
+    // Kronenfoto (optional)
+    if (f.fotoId) {
+      const foto = await dateiLaden(f.fotoId).catch(() => null);
+      const bild = foto ? await alsJpeg(foto).catch(() => null) : null;
+      if (bild) { if (y > 560) { doc.neueSeite(); y = 50; } const b = 220, hh = (b * bild.h) / bild.w; doc.text(L0, y, 'Kronenfoto', { bold: true, size: 10 }); y += 8; doc.bild(L0, y, b, Math.min(hh, 300), bild); y += Math.min(hh, 300) + 10; }
+    }
+    // Bäume
+    doc.neueSeite(); y = 50;
+    doc.text(L0, y, 'Ausgezeichnete Bäume', { bold: true, size: 11 }); y += 16;
+    z.baeume.forEach((b, i) => { if (y > 800) { doc.neueSeite(); y = 50; } doc.text(L0, y, `${i + 1}. Punkt ${b.punkt ?? '–'} · ${b.bhd ? `dick, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name} (${F4.KLASSE_NAME[b.klasse]})`} · ${fmt(b.v, 3)} m³ · ${new Date(b.t).toLocaleString('de-DE')}`, { size: 8.5 }); y += 11; });
+    return doc.blob();
+  }
+  function alsJpeg(blob) {
+    return new Promise((res, rej) => {
+      const img = new Image(), url = URL.createObjectURL(blob);
+      img.onload = () => { const s = Math.min(1, 900 / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        c.toBlob(async (b) => (b ? res({ jpeg: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height }) : rej(new Error('Bild'))), 'image/jpeg', 0.8); };
+      img.onerror = rej; img.src = url;
+    });
+  }
 
   go(st.step);
 }

@@ -238,6 +238,8 @@ function vspFelder(m) {
   );
 }
 
+const fmtM3 = (v) => Number(v || 0).toLocaleString('de-DE', { maximumFractionDigits: 1 });
+
 function measureCard(m, byId) {
   const p = byId[m.parcelId];
   const where = wo(m, byId);
@@ -272,7 +274,7 @@ function measureCard(m, byId) {
     m.flaeche?.ring ? h('p', { class: 'measure-details' }, `Teilfläche ${formatHa(m.flaeche.ha)}`) : null,
     m.foerderung?.antragId ? (() => { const fa = store.get().foerderantraege?.find((x) => x.id === m.foerderung.antragId); return fa ? h('p', { class: 'measure-details' }, h('button', { type: 'button', class: 'link-btn', onclick: () => openFoerderantrag({ antragId: fa.id }) }, fa.status === 'fertig' ? 'Förderantrag vorbereitet – ansehen' : 'Förderantrag fortsetzen')) : null; })() : null,
     m.kosten ? h('p', { class: 'measure-details' }, `Kosten: ${Number(m.kosten).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`) : null,
-    m.thinning?.plan ? h('p', { class: 'measure-details' }, `${m.thinning.plan.eingriffe?.anzahl > 1 ? `Eingriff ${m.thinning.plan.eingriffe.nr} von ${m.thinning.plan.eingriffe.anzahl}, ` : ''}${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.total} Bäume Entnahme geplant`) : null,
+    m.thinning?.plan ? h('p', { class: 'measure-details' }, `${m.thinning.plan.eingriffe?.anzahl > 1 ? `Eingriff ${m.thinning.plan.eingriffe.nr} von ${m.thinning.plan.eingriffe.anzahl}, ` : ''}${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.methode === 'f4' ? `${fmtM3(m.thinning.plan.planung?.mengeHa)} m³/ha = ${fmtM3(m.thinning.plan.planung?.budget)} m³ Menge${m.thinning.f4 ? `, ${fmtM3(m.thinning.f4.gezaehlt)} m³ gezählt` : ''}` : `${m.thinning.plan.total} Bäume Entnahme geplant`}`) : null,
     m.note ? h('p', { class: 'measure-note' }, m.note) : null,
     progress,
     m.type === 'durchforstung' && m.thinning?.natura2000?.length && m.date && inBrutzeit(m.date, schutzzeitVon(m)) && !m.anhaenge?.some((a) => a.typ === 'vertraeglichkeit')

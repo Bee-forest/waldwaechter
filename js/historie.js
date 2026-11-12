@@ -94,7 +94,18 @@ function openDetail(p, T) {
       z(label === 'Fläche (ha)' ? 'Angegebene Fläche' : label.replace(/ \(.*\)/, ''), einheit && !/je /.test(einheit) ? `${v} ${einheit}` : v);
     }
     const t = m.thinning, pl = t?.plan;
-    if (pl) {
+    if (pl?.methode === 'f4') {
+      const pts = pl.points || [], pr = t.params || {}, pg = pl.planung || {}, e = t.f4;
+      const m3 = (v, d = 1) => Number(v || 0).toLocaleString('de-DE', { maximumFractionDigits: d });
+      z('Baumart', `${pr.art || ''}${pg.gruppe ? ` (Gruppe ${pg.gruppe})` : ''}`);
+      z('Angaben', [`Oberhöhe ${m3(pr.ho)} m`, `B° ${m3(pr.b, 2)}`, pg.szenario ? `Szenario ${pg.szenario}` : null].filter(Boolean).join(' · '));
+      z('Zielmenge', `${m3(pg.zielmenge)} m³/ha im Jahrzehnt, ${pg.eingriffe} Eingriff${pg.eingriffe > 1 ? 'e' : ''}`);
+      if (pl.eingriffe) z('Eingriff', `${pl.eingriffe.nr || 1} von ${pl.eingriffe.anzahl}`);
+      z('Menge dieses Eingriffs', `${m3(pg.mengeHa, 2)} m³/ha = ${m3(pg.budget, 2)} m³`);
+      z('Rasterpunkte', `${pts.filter((x) => x.status === 'done').length} von ${pts.length} erledigt (Raster ${m3(pl.raster, 0)} m)`);
+      if (e) z('Gezählt', `${m3(e.gezaehlt, 2)} m³ (${m3(e.gezaehltHa, 1)} m³/ha), ${e.baeume} Bäume – vorsichtige Schätzung, geerntet wird meist etwas weniger`);
+      if (t.natura2000?.length) z('Schutzgebiet', t.natura2000.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', '));
+    } else if (pl) {
       const pts = pl.points || [];
       const erledigt = pts.filter((x) => x.status === 'done').length;
       const entnommen = pts.reduce((s, x) => s + x.removals.reduce((a, r) => a + (r.marked || 0), 0), 0);

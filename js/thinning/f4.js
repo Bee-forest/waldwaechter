@@ -123,7 +123,11 @@ export function klasseDerStufe(stufe) {
 }
 /** Zählstufe zu einem BHD unter 50 cm (15 ≤ BHD < 25 → Stufe „15–25“ usw.) */
 export function stufeZuBhd(bhd) {
-  const s = parameter().zaehlstufen_unter_50cm.find((x) => bhd >= x.von && bhd < x.bis);
+  // FESTLEGUNG: Grenzwert gehört zur unteren Stufe (15 → 7–15, 25 → 15–25, 50 → 35–50),
+  // passend zu den Stärkeklassen „dünn 7 ≤ BHD ≤ 25, mittel 25 < BHD ≤ 50“.
+  const st = parameter().zaehlstufen_unter_50cm;
+  if (!(bhd >= st[0].von) || bhd > st[st.length - 1].bis) return null;
+  const s = st.find((x) => bhd <= x.bis);
   return s ? s.id : null;
 }
 
@@ -192,6 +196,28 @@ export class Zaehler {
       d[c] -= this.vk[c];
     }
     return KLASSEN.filter((k) => n[k]).map((k) => ({ klasse: k, anzahl: n[k] }));
+  }
+  /** Kopie zum Vorausrechnen (ohne erneute Prüfung, verändert den echten Stand nicht) */
+  kopie() {
+    const z = new Zaehler({ budget: this.budget, punkte: this.punkte, hauptklasse: this.hauptklasse, nebenklasse: this.nebenklasse, anteilHaupt: this.anteilHaupt, vKlasse: this.vk });
+    z.baeume = this.baeume.map((b) => ({ ...b })); z.defizit = { ...this.defizit }; z.angekommen = [...this.angekommen]; z.nr = this.nr;
+    return z;
+  }
+  /**
+   * Welche der noch anzulaufenden Punkte (in Laufreihenfolge) bekommen keinen Baum?
+   * FESTLEGUNG: Vorausrechnung unter der Annahme, dass am Punkt genau der Vorschlag mit v_klasse
+   * ausgezeichnet wird. Für den nächsten Punkt ist das Ergebnis exakt (hängt nur vom jetzigen Stand ab),
+   * für spätere Punkte eine Vorschau, die nach jedem Punkt neu gerechnet wird.
+   */
+  leerePunkte(ids) {
+    const z = this.kopie(), leer = new Set();
+    for (const id of ids) {
+      if (z.angekommen.includes(id)) continue;
+      const vs = z.ankunft(id, z.angekommen.length + 1);
+      if (!vs.length) { leer.add(id); continue; }
+      for (const { klasse, anzahl } of vs) for (let i = 0; i < anzahl; i++) z.auszeichnen({ v: z.vk[klasse], klasse });
+    }
+    return leer;
   }
   toJSON() {
     return { budget: this.budget, punkte: this.punkte, hauptklasse: this.hauptklasse, nebenklasse: this.nebenklasse, anteilHaupt: this.anteilHaupt, vKlasse: this.vk, baeume: this.baeume, defizit: this.defizit, angekommen: this.angekommen, nr: this.nr };

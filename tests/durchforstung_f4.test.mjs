@@ -80,5 +80,17 @@ const maxM = Math.max(...P.feldtabelle.map((f) => F.mengeEingriff(f.zielmenge_m3
 gleich('Obergrenze', maxM <= P.obergrenze_je_eingriff_m3ha, true);
 gleich('Gruppe Strobe', F.gruppe('Strobe'), 'Fi/Ta/Dgl'); gleich('Gruppe Schwarzkiefer', F.gruppe('Schwarzkiefer'), 'Ki/Lä'); gleich('Gruppe Hainbuche', F.gruppe('Hainbuche'), 'Bu/Laub');
 
+// Stufe aus gemessenem BHD (Grenzwert zur unteren Stufe)
+gleich('BHD 15 → Stufe 0', F.stufeZuBhd(15), 0); gleich('BHD 25 → Stufe 1', F.stufeZuBhd(25), 1); gleich('BHD 25,5 → Stufe 2', F.stufeZuBhd(25.5), 2); gleich('BHD 50 → Stufe 3', F.stufeZuBhd(50), 3); gleich('BHD 6 → keine', F.stufeZuBhd(6), null); gleich('BHD 51 → keine', F.stufeZuBhd(51), null);
+// Leere Punkte: kleines Budget, viele Punkte → einige Punkte ohne Baum; Vorhersage verändert den Stand nicht
+{
+  const z = new F.Zaehler({ budget: 1.0, punkte: 10, hauptklasse: 'duenn', nebenklasse: 'mittel', anteilHaupt: 1, vKlasse: { duenn: 0.3, mittel: 1, dick: 3 } });
+  const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const leer = z.leerePunkte(ids);
+  gleich('leere Punkte vorhanden', leer.size > 0 && leer.size < 10, true);
+  gleich('Vorhersage unverändert', z.angekommen.length + z.baeume.length, 0);
+  // exakt für den ersten Punkt
+  gleich('erster Punkt exakt', leer.has(1), z.kopie().ankunft(1, 1).length === 0);
+}
 console.log(`${ok} Tests bestanden, ${fehler} Fehler`);
 process.exit(fehler ? 1 : 0);

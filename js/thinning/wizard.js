@@ -1014,7 +1014,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     highlightTarget();
     map.flyTo(working.at, Math.max(map.getZoom(), 18), { duration: 0.6 });
     if (istF4()) {
-      if (!st.auffuellen) st.zaehler.ankunft(working.id, st.zaehler.angekommen.length + 1);
+      if (!st.auffuellen) { const vs = st.zaehler.ankunft(working.id, st.zaehler.angekommen.length + 1); working.vorschlag ??= vs; saveMeasure(); }
+      zuletzt = null;
       zaehlerSpeichern();
       renderWorkF4();
       return;
@@ -1162,65 +1163,95 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
   function auszeichnen(baum) {
     const b = st.zaehler.auszeichnen({ ...baum, punkt: working?.id ?? null });
-    if (!b) { buzz('arrive'); toast(MELDUNG_PASST_NICHT); fehlerMeldung = MELDUNG_PASST_NICHT; renderWorkF4(); return; }
+    if (!b) { buzz('arrive'); toast(MELDUNG_PASST_NICHT); fehlerMeldung = MELDUNG_PASST_NICHT; zuletzt = null; renderWorkF4(); return; }
     fehlerMeldung = null;
     buzz('tick');
     zaehlerSpeichern();
     renderWorkF4();
   }
-  let fehlerMeldung = null, bhdEingabe = '';
+  let fehlerMeldung = null, bhdEingabe = '', zuletzt = null;
   function renderWorkF4() {
     page.classList.add('w-mode'); // beim Auszeichnen: Karte klein, Zähltasten groß
     const pt = working;
     const z = st.zaehler, pl = st.plan.planung;
     const K = (k) => F4.KLASSE_NAME[k];
-    const vs = st.mindest || st.auffuellen ? [] : z.vorschlag();
+    const modus = st.mindest ? 'mindest' : st.auffuellen ? 'auffuellen' : 'punkt';
     const hier = z.baeume.filter((b) => (pt ? b.punkt === pt.id : b.punkt == null));
+    const hierK = (k) => hier.filter((b) => b.klasse === k).length;
+    const hierS = (id) => hier.filter((b) => b.stufe === id && b.klasse !== 'dick').length;
+    // Soll je Klasse = Vorschlag beim Eintreffen am Punkt (bleibt stehen, damit „1 / 2“ hochzählt)
+    const soll = {};
+    if (modus === 'punkt') {
+      const vs = pt.vorschlag || z.vorschlag().map((x) => ({ ...x, anzahl: x.anzahl + hierK(x.klasse) }));
+      for (const x of vs) soll[x.klasse] = x.anzahl;
+    }
     const passtNichts = !z.darfAuszeichnen(pl.kleinstesStufenVolumen);
-    const stufenBtn = pl.stufen.map((x) => { const passt = z.darfAuszeichnen(x.v);
-      return h('button', { type: 'button', class: `stufe-btn ${passt ? '' : 'passt-nicht'}`, 'aria-label': `Baum ${x.name} BHD auszeichnen, ${fmt(x.v, 3)} m³`, onclick: () => auszeichnen({ v: x.v, klasse: x.klasse, stufe: x.id }) },
-        h('strong', {}, x.name), h('small', {}, `${K(x.klasse)} · ${fmt(x.v, 3)} m³`)); });
-    // Gemessener BHD: bis 50 cm zählt die passende Stufe, darüber das Volumen aus BHD und Höhe
-    const bhdFeld = h('input', { type: 'text', inputmode: 'decimal', enterkeyhint: 'done', autocomplete: 'off', placeholder: 'z. B. 38', 'aria-label': 'Gemessener BHD in cm', value: bhdEingabe,
+    const stufeBtn = (x) => {
+      const n = hierS(x.id), passt = z.darfAuszeichnen(x.v);
+      return h('button', { type: 'button', class: `stufe-btn ${passt ? '' : 'passt-nicht'} ${zuletzt === `s${x.id}` ? 'getippt' : ''}`, 'aria-label': `Baum ${x.name} BHD auszeichnen, ${fmt(x.v, 3)} m³${n ? `, hier schon ${n}` : ''}`,
+        onclick: () => { zuletzt = `s${x.id}`; auszeichnen({ v: x.v, klasse: x.klasse, stufe: x.id }); } },
+        h('strong', {}, x.name), h('small', {}, `${fmt(x.v, 3)} m³`), n ? h('span', { class: 'stufe-n' }, `${n}×`) : null);
+    };
+    const bhdFeld = h('input', { type: 'text', inputmode: 'decimal', enterkeyhint: 'done', autocomplete: 'off', placeholder: 'BHD', 'aria-label': 'Gemessener BHD in cm', value: bhdEingabe,
       oninput: (e) => { bhdEingabe = e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); bhdZaehlen(); } } });
     const bhdZaehlen = () => {
       const bhd = Number(String(bhdFeld.value).trim().replace(',', '.'));
       if (!bhdFeld.value.trim() || !Number.isFinite(bhd)) { toast('Bitte den gemessenen BHD in cm eingeben.'); bhdFeld.focus(); return; }
-      if (bhd < pl.stufen[0].von) { toast(`Bäume unter ${pl.stufen[0].von} cm BHD werden nicht gezählt.`); return; }
+      if (bhd <= 50) { toast('Dick heißt über 50 cm BHD. Dünnere Bäume bitte über die Stufen oben zählen.'); return; }
       if (bhd > 250) { toast('Bitte den BHD in Zentimetern eingeben.'); return; }
-      bhdEingabe = '';
-      if (bhd <= 50) { const x = pl.stufen.find((y) => y.id === F4.stufeZuBhd(bhd)); auszeichnen({ v: x.v, klasse: x.klasse, stufe: x.id, bhd }); return; }
+      bhdEingabe = ''; zuletzt = 'dick';
       auszeichnen({ v: F4.zaehlvolumenDick(pl.gruppe, bhd, st.params.ho), klasse: 'dick', bhd });
     };
-    const kopf = st.mindest ? ['Mindestnutzung', 'Bisher ist nichts gezählt. Zeichne den schwächsten passenden Baum aus: zuerst dünn, dann mittel, dann dick.']
-      : st.auffuellen ? [`Auffüllen an Punkt ${pt.id}`, `Rückweg: zuerst ${K(pl.hauptklasse)}, dann ${K(pl.nebenklasse)} auszeichnen, solange etwas passt.`]
-        : [`Rasterpunkt ${pt.id}: Auszeichnen`, `Im Umkreis von ${st.plan.kreis} m, notfalls bis ${st.plan.ausweichen} m.`];
-    const bezeichnung = (b) => (b.klasse === 'dick' ? `dick, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name || ''}${b.bhd ? `, gemessen ${fmt(b.bhd, 0)} cm` : ''} (${K(b.klasse)})`);
+    const karte = (k) => {
+      const n = hierK(k), s = soll[k] || 0, fertig = s > 0 && n >= s;
+      const inhalt = k === 'dick'
+        ? h('div', { class: 'dick-zeile' }, h('div', { class: 'mit-einheit' }, bhdFeld, h('span', {}, 'cm')), h('button', { type: 'button', class: `btn btn-primary ${zuletzt === 'dick' ? 'getippt' : ''}`, onclick: bhdZaehlen }, 'Zählen'))
+        : h('div', { class: 'stufen-grid' }, pl.stufen.filter((x) => x.klasse === k).map(stufeBtn));
+      const zahl = modus === 'punkt' && s > 0 ? `${n} / ${s}` : n ? `${n} gezählt` : '';
+      return h('section', { class: `klasse-karte ${fertig ? 'fertig' : ''} ${s > 0 ? 'soll' : ''}` },
+        h('div', { class: 'klasse-kopf' },
+          h('strong', {}, `${K(k)}`, h('small', {}, k === 'duenn' ? ' 7–25 cm' : k === 'mittel' ? ' über 25–50 cm' : ' über 50 cm, BHD messen')),
+          zahl ? h('span', { class: 'klasse-zahl' }, fertig ? h('span', { html: icon.check }) : null, zahl) : null),
+        inhalt);
+    };
+    const klassen = ['duenn', 'mittel', 'dick'];
+    let oben = klassen, unten = [];
+    if (modus === 'punkt' && Object.keys(soll).length) { oben = klassen.filter((k) => soll[k]); unten = klassen.filter((k) => !soll[k]); }
+    if (modus === 'auffuellen') oben = [pl.hauptklasse, pl.nebenklasse, ...klassen.filter((k) => k !== pl.hauptklasse && k !== pl.nebenklasse)];
+    const alleFertig = modus === 'punkt' && Object.keys(soll).length > 0 && Object.entries(soll).every(([k, a]) => hierK(k) >= a);
+    const kopf = modus === 'mindest' ? ['Mindestnutzung', 'Bisher ist nichts gezählt. Zeichne den schwächsten passenden Baum aus: zuerst dünn, dann mittel, dann dick.']
+      : modus === 'auffuellen' ? [`Auffüllen an Punkt ${pt.id}`, `Rückweg: zuerst ${K(pl.hauptklasse)}, dann ${K(pl.nebenklasse)} auszeichnen, solange etwas passt.`]
+        : [`Rasterpunkt ${pt.id}`, Object.keys(soll).length
+          ? `Hier etwa ${Object.entries(soll).map(([k, a]) => `${a} ${a === 1 ? 'Baum' : 'Bäume'} ${K(k)}`).join(' und ')} auszeichnen – im Umkreis von ${st.plan.kreis} m, notfalls bis ${st.plan.ausweichen} m.`
+          : 'Hier ist nach der Menge kein Baum nötig.'];
+    const letzter = hier[hier.length - 1];
     fill(hud,
-      h('div', { class: 'work-head' }, h('p', { class: 'hud-label' }, kopf[0]), h('p', { class: 'muted' }, kopf[1])),
+      h('div', { class: 'work-head' }, h('p', { class: 'hud-label' }, kopf[0]), h('p', {}, kopf[1])),
       zaehlerLeiste(),
-      !st.mindest && !st.auffuellen ? h('div', { class: 'vorschlag' }, vs.length
-        ? h('strong', {}, `Hier etwa ${vs.map((x) => `${x.anzahl} ${x.anzahl === 1 ? 'Baum' : 'Bäume'} ${K(x.klasse)}`).join(' und ')} auszeichnen`)
-        : h('strong', {}, 'Hier ist nach dem Vorschlag kein weiterer Baum nötig.'), h('small', {}, 'Der Vorschlag ist eine Hilfe – verbindlich ist nur die Menge.')) : null,
       fehlerMeldung ? h('p', { class: 'warn-line', role: 'alert' }, fehlerMeldung) : null,
       passtNichts ? h('p', { class: 'warn-line' }, 'Die Menge ist ausgeschöpft – es passt kein Baum mehr.') : null,
-      h('p', { class: 'sheet-label' }, 'BHD-Stufe antippen (bis 50 cm)'),
-      h('div', { class: 'stufen-grid' }, stufenBtn),
-      h('p', { class: 'sheet-label' }, 'Oder BHD gemessen? In cm eingeben – über 50 cm Pflicht'),
-      h('div', { class: 'dick-zeile' }, h('div', { class: 'mit-einheit' }, bhdFeld, h('span', {}, 'cm')), h('button', { type: 'button', class: 'btn btn-primary', onclick: bhdZaehlen }, 'Zählen')),
-      hier.length ? h('div', {}, h('p', { class: 'sheet-label' }, `Hier ausgezeichnet (${hier.length})`),
+      alleFertig ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Vorschlag erfüllt – du kannst den Punkt abschließen.') : null,
+      oben.map(karte),
+      unten.length ? h('details', { class: 'andere-staerke' }, h('summary', {}, `Anderen Baum auszeichnen (${unten.map(K).join(', ')})`),
+        h('p', { class: 'muted' }, 'Nicht vorgeschlagen, aber erlaubt, wenn hier kein passender Baum der vorgeschlagenen Stärke steht – die Menge gleicht sich an den nächsten Punkten aus.'),
+        unten.map(karte)) : null,
+      letzter ? h('div', { class: 'letzter' },
+        h('span', {}, `Zuletzt: ${letzter.klasse === 'dick' ? `dick, BHD ${fmt(letzter.bhd, 0)} cm` : `${pl.stufen[letzter.stufe]?.name} (${K(letzter.klasse)})`} · ${fmt(letzter.v, 3)} m³`),
+        h('button', { type: 'button', class: 'btn btn-small', onclick: () => { st.zaehler.rueckgaengig(letzter.id); zuletzt = null; fehlerMeldung = null; zaehlerSpeichern(); renderWorkF4(); } }, 'Rückgängig')) : null,
+      hier.length > 1 ? h('details', { class: 'calc' }, h('summary', {}, `Alle ${hier.length} Bäume an diesem Punkt`),
         h('ul', { class: 'baum-liste' }, hier.slice().reverse().map((b) => h('li', {},
-          h('span', {}, bezeichnung(b), h('small', {}, ` · ${fmt(b.v, 3)} m³`)),
+          h('span', {}, b.klasse === 'dick' ? `dick, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name} (${K(b.klasse)})`, h('small', {}, ` · ${fmt(b.v, 3)} m³`)),
           h('button', { type: 'button', class: 'btn btn-small', 'aria-label': 'Baum rückgängig machen', onclick: () => { st.zaehler.rueckgaengig(b.id); fehlerMeldung = null; zaehlerSpeichern(); renderWorkF4(); } }, 'Rückgängig'))))) : null,
       h('p', { class: 'hint warn' }, 'Stufen sorgfältig ansprechen und dicke Bäume wirklich messen (Maßband). Wer zu niedrig tippt oder zu klein misst, kann die 50 m³/ha im Einzelfall überschreiten.'),
       h('details', { class: 'calc' }, h('summary', {}, 'Welche Bäume bevorzugt?'), h('p', {}, `${st.plan.auswahl[0].toUpperCase()}${st.plan.auswahl.slice(1)}.`)),
       h('div', { class: 'btn-row' },
-        st.mindest
+        modus === 'mindest'
           ? h('button', { class: 'btn btn-primary btn-large', disabled: z.gezaehlt <= 0 && !passtNichts, onclick: () => { st.mindest = false; abschlussF4(); } }, h('span', { html: icon.check }), 'Eingriff abschließen')
           : [h('button', { class: 'btn', onclick: () => { working = null; fehlerMeldung = null; page.classList.remove('w-mode'); highlightTarget(); renderHud(); } }, 'Zurück zur Navigation'),
-            st.auffuellen ? h('button', { class: 'btn', onclick: () => abschlussF4() }, 'Auffüllen beenden') : null,
-            h('button', { class: 'btn btn-primary btn-large', onclick: completePoint }, h('span', { html: icon.check }), st.auffuellen ? 'Weiter auf dem Rückweg' : 'Punkt abschließen')]),
+            modus === 'auffuellen' ? h('button', { class: 'btn', onclick: () => abschlussF4() }, 'Auffüllen beenden') : null,
+            h('button', { class: `btn btn-primary btn-large ${alleFertig ? 'puls' : ''}`, onclick: completePoint }, h('span', { html: icon.check }), modus === 'auffuellen' ? 'Weiter auf dem Rückweg' : 'Punkt abschließen')]),
     );
+    if (zuletzt) setTimeout(() => hud.querySelectorAll('.getippt').forEach((e) => e.classList.remove('getippt')), 700);
     setTimeout(() => map.invalidateSize(), 50);
   }
   function punktFertigF4() {

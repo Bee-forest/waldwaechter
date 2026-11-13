@@ -1,0 +1,4 @@
+{
+  "hinweis": "Termine der Forstbetriebsgemeinschaften. Eintrag: { \"fbg\": \"Name wie im Profil\", \"titel\": \"…\", \"datum\": \"JJJJ-MM-TT\", \"zeit\": \"18:00\", \"ort\": \"…\", \"text\": \"…\", \"link\": \"https://…\" }",
+  "termine": []
+}

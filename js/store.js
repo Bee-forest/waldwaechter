@@ -7,6 +7,8 @@ const defaults = () => ({
   parcels: [],      // { id, gemarkung, flur, nr, category, addedAt, ring, … } – ALKIS-Flurstücke mit Geometrie
   measures: [],     // siehe measures.js
   foerderantraege: [],
+  finanzen: { buchungen: [], quote: 25 }, // siehe finanzen.js – Rechnungen, Einnahmen, Rücklagenquote für den Wald
+  termine: [],      // eigene Termine (Aktuelles → FBG-Termine)
   bestandKorrektur: {}, // eigene Angaben zum Bestand je Flurstück: { haupt, misch, neben: { art, alter }, jahr } // siehe foerderung.js – Entwürfe für Förderanträge (ThüringenForst)
   profile: { name: '', email: '', fbg: '', accountHolder: '', iban: '', strasse: '', ort: '', telefon: '', pi: '' },
   settings: {

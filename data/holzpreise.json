@@ -1,0 +1,49 @@
+{
+  "stand": "2025-05",
+  "titel": "Richtwerte Holzpreise (Privatwald)",
+  "hinweis": "Überregionale Richtwerte aus der Holzpreistabelle von LAND & FORST (Niedersachsen), Spannen aus mehreren Regionen, ohne MwSt., frei Waldstraße. Für Thüringen bitte durch die aktuellen Preise eurer Holzvermarktung bzw. FBG ersetzen. Holzpreise schwanken regional und je nach Menge, Qualität und Transportweg stark.",
+  "quelle": { "titel": "LAND & FORST: Holzpreistabelle Mai 2025 (PDF)", "url": "https://www.digitalmagazin.de/heftbilder/land-forst/luf-2025-21/Holzpreistabelle_Mai_2025.pdf" },
+  "baumarten": [
+    { "art": "Fichte", "sortimente": [
+      { "sortiment": "Stammholz lang (> 10 m)", "guete": "B/C", "staerke": "2b", "von": 84, "bis": 120, "einheit": "€/Fm" },
+      { "sortiment": "Stammholz lang, Export", "guete": "B/C/D", "staerke": "2a+", "von": 80, "bis": 100, "einheit": "€/Fm" },
+      { "sortiment": "Stammholzabschnitte", "guete": "B/C", "staerke": "2b", "von": 72, "bis": 115, "einheit": "€/Fm" },
+      { "sortiment": "Stammholzabschnitte", "guete": "C/D", "staerke": "2b", "von": 60, "bis": 91, "einheit": "€/Fm" },
+      { "sortiment": "Palettenabschnitte 2,40 m (Nadelholz)", "guete": "Palette", "staerke": "1b–4a", "von": 40, "bis": 53, "einheit": "€/Rm" },
+      { "sortiment": "Industrieholz OSB, 3 m (Nadelholz)", "guete": "N/F", "staerke": "", "von": 29, "bis": 48, "einheit": "€/Rm" },
+      { "sortiment": "Industrieholz Spanholz, 3 m (Nadelholz)", "guete": "F/K", "staerke": "", "von": 25, "bis": 36, "einheit": "€/Rm" }
+    ]},
+    { "art": "Kiefer", "sortimente": [
+      { "sortiment": "Stammholzabschnitte", "guete": "B/C", "staerke": "2b", "von": 65, "bis": 93, "einheit": "€/Fm" },
+      { "sortiment": "Stammholz, Export", "guete": "B/C/D", "staerke": "3a", "von": 70, "bis": 90, "einheit": "€/Fm" },
+      { "sortiment": "Palettenabschnitte 2,40 m (Nadelholz)", "guete": "Palette", "staerke": "1b–4a", "von": 40, "bis": 53, "einheit": "€/Rm" },
+      { "sortiment": "Industrieholz Spanholz, 3 m (Nadelholz)", "guete": "F/K", "staerke": "", "von": 25, "bis": 36, "einheit": "€/Rm" }
+    ]},
+    { "art": "Lärche", "sortimente": [
+      { "sortiment": "Stammholz lang", "guete": "B/C", "staerke": "2b", "von": 85, "bis": 135, "einheit": "€/Fm" },
+      { "sortiment": "Stammholzabschnitte", "guete": "B/C", "staerke": "2b", "von": 85, "bis": 135, "einheit": "€/Fm" }
+    ]},
+    { "art": "Douglasie", "sortimente": [
+      { "sortiment": "Stammholz lang", "guete": "B/C", "staerke": "2b", "von": 85, "bis": 140, "einheit": "€/Fm" },
+      { "sortiment": "Stammholzabschnitte", "guete": "B/C", "staerke": "2b", "von": 85, "bis": 135, "einheit": "€/Fm" }
+    ]},
+    { "art": "Buche", "sortimente": [
+      { "sortiment": "Stammholz", "guete": "B", "staerke": "4", "von": 100, "bis": 135, "einheit": "€/Fm", "stand": "2024-11" },
+      { "sortiment": "Stammholz", "guete": "B", "staerke": "5/6", "von": 100, "bis": 160, "einheit": "€/Fm", "stand": "2024-11" },
+      { "sortiment": "Stammholz", "guete": "C", "staerke": "4", "von": 75, "bis": 110, "einheit": "€/Fm", "stand": "2024-11" },
+      { "sortiment": "Stammholz", "guete": "C", "staerke": "5/6", "von": 80, "bis": 125, "einheit": "€/Fm", "stand": "2024-11" },
+      { "sortiment": "Palette", "guete": "Palette", "staerke": "", "von": 70, "bis": 100, "einheit": "€/Fm" },
+      { "sortiment": "Industrieholz", "guete": "IS F/K", "staerke": "", "von": 70, "bis": 105, "einheit": "€/Fm" }
+    ]},
+    { "art": "Eiche", "sortimente": [
+      { "sortiment": "Stammholz", "guete": "B", "staerke": "4", "von": 250, "bis": 480, "einheit": "€/Fm" },
+      { "sortiment": "Stammholz", "guete": "B", "staerke": "5/6", "von": 300, "bis": 620, "einheit": "€/Fm" },
+      { "sortiment": "Stammholz", "guete": "C", "staerke": "4", "von": 155, "bis": 240, "einheit": "€/Fm" },
+      { "sortiment": "Stammholz", "guete": "C", "staerke": "5/6", "von": 190, "bis": 260, "einheit": "€/Fm", "stand": "2025-01" }
+    ]},
+    { "art": "Brennholz", "sortimente": [
+      { "sortiment": "Eiche, Buche – ungespaltenes Rundholz ab ca. 2 m, frei Waldstraße", "guete": "", "staerke": "", "von": 35, "bis": 55, "einheit": "€/Rm", "stand": "2025-04" },
+      { "sortiment": "Fichte, Kiefer – ungespaltenes Rundholz ab ca. 2 m, frei Waldstraße", "guete": "", "staerke": "", "von": 20, "bis": 40, "einheit": "€/Rm", "stand": "2025-04" }
+    ]}
+  ]
+}

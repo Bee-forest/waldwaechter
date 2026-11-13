@@ -1075,3 +1075,79 @@ pre.diagnose { white-space: pre-wrap; word-break: break-word; font-size: 12px; l
 .es-info ul, .es-info ol { margin: 4px 0; padding-left: 20px; display: grid; gap: 6px; }
 .es-info-kopf { display: grid; grid-template-columns: 84px 1fr; gap: 12px; align-items: start; }
 .es-quellen a { word-break: break-word; }
+
+/* ---------- Finanzen ---------- */
+.pos { color: var(--ok); }
+.neg { color: var(--danger); }
+.fin-stand-kopf { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.fin-stand-kopf h1 { margin: 0; }
+.fin-jahr { min-height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 0 10px; font: inherit; font-weight: 700; }
+.fin-stand-label { margin: 10px 0 2px; }
+.fin-saldo { font-size: 34px; font-weight: 700; letter-spacing: -.5px; margin-bottom: 10px; }
+.fin-ein-aus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.fin-ein-aus > div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); }
+.fin-ein-aus strong { font-size: 18px; }
+.fin-bereiche { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fin-bereich { position: relative; display: grid; gap: 4px; text-align: left; padding: 12px 24px 12px 12px; border-radius: 16px; border: 1px solid var(--line); border-left: 6px solid var(--farbe); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.fin-bereich-name { display: flex; align-items: center; gap: 6px; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.fin-bereich strong { font-size: 19px; }
+.fin-pfeil { position: absolute; right: 8px; top: 10px; color: var(--ink-2); }
+.fin-pfeil svg { width: 18px; height: 18px; }
+.fin-unter { font-size: 16px; margin: 12px 0 6px; display: flex; justify-content: space-between; }
+.fin-balken { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 8px; }
+.fin-balken-kopf { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; }
+.fin-balken-spur { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 3px; }
+.fin-balken-spur span { display: block; height: 100%; border-radius: 99px; }
+.fin-liste { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.fin-liste > li > .fin-zeile, .fin-liste > li.fin-zeile { width: 100%; }
+.fin-zeile { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+li.fin-zeile { cursor: default; }
+.fin-zeile-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.fin-zeile-text small { overflow: hidden; text-overflow: ellipsis; }
+.fin-zeile-rechts { display: grid; gap: 4px; justify-items: end; }
+.fin-plan-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.fin-fortschritt { height: 14px; border-radius: 99px; background: var(--surface-2); overflow: hidden; border: 1px solid var(--line); }
+.fin-fortschritt span { display: block; height: 100%; background: var(--ok); border-radius: 99px; }
+.fin-plan-zahlen { display: flex; justify-content: space-between; gap: 10px; }
+.fin-alarm { padding: 10px 12px; border-radius: 14px; background: var(--signal-soft); color: var(--ink); margin: 6px 0 10px; display: grid; gap: 8px; }
+.fin-alarm p { margin: 0; }
+.fin-geplant ul { list-style: none; padding: 0; margin: 0 0 6px; display: grid; gap: 4px; }
+.fin-geplant li { display: flex; justify-content: space-between; gap: 8px; }
+.fin-feld { display: grid; gap: 6px; }
+.fin-feld-label { font-weight: 700; font-size: 15px; }
+.fin-beleg-btn { cursor: pointer; justify-content: center; }
+.fin-form select, .fin-form input { font: inherit; }
+.fin-hinweis p { margin: 0 0 8px; }
+.fin-seite { display: grid; gap: 0; }
+
+/* ---------- Aktuelles ---------- */
+.akt-kopf { margin: 4px 4px 12px; }
+.akt-kopf h1 { margin: 0; }
+.akt-titelzeile { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.akt-stand { font-size: 14px; color: var(--ink-2); }
+.akt-kachel-btn { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+.akt-preise { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.akt-preise li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.akt-preise li strong:last-child { white-space: nowrap; }
+.akt-mehr { display: flex; align-items: center; gap: 4px; color: var(--primary); font-weight: 700; }
+.akt-mehr svg { width: 18px; height: 18px; }
+.akt-art summary { display: flex; justify-content: space-between; align-items: baseline; cursor: pointer; font-size: 18px; }
+.akt-tabelle { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 15px; }
+.akt-tabelle th, .akt-tabelle td { text-align: left; padding: 7px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.akt-tabelle .zahl { text-align: right; white-space: nowrap; font-weight: 700; }
+.akt-tabelle th { font-size: 13px; color: var(--ink-2); }
+.akt-fuss { margin: 6px 4px 20px; font-size: 14px; }
+.akt-wbi-stufe { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 16px; background: var(--wbi); color: var(--wbi-ink); margin: 6px 0 10px; }
+.akt-wbi-stufe small { display: block; opacity: .9; }
+.akt-wbi-zahl { font-size: 38px; font-weight: 700; width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; background: rgba(255,255,255,.35); flex: none; }
+.akt-wbi-skala { list-style: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 0; margin: 0 0 10px; }
+.akt-wbi-skala li { text-align: center; padding: 4px 0; border-radius: 8px; font-weight: 700; color: #3a2a00; opacity: .55; }
+.akt-wbi-skala li:nth-child(n+4) { color: #fff; }
+.akt-wbi-skala li.an { opacity: 1; outline: 3px solid var(--ink); }
+.akt-links { font-size: 15px; }
+.akt-termine { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
+.akt-termin { display: flex; gap: 12px; align-items: flex-start; padding: 10px; border-radius: 14px; border: 1px solid var(--line); }
+.akt-datum { display: grid; justify-items: center; min-width: 46px; padding: 6px; border-radius: 12px; background: var(--primary-soft); }
+.akt-datum strong { font-size: 20px; line-height: 1; }
+.akt-termin-text { display: grid; gap: 2px; flex: 1; }
+.akt-termin-aktionen { display: flex; gap: 14px; margin-top: 4px; font-size: 15px; }

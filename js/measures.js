@@ -296,7 +296,7 @@ function measureCard(m, byId) {
   );
 }
 
-async function openNewMeasure({ parcelId, antragId = null } = {}) {
+async function openNewMeasure({ parcelId, antragId = null, typ = null } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id]);
@@ -322,6 +322,9 @@ async function openNewMeasure({ parcelId, antragId = null } = {}) {
     else if (k === 'pflanzung') openPflanzPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
     else formularSeite(k, foerdern);
   });
+
+  // Direkt eine bestimmte Maßnahme öffnen (z. B. aus der Finanzplanung)
+  if (typ && MEASURE_TYPES[typ]) { oeffne(typ); return; }
 
   // Zum Förderantrag hinzufügen: nur förderfähige Maßnahmen
   if (antragId) {

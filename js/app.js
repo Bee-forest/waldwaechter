@@ -5,6 +5,8 @@ import { initHome, invalidateMap } from './home.js';
 import { initMeasures } from './measures.js';
 import { initErinnerungen } from './erinnerung.js';
 import { renderPlaceholder } from './placeholders.js';
+import { initFinanzen } from './finanzen.js';
+import { initAktuelles } from './aktuelles.js';
 
 // Unerwartete Fehler sichtbar machen (statt dass einfach nichts passiert) – je Meldung höchstens alle 20 s
 const gemeldet = new Map();
@@ -72,8 +74,8 @@ async function main() {
   views.home.hidden = false;
   await initHome(views.home);
   initMeasures(views.massnahmen);
-  renderPlaceholder(views.finanzen, 'finanzen');
-  renderPlaceholder(views.aktuelles, 'aktuelles');
+  initFinanzen(views.finanzen);
+  initAktuelles(views.aktuelles);
   renderPlaceholder(views.ki, 'ki');
   const legacy = { rechner: 'finanzen', schaeden: 'aktuelles', silvana: 'ki' };
   const start = location.hash.replace('#/', '');

@@ -1,17 +1,17 @@
 // Besonderheiten eines Flurstücks als „i“-Punkte auf der Karte:
-//  • Verkehrssicherungspflicht: Wald grenzt an eine öffentliche Verkehrsfläche
-//    (Nachbarflurstücke mit ALKIS-Nutzung Straßenverkehr, Platz oder Bahnverkehr)
+//  • Verkehrssicherungspflicht: Wald liegt bis 60 m an öffentlichen Straßen/Wegen/Plätzen, Bahnstrecken
+//    oder Gebäuden (OpenStreetMap über Overpass, live abgefragt) – ein Punkt je Straße bzw. Gebäudegruppe
 //  • Biotope: Punkt-, Linien- und Flächenbiotope aus Waldbiotop- und Offenlandbiotopkartierung
 //    (Kartendienste des Geoportals, live abgefragt, nichts gespeichert)
-import { bbox, polysOf, inPolys, centroid, distance } from '../geo.js';
-import { parcelsNear, scanWmsLayer, nutzungAnteile, FORST, GP } from './thueringen.js';
+import { bbox, polysOf, inPolys, centroid } from '../geo.js';
+import { scanWmsLayer, nutzungAnteile, FORST, GP } from './thueringen.js';
 import { umlaut } from './geoinfo.js';
 import { biotopWichtig, lrtCode, lrtWichtig, LRT } from './lrt.js';
 
 export const BESONDERHEIT = {
   vsp: {
     title: 'Verkehrssicherungspflicht',
-    text: 'Hier grenzt dein Wald an eine öffentliche Straße, einen Platz oder eine Bahnstrecke. Du musst dafür sorgen, dass von deinen Bäumen keine erkennbare Gefahr ausgeht, etwa durch tote Äste oder kranke Bäume. Kontrolliere den Waldrand deshalb zweimal im Jahr – belaubt und unbelaubt – und schreib die Kontrolle auf.',
+    text: 'Dein Wald liegt hier bis 60 m an einer öffentlichen Straße, einem öffentlichen Weg oder Platz, einer Bahnstrecke oder an Gebäuden. Bäume, die beim Umfallen dorthin reichen können, musst du kontrollieren: Von ihnen darf keine erkennbare Gefahr ausgehen, etwa durch tote Äste oder kranke Bäume. Kontrolliere diesen Streifen zweimal im Jahr – belaubt und unbelaubt – und schreib die Kontrolle auf. Waldwege und private Wege lösen diese Pflicht nicht aus.',
   },
   punktbiotop: {
     title: 'Punktbiotop',
@@ -27,29 +27,109 @@ export const BESONDERHEIT = {
   },
 };
 
-const VERKEHR = /straßenverkehr|strassenverkehr|platz|bahnverkehr/i;
-const NAH_M = 4;          // so nah muss die Grenze an der Verkehrsfläche liegen
-const PUNKT_ALLE_M = 120; // ein „i“ je angefangene 120 m Grenze
+// ---------- Verkehrssicherung: öffentliche Verkehrswege, Bahn und Gebäude bis 60 m ----------
+// Rechtsgrundlage ist die allgemeine Verkehrssicherungspflicht (§ 823 BGB, Rechtsprechung): Der Waldbesitzer
+// muss Bäume kontrollieren, die beim Umfallen öffentliche Straßen, Wege, Plätze, Bahnanlagen oder Gebäude
+// treffen können – üblich ist ein Streifen von mindestens einer Baumlänge. Hier: 60 m (Vorgabe).
+// Waldwege und private Wege lösen keine Pflicht aus (Betreten des Waldes auf eigene Gefahr, § 14 BWaldG / § 6 ThürWaldG).
+export const VSP_ABSTAND_M = 60;
+const OEFFENTLICH = /^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|road|pedestrian|cycleway|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$/;
+const PRIVAT = /^(private|no|agricultural|forestry|delivery|customers|permit)$/;
+const GEBAEUDE_ART = { house: 'Wohnhaus', residential: 'Wohngebäude', detached: 'Wohnhaus', semidetached_house: 'Wohnhaus', apartments: 'Wohngebäude', terrace: 'Reihenhaus', farm: 'Bauernhaus', garage: 'Garage', garages: 'Garagen', barn: 'Scheune', shed: 'Schuppen', hut: 'Hütte', cabin: 'Hütte', farm_auxiliary: 'Nebengebäude', industrial: 'Gewerbegebäude', commercial: 'Gewerbegebäude', church: 'Kirche', school: 'Schule' };
 
-// Abstand Punkt–Strecke in Metern (lokal eben)
-function distSeg(p, a, b) {
-  const k = Math.cos((p[0] * Math.PI) / 180) * 111320, m = 110540;
-  const px = p[1] * k, py = p[0] * m, ax = a[1] * k, ay = a[0] * m, bx = b[1] * k, by = b[0] * m;
-  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
-  const t = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
-  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+/** Ist ein OSM-Weg ein öffentlicher Verkehrsweg (bzw. Bahn/öffentlicher Platz)? */
+export function oeffentlich(tags = {}) {
+  if (PRIVAT.test(tags.access || '') || PRIVAT.test(tags['motor_vehicle'] || '') && !tags.highway?.match(/cycleway|pedestrian/)) return false;
+  if (tags.railway) return /^(rail|light_rail|tram|narrow_gauge)$/.test(tags.railway) && !tags.disused && !tags.abandoned;
+  if (tags.amenity === 'parking') return !PRIVAT.test(tags.access || '');
+  if (tags.highway === 'service') return /^(yes|public|permissive|destination)$/.test(tags.access || '') && tags.service !== 'driveway';
+  return OEFFENTLICH.test(tags.highway || '');
 }
-const nearRing = (p, ring) => { for (let i = 0; i < ring.length - 1; i++) if (distSeg(p, ring[i], ring[i + 1]) <= NAH_M) return true; return false; };
 
-// Grenze des Flurstücks in ~10-m-Schritten
-function grenzpunkte(polys) {
-  const out = [];
-  for (const poly of polys) for (const ring of poly) {
-    for (let i = 0; i < ring.length - 1; i++) {
-      const a = ring[i], b = ring[i + 1], n = Math.max(1, Math.ceil(distance(a, b) / 10));
-      for (let k = 0; k < n; k++) out.push({ at: [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n], seg: out.length });
+async function overpass(b, rand) {
+  const k = 111320 * Math.cos(((b.s + b.n) / 2) * Math.PI / 180);
+  const bb = [b.s - rand / 110540, b.w - rand / k, b.n + rand / 110540, b.e + rand / k].map((v) => v.toFixed(6)).join(',');
+  const q = `[out:json][timeout:25];(way["highway"](${bb});way["railway"](${bb});way["building"](${bb});way["amenity"="parking"](${bb}););out tags geom;`;
+  const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q) });
+  if (!res.ok) throw new Error('Overpass nicht erreichbar');
+  return (await res.json()).elements || [];
+}
+
+/**
+ * Pure Auswertung: welche Objekte liegen bis maxM an der Fläche? Je Objekt-Gruppe (eine Straße, eine Bahnstrecke,
+ * eine Gebäudegruppe) genau EIN Punkt – an der Stelle der Fläche, die dem Objekt am nächsten liegt.
+ */
+export function vspAuswerten(polys, elemente, maxM = VSP_ABSTAND_M) {
+  const alle = polys.flat(2);
+  const lat0 = alle.reduce((a, q) => a + q[0], 0) / alle.length;
+  const kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110540;
+  const xy = ([la, lo]) => [lo * kx, la * ky];
+  const ll = ([x, y]) => [y / ky, x / kx];
+  // Flächenrand in 5-m-Schritten
+  const rand = [];
+  for (const poly of polys) for (const ring of poly) for (let i = 0; i < ring.length - 1; i++) {
+    const a = xy(ring[i]), b = xy(ring[i + 1]), n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 5));
+    for (let t = 0; t < n; t++) rand.push([a[0] + ((b[0] - a[0]) * t) / n, a[1] + ((b[1] - a[1]) * t) / n]);
+  }
+  const segDist = (p, a, b) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
+    return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+  };
+  const minAbstand = (linien) => {
+    let best = { d: Infinity, at: null };
+    for (const L of linien) {
+      // Objekt liegt in der Fläche → Abstand 0 an diesem Objektpunkt
+      for (const q of L) if (inPolys(ll(q), polys)) return { d: 0, at: ll(q) };
+      for (const r of rand) for (let i = 0; i < L.length - 1; i++) { const d = segDist(r, L[i], L[i + 1]); if (d < best.d) best = { d, at: ll(r) }; }
     }
-    out.push(null); // Ringende
+    // verläuft das Objekt parallel zum Rand, sind viele Randpunkte gleich nah → die Mitte dieses Abschnitts nehmen
+    if (best.at) {
+      const gleich = rand.filter((r) => linien.some((L) => L.some((_, i) => i < L.length - 1 && segDist(r, L[i], L[i + 1]) <= best.d + 1)));
+      if (gleich.length > 2) best.at = ll(gleich[Math.floor(gleich.length / 2)]);
+    }
+    return best;
+  };
+  // Gruppen bilden
+  const wege = [], gebaeude = [];
+  for (const el of elemente) {
+    if (el.type !== 'way' || !el.geometry?.length) continue;
+    const t = el.tags || {}, linie = el.geometry.map((g) => xy([g.lat, g.lon]));
+    if (t.building) gebaeude.push({ el, linie, mitte: linie.reduce((a, q) => [a[0] + q[0] / linie.length, a[1] + q[1] / linie.length], [0, 0]) });
+    else if (oeffentlich(t)) wege.push({ el, linie, key: t.railway ? `bahn:${t.name || t.ref || el.id}` : t.amenity === 'parking' ? `platz:${el.id}` : (t.ref || t.name) ? `str:${t.ref || ''}|${t.name || ''}` : null, knoten: new Set(el.nodes || []) });
+  }
+  // unbenannte Wege über gemeinsame Knoten zu einem Weg zusammenfassen
+  const gruppen = new Map();
+  for (const w of wege) {
+    if (!w.key) {
+      const nachbar = wege.find((v) => v !== w && v.gruppe && [...w.knoten].some((n) => v.knoten.has(n)));
+      w.key = nachbar ? nachbar.gruppe : `weg:${w.el.id}`;
+    }
+    w.gruppe = w.key;
+    (gruppen.get(w.key) || gruppen.set(w.key, []).get(w.key)).push(w);
+  }
+  const out = [];
+  for (const [key, ws] of gruppen) {
+    const m = minAbstand(ws.map((w) => w.linie));
+    if (!(m.d <= maxM)) continue;
+    const t = ws[0].el.tags || {};
+    const art = key.startsWith('bahn') ? 'Bahnstrecke' : key.startsWith('platz') ? 'öffentlicher Parkplatz' : t.highway === 'cycleway' ? 'Radweg' : 'öffentliche Straße';
+    const name = [t.ref, t.name].filter(Boolean).join(' ');
+    // Abschnitt des Objekts, der näher als maxM an der Fläche liegt (für die Linie auf der Karte)
+    const linie = [];
+    for (const w of ws) for (const q of w.linie) if (rand.some((r) => Math.hypot(r[0] - q[0], r[1] - q[1]) <= maxM)) linie.push(ll(q));
+    out.push({ type: 'vsp', at: m.at, art, objekt: name ? `${art} ${name}` : art, abstand: Math.round(m.d), line: linie.length > 1 ? linie : null });
+  }
+  // Gebäude: Gruppen (bis 40 m auseinander) → ein Punkt je Gruppe
+  const nah = gebaeude.map((g) => ({ ...g, m: minAbstand([g.linie]) })).filter((g) => g.m.d <= maxM);
+  const frei = new Set(nah);
+  for (const g of nah) {
+    if (!frei.has(g)) continue;
+    const gruppe = [g]; frei.delete(g);
+    for (let i = 0; i < gruppe.length; i++) for (const h2 of [...frei]) if (Math.hypot(gruppe[i].mitte[0] - h2.mitte[0], gruppe[i].mitte[1] - h2.mitte[1]) <= 40) { gruppe.push(h2); frei.delete(h2); }
+    const naechstes = gruppe.reduce((a, b) => (b.m.d < a.m.d ? b : a));
+    const arten = [...new Set(gruppe.map((x) => GEBAEUDE_ART[x.el.tags.building] || 'Gebäude'))];
+    out.push({ type: 'vsp', at: naechstes.m.at, art: 'Gebäude', objekt: gruppe.length > 1 ? `${gruppe.length} Gebäude (${arten.join(', ')})` : arten[0], abstand: Math.round(naechstes.m.d), line: null });
   }
   return out;
 }
@@ -59,31 +139,8 @@ export async function verkehrssicherung(p) {
   if (teile && !(teile.Wald > 0)) return []; // kein Wald auf dem Flurstück
   const polys = polysOf(p);
   const b = bbox(polys.flat(2));
-  const nachbarn = (await parcelsNear(b)).filter((x) => x.id !== p.id && VERKEHR.test(x.nutzungText || ''));
-  if (!nachbarn.length) return [];
-  const pts = grenzpunkte(polys);
-  // zusammenhängende Grenzabschnitte, die an Verkehrsflächen liegen
-  const strecken = [];
-  let cur = null;
-  for (const gp of pts) {
-    const hit = gp && nachbarn.find((nb) => polysOf(nb).some((poly) => poly.some((ring) => nearRing(gp.at, ring))));
-    if (hit) {
-      if (!cur) { cur = { pts: [], art: new Set() }; strecken.push(cur); }
-      cur.pts.push(gp.at);
-      cur.art.add(/bahn/i.test(hit.nutzungText) ? 'Bahnstrecke' : /platz/i.test(hit.nutzungText) ? 'Platz' : 'Straße');
-    } else cur = null;
-  }
-  const out = [];
-  for (const s of strecken) {
-    if (s.pts.length < 2) continue;
-    const laenge = s.pts.length * 10;
-    const n = Math.max(1, Math.ceil(laenge / PUNKT_ALLE_M));
-    for (let k = 0; k < n; k++) {
-      const at = s.pts[Math.min(s.pts.length - 1, Math.round(((k + 0.5) / n) * (s.pts.length - 1)))];
-      out.push({ type: 'vsp', at, line: k === 0 ? s.pts : null, laenge, art: [...s.art].join(', '), ...BESONDERHEIT.vsp });
-    }
-  }
-  return out;
+  const elemente = await overpass(b, VSP_ABSTAND_M + 10);
+  return vspAuswerten(polys, elemente).map((f) => ({ ...f, ...BESONDERHEIT.vsp, title: `${BESONDERHEIT.vsp.title}: ${f.objekt}` }));
 }
 
 /**

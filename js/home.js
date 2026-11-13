@@ -23,6 +23,7 @@ export const FEATURE_TYPES = {
   waldfunktion: 'Waldfunktion',
   vsp: 'Verkehrssicherungspflicht',
   punktbiotop: 'Punktbiotop',
+  lrt: 'FFH-Wald-Lebensraumtyp',
 };
 
 let base, map, osmLayer;
@@ -34,22 +35,7 @@ let rescueMarkers = null;
 /** Entfernt alles, was zur vorherigen Auswahl gehört (Umriss, „i“, Rettungspunkt-Linie) */
 function clearMarks() { selectionLayer?.clearLayers(); rescueMarkers?.remove(); rescueMarkers = null; }
 let ALL = [];
-const FEAT = new Map(); // Besonderheiten je Flurstück (Sitzung + Zwischenspeicher)
-// Besonderheiten (Verkehrssicherung, Biotope) der eigenen Flurstücke werden zwischengespeichert,
-// damit die „i“-Punkte gleich beim Start auf der Karte stehen – nicht erst nach dem Antippen.
-const FEAT_SPEICHER = 'waldwaechter.besonderheiten', FEAT_TAGE = 30;
-try {
-  const alt = JSON.parse(localStorage.getItem(FEAT_SPEICHER) || '{}');
-  for (const [id, e] of Object.entries(alt)) if (e?.t > Date.now() - FEAT_TAGE * 864e5 && Array.isArray(e.f)) FEAT.set(id, e.f);
-} catch { /* kein Zwischenspeicher */ }
-function featMerken(id, f) {
-  if (!f?.length) return; // leer kann auch „Dienst nicht erreichbar“ heißen – dann beim nächsten Start neu fragen
-  try {
-    const alt = JSON.parse(localStorage.getItem(FEAT_SPEICHER) || '{}');
-    alt[id] = { t: Date.now(), f };
-    localStorage.setItem(FEAT_SPEICHER, JSON.stringify(alt));
-  } catch { /* Speicher voll oder privat */ }
-}
+const FEAT = new Map(); // Besonderheiten je Flurstück (Sitzung)
 const featuresOf = (p) => FEAT.get(p.id) || p.features || [];
 
 const mine = (id) => store.get().parcels.find((p) => p.id === id);
@@ -181,8 +167,7 @@ export async function initHome(root) {
   ALL = await source.allParcels();
   drawParcels();
   applyLayerVisibility();
-  ladeEigeneBesonderheiten();
-  store.subscribe(async () => { ALL = await source.allParcels(); drawParcels(); applyLayerVisibility(); ladeEigeneBesonderheiten(); });
+  store.subscribe(async () => { ALL = await source.allParcels(); drawParcels(); applyLayerVisibility(); });
 }
 
 export function invalidateMap() { map?.invalidateSize(); }
@@ -200,7 +185,7 @@ function drawParcels() {
     } else if (p.source !== 'alkis') { // ALKIS-Grenzen zeigt bereits der WMS
       allParcelsLayer.addLayer(L.polygon(polysOf(p), { color: '#3B4A40', weight: 1, dashArray: '4 4', fillOpacity: 0, interactive: false, className: 'parcel-outline' }));
     }
-    if (m || selected?.parcel.id === p.id) addInfoPoints(p);
+    if (selected?.parcel.id === p.id) addInfoPoints(p); // „i“-Punkte nur am angetippten Flurstück
   }
   selectionLayer.eachLayer((l) => l.bringToFront?.());
 }
@@ -229,7 +214,9 @@ function zeigeBesonderheit(f, p) {
     } }, schon ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern'));
   }
   const extra = f.type === 'vsp' && f.laenge ? ` (an ${f.art || 'Straße'} entlang, ca. ${Math.round(f.laenge / 10) * 10} m Waldrand)` : '';
-  say(`${f.title}${extra}: ${f.text}`, { duration: 0, actions: actions.length ? actions : undefined });
+  const kartiert = f.type !== 'vsp' ? (f.name ? ` Kartiert als: ${f.name}.` : ' Die Art ist in der Kartierung nicht angegeben.') : '';
+  const angaben = (f.angaben || []).filter(([, v]) => !f.name || !f.name.includes(v)).slice(0, 4).map(([k, v]) => `${k}: ${v}`).join(' · ');
+  say(`${f.title}${extra}:${kartiert} ${f.text}${angaben ? ` (${angaben})` : ''}`, { duration: 0, actions: actions.length ? actions : undefined });
 }
 
 export function applyLayerVisibility() {
@@ -262,29 +249,10 @@ async function select(parcel, latlng) {
   await renderInfo();
 }
 
-/** Besonderheiten aller eigenen Flurstücke im Hintergrund laden (nacheinander, nur was noch fehlt) */
-let eigeneLaeuft = false;
-async function ladeEigeneBesonderheiten() {
-  if (eigeneLaeuft) return;
-  eigeneLaeuft = true;
-  try {
-    const meine = new Set(store.get().parcels.map((x) => x.id));
-    const offen = ALL.filter((p) => meine.has(p.id) && p.source === 'alkis' && !FEAT.has(p.id));
-    for (const p of offen) {
-      try {
-        const f = await besonderheiten(p);
-        FEAT.set(p.id, f); featMerken(p.id, f);
-        drawParcels();
-      } catch { /* Dienst nicht erreichbar – beim Antippen erneut */ }
-    }
-  } finally { eigeneLaeuft = false; }
-}
-
 function ladeBesonderheiten(parcel) {
   if (parcel.source !== 'alkis') return;
   besonderheiten(parcel).then((f) => {
     FEAT.set(parcel.id, f);
-    featMerken(parcel.id, f);
     drawParcels();
     const host = document.getElementById('besonderheiten');
     if (host && selected?.parcel.id === parcel.id) fill(host, ...besonderheitenListe(parcel));
@@ -293,12 +261,14 @@ function ladeBesonderheiten(parcel) {
 
 function besonderheitenListe(p) {
   const f = featuresOf(p);
-  if (!f.length) return [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht und keine kartierten Biotope auf diesem Flurstück gefunden.')];
+  if (!f.length) return [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.')];
   const gruppen = {};
   for (const x of f) (gruppen[x.type] ||= []).push(x);
   return [h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
     h('span', { class: 'feature-type' }, FEATURE_TYPES[t] || list[0].title),
-    h('strong', {}, list.length > 1 ? `${list.length} Stellen auf der Karte` : list[0].title),
+    t === 'vsp' ? h('strong', {}, list.length > 1 ? `${list.length} Stellen auf der Karte` : list[0].title)
+      : h('ul', { class: 'feature-namen' }, [...new Map(list.map((x) => [x.name || '', x])).values()].map((x) => h('li', {}, h('strong', {}, x.name || 'Art nicht angegeben'),
+        (x.angaben || []).filter(([, v]) => !x.name || !x.name.includes(v)).length ? h('small', { class: 'muted' }, ` · ${(x.angaben || []).filter(([, v]) => !x.name || !x.name.includes(v)).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}`) : null))),
     h('p', {}, list[0].text),
     t === 'vsp' ? h('button', { class: 'btn btn-small', disabled: hatVerkehrssicherung(p.id), onclick: (e) => { erinnereVerkehrssicherung(p); e.currentTarget.disabled = true; e.currentTarget.textContent = 'Im Maßnahmenplan'; toast('Verkehrssicherung im Maßnahmenplan'); } },
       hatVerkehrssicherung(p.id) ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern') : null,

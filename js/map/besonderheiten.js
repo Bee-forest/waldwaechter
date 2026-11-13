@@ -6,7 +6,7 @@
 import { bbox, polysOf, inPolys, centroid, distance } from '../geo.js';
 import { parcelsNear, scanWmsLayer, nutzungAnteile, FORST, GP } from './thueringen.js';
 import { umlaut } from './geoinfo.js';
-import { biotopWichtig } from './lrt.js';
+import { biotopWichtig, lrtCode, lrtWichtig, LRT } from './lrt.js';
 
 export const BESONDERHEIT = {
   vsp: {
@@ -16,6 +16,10 @@ export const BESONDERHEIT = {
   punktbiotop: {
     title: 'Punktbiotop',
     text: 'Hier ist ein kleines, besonders wertvolles Biotop kartiert, zum Beispiel eine Quelle, ein Felsen, ein Tümpel oder ein Höhlenbaum. Es ist meist gesetzlich geschützt: bei Holzernte und Rücken großräumig umfahren und nichts ablagern.',
+  },
+  lrt: {
+    title: 'Wald-Lebensraumtyp',
+    text: 'Hier ist ein FFH-Wald-Lebensraumtyp kartiert. Für ihn gilt das Verschlechterungsverbot: keine Kahlschläge, lebensraumtypische Baumarten fördern, Biotopbäume und starkes Totholz erhalten. Die genauen Hinweise stehen in der Infobox unter „Biotope und Lebensraumtypen“.',
   },
   biotop: {
     title: 'Biotop',
@@ -82,9 +86,28 @@ export async function verkehrssicherung(p) {
   return out;
 }
 
-function biotopName(props) {
-  const v = (re) => Object.entries(props).find(([k, x]) => re.test(k) && x && !/^\d+([.,]\d+)?$/.test(x))?.[1];
-  return umlaut(v(/name|bezeich|biotoptyp|btyp|typ_text|text|kurz/i) || '');
+/**
+ * Bezeichnung des Biotops aus den Sachdaten der Kartierung: zuerst ein Klartext zum Biotoptyp,
+ * dann eine allgemeine Bezeichnung; ein Biotoptyp-Code wird vorangestellt, wenn er getrennt vorliegt.
+ */
+export function biotopName(props = {}) {
+  const eintraege = Object.entries(props).filter(([, x]) => x && String(x).trim() && !/^(missing|null|-)$/i.test(String(x).trim()));
+  const text = (x) => !/^\d+([.,]\d+)?$/.test(String(x).trim()) && /[a-zäöüß]{3}/i.test(String(x));
+  const finde = (...res) => { for (const re of res) { const e = eintraege.find(([k, x]) => re.test(k) && text(x)); if (e) return String(e[1]).trim(); } return ''; };
+  const name = finde(/biotop.?typ.*(text|name|bez|lang)/i, /(btyp|bt).*(text|name|bez|lang)/i, /typ.?(text|name|bez)/i, /^(biotop.?)?bezeichnung$/i, /biotop.?name|^name$/i, /bezeich|beschreib|text|name/i, /biotop.?typ|btyp/i);
+  const code = eintraege.find(([k, x]) => /(biotop.?typ|btyp|bt).?(code|nr|schl|kz)?$|code|schl(u|ü)ssel/i.test(k) && /^[0-9A-Z.\-/]{2,12}$/i.test(String(x).trim()) && /\d/.test(String(x)) && !String(name).includes(String(x).trim()))?.[1];
+  return umlaut([code, name].filter(Boolean).join(' – '));
+}
+/** Weitere Angaben der Kartierung für die Anzeige (Schutzstatus, Kartierjahr, Größe …) */
+export function biotopAngaben(props = {}) {
+  const out = [];
+  for (const [k, v] of Object.entries(props)) {
+    const t = String(v).trim();
+    if (!t || /^(missing|null|-)$/i.test(t) || /(^|_)(id|objectid|fid|gid|shape|geom|the_geom|ogc_fid)$/i.test(k) || t.length > 160) continue;
+    if (/schutz|§|status|jahr|datum|kartier|flaeche|fläche|wert|lrt|ffh|bewert|zustand|beschreib|typ|bezeich|name|code/i.test(k)) out.push([umlaut(k.replace(/_/g, ' ')), umlaut(t)]);
+    if (out.length >= 8) break;
+  }
+  return out;
 }
 
 export async function biotope(p) {
@@ -97,7 +120,7 @@ export async function biotope(p) {
     { url: GP, layer: 'obk1_linien', typ: 'biotop' },
   ];
   const res = await Promise.all(quellen.map(async (q) => {
-    try { return (await scanWmsLayer(q.url, q.layer, b)).map((f) => ({ ...f, q })); } catch { return []; }
+    try { return (await scanWmsLayer(q.url, q.layer, b, { innerhalb: polys })).map((f) => ({ ...f, q })); } catch { return []; }
   }));
   const out = [];
   for (const f of res.flat()) {
@@ -106,7 +129,22 @@ export async function biotope(p) {
     const typ = f.q.typ === 'biotop' && f.px < 400 ? 'punktbiotop' : f.q.typ;
     const name = biotopName(f.props);
     if (!biotopWichtig(name, f.props)) continue;
-    out.push({ type: typ, at: f.at, name, props: f.props, ...BESONDERHEIT[typ], title: name ? `${BESONDERHEIT[typ].title}: ${name}` : BESONDERHEIT[typ].title });
+    out.push({ type: typ, at: f.at, name, props: f.props, angaben: biotopAngaben(f.props), ...BESONDERHEIT[typ], title: name ? `${BESONDERHEIT[typ].title}: ${name}` : BESONDERHEIT[typ].title });
+  }
+  return out;
+}
+
+/** FFH-Wald-Lebensraumtypen als „i“-Punkte – mit Code und Namen des Lebensraumtyps */
+export async function lebensraumtypen(p) {
+  const polys = polysOf(p);
+  const b = bbox(polys.flat(2));
+  const funde = await scanWmsLayer(FORST, 'waldlebensraumtypen', b, { innerhalb: polys, max: 10 }).catch(() => []);
+  const out = [];
+  for (const f of funde) {
+    const c = lrtCode(f.props);
+    if (c && !lrtWichtig(c)) continue; // Nadelholz-LRT ohne §18 sind für die Bewirtschaftung unwichtig
+    const name = c ? `${c}${LRT[c].prioritaer ? '*' : ''} ${LRT[c].name}` : biotopName(f.props);
+    out.push({ type: 'lrt', at: f.at, name, code: c, props: f.props, angaben: biotopAngaben(f.props), ...BESONDERHEIT.lrt, title: name ? `${BESONDERHEIT.lrt.title} ${name}` : BESONDERHEIT.lrt.title });
   }
   return out;
 }
@@ -116,7 +154,7 @@ const cache = new Map();
 export function besonderheiten(p) {
   if (!p || p.source !== 'alkis') return Promise.resolve(p?.features || []);
   if (!cache.has(p.id)) {
-    const job = Promise.all([verkehrssicherung(p).catch(() => []), biotope(p).catch(() => [])]).then(([a, b2]) => [...a, ...b2]);
+    const job = Promise.all([verkehrssicherung(p).catch(() => []), biotope(p).catch(() => []), lebensraumtypen(p).catch(() => [])]).then(([a, b2, c]) => [...a, ...b2, ...c]);
     cache.set(p.id, job);
     job.catch(() => cache.delete(p.id));
   }

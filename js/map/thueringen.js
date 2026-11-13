@@ -422,23 +422,25 @@ function mercBBox([lat, lng], spanM) {
   return [x - half, y - half, x + half, y + half];
 }
 
-function findBlobs(alpha, w, h, minN = 20) {
+function findBlobs(alpha, w, h, minN = 20, mitPixeln = false) {
   const seen = new Uint8Array(w * h);
   const out = [];
   for (let i = 0; i < alpha.length; i++) {
     if (seen[i] || alpha[i] < 60) continue;
     const stack = [i]; seen[i] = 1;
     let sx = 0, sy = 0, n = 0;
+    const px = mitPixeln ? [] : null;
     while (stack.length) {
       const j = stack.pop(); const x = j % w, y = (j / w) | 0;
       sx += x; sy += y; n++;
+      if (px) px.push(j);
       for (const k of [j + 1, j - 1, j + w, j - w]) {
         if (k < 0 || k >= alpha.length || seen[k] || alpha[k] < 60) continue;
         if ((k === j + 1 && x === w - 1) || (k === j - 1 && x === 0)) continue;
         seen[k] = 1; stack.push(k);
       }
     }
-    if (n >= minN) out.push({ x: sx / n, y: sy / n, n });
+    if (n >= minN) out.push({ x: sx / n, y: sy / n, n, px });
   }
   return out;
 }
@@ -481,7 +483,7 @@ async function scanRescue(latlng, spanM, px) {
  * Sucht in einem WMS-Layer alle dargestellten Objekte innerhalb eines Rahmens (Kartenbild → Flecken)
  * und fragt zu jedem Fleck die Sachdaten ab (GetFeatureInfo). Gibt [{ at, props }] zurück.
  */
-export async function scanWmsLayer(url, layer, { s: so, w, n, e }, { maxPx = 1024, max = 12 } = {}) {
+export async function scanWmsLayer(url, layer, { s: so, w, n, e }, { maxPx = 1024, max = 12, innerhalb = null } = {}) {
   const R = 6378137;
   const mx = (lng) => (lng * Math.PI / 180) * R;
   const my = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R;
@@ -502,7 +504,24 @@ export async function scanWmsLayer(url, layer, { s: so, w, n, e }, { maxPx = 102
     const x = bb[0] + (px + 0.5) * (bb[2] - bb[0]) / W, y = bb[3] - (py + 0.5) * (bb[3] - bb[1]) / H;
     return [(2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * 180 / Math.PI, x / R * 180 / Math.PI];
   };
-  const blobs = findBlobs(alpha, W, H, 6).sort((a, b) => b.n - a.n).slice(0, max);
+  let blobs = findBlobs(alpha, W, H, 6, !!innerhalb);
+  if (innerhalb) {
+    // Nur der Teil des kartierten Objekts, der in der Fläche liegt: der Punkt sitzt auf einem Bildpunkt,
+    // der sicher zum Objekt UND zur Fläche gehört (nächster zum Schwerpunkt dieses Teils) –
+    // dort wird auch die Sachauskunft abgefragt.
+    const { inPolys } = await import('../geo.js');
+    blobs = blobs.map((b) => {
+      const drin = b.px.filter((j) => inPolys(toLL(j % W, (j / W) | 0), innerhalb));
+      if (!drin.length) return null;
+      let sx = 0, sy = 0;
+      for (const j of drin) { sx += j % W; sy += (j / W) | 0; }
+      const cx = sx / drin.length, cy = sy / drin.length;
+      let best = drin[0], bd = Infinity;
+      for (const j of drin) { const d = (j % W - cx) ** 2 + (((j / W) | 0) - cy) ** 2; if (d < bd) { bd = d; best = j; } }
+      return { x: best % W, y: (best / W) | 0, n: drin.length, gesamt: b.n };
+    }).filter(Boolean);
+  }
+  blobs = blobs.sort((a, b) => b.n - a.n).slice(0, max);
   return Promise.all(blobs.map(async (b) => {
     const at = toLL(b.x, b.y);
     let props = {};

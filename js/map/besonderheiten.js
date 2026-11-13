@@ -4,7 +4,7 @@
 //  • Biotope: Punkt-, Linien- und Flächenbiotope aus Waldbiotop- und Offenlandbiotopkartierung
 //    (Kartendienste des Geoportals, live abgefragt, nichts gespeichert)
 import { bbox, polysOf, inPolys, centroid } from '../geo.js';
-import { scanWmsLayer, nutzungAnteile, FORST, GP } from './thueringen.js';
+import { scanWmsLayer, nutzungAnteile, parcelsNear, FORST, GP } from './thueringen.js';
 import { umlaut } from './geoinfo.js';
 import { biotopWichtig, lrtCode, lrtWichtig, LRT } from './lrt.js';
 
@@ -175,13 +175,51 @@ export function vspAuswerten(polys, elemente, maxM = VSP_ABSTAND_M) {
   return out;
 }
 
+/**
+ * Ersatz, wenn die Straßendaten (OpenStreetMap) nicht erreichbar sind: amtliche Flurstücke (ALKIS) der Umgebung
+ * mit der Nutzung „Straßenverkehr“ oder „Bahnverkehr“. Straßenflurstücke gehören fast immer dem Straßenbaulastträger,
+ * sind also öffentlich; „Weg“ und „Platz“ (oft privat) zählen hier nicht. Aneinanderstoßende Straßenflurstücke
+ * werden zu einer Straße zusammengefasst (gemeinsame Eckpunkte).
+ */
+async function vspAusAlkis(p, polys, b) {
+  const k = 111320 * Math.cos(((b.s + b.n) / 2) * Math.PI / 180), r = VSP_ABSTAND_M + 10;
+  const nachbarn = await parcelsNear({ s: b.s - r / 110540, w: b.w - r / k, n: b.n + r / 110540, e: b.e + r / k });
+  const el = [];
+  for (const nb of nachbarn) {
+    if (nb.id === p.id) continue;
+    const t = nb.nutzungText || '';
+    // Anteile aus „Weg 1.072 m², Straßenverkehr 864 m²“: die Verkehrsnutzung muss überwiegen
+    let gesamt = 0, verkehr = 0, bahnTeil = 0;
+    for (const seg of t.split(/,\s+/)) {
+      const m = seg.trim().match(/^(.*?)\s+([\d.]+(?:,\d+)?)\s*(ha|m²)$/);
+      if (!m) continue;
+      const v = Number(m[2].replace(/\./g, '').replace(',', '.')) * (m[3] === 'ha' ? 10000 : 1);
+      gesamt += v;
+      if (/stra(ß|ss)enverkehr/i.test(m[1])) verkehr += v;
+      if (/bahnverkehr/i.test(m[1])) bahnTeil += v;
+    }
+    const bahn = bahnTeil > gesamt / 2, strasse = verkehr > gesamt / 2;
+    if (!bahn && !strasse) continue;
+    for (const poly of polysOf(nb)) {
+      const ring = poly[0];
+      el.push({ type: 'way', id: `alkis-${nb.id}`, nodes: ring.map((q) => `${q[0].toFixed(5)},${q[1].toFixed(5)}`),
+        tags: bahn ? { railway: 'rail' } : { highway: 'road' }, geometry: ring.map((q) => ({ lat: q[0], lon: q[1] })) });
+    }
+  }
+  return el;
+}
+
 export async function verkehrssicherung(p) {
   const teile = nutzungAnteile(p);
   if (teile && !(teile.Wald > 0)) return []; // kein Wald auf dem Flurstück
   const polys = polysOf(p);
   const b = bbox(polys.flat(2));
-  const elemente = await overpass(b, VSP_ABSTAND_M + 10);
-  return vspAuswerten(polys, elemente).map((f) => ({ ...f, ...BESONDERHEIT.vsp, title: `${BESONDERHEIT.vsp.title}: ${f.objekt}` }));
+  let elemente, quelle = 'osm';
+  try { elemente = await overpass(b, VSP_ABSTAND_M + 10); } catch (e) {
+    console.warn('Straßendaten (OpenStreetMap) nicht erreichbar – Ersatz aus dem Kataster', e);
+    elemente = await vspAusAlkis(p, polys, b); quelle = 'alkis';
+  }
+  return vspAuswerten(polys, elemente).map((f) => ({ ...f, quelle, ...BESONDERHEIT.vsp, title: `${BESONDERHEIT.vsp.title}: ${f.objekt}` }));
 }
 
 /**

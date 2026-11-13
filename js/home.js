@@ -213,7 +213,7 @@ function zeigeBesonderheit(f, p) {
       toast('Verkehrssicherung im Maßnahmenplan – zweimal im Jahr');
     } }, schon ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern'));
   }
-  const extra = f.type === 'vsp' && f.abstand != null ? ` (${f.abstand === 0 ? 'führt durch das Flurstück' : `${f.abstand} m vom Flurstück`})` : '';
+  const extra = f.type === 'vsp' && f.abstand != null ? ` (${f.abstand === 0 ? 'direkt am bzw. im Flurstück' : `${f.abstand} m vom Flurstück`}${f.quelle === 'alkis' ? ', nach Kataster' : ''})` : '';
   const kartiert = f.type !== 'vsp' ? (f.name ? ` Kartiert als: ${f.name}.` : ' Die Art ist in der Kartierung nicht angegeben.') : '';
   const angaben = (f.angaben || []).filter(([, v]) => !f.name || !f.name.includes(v)).slice(0, 4).map(([k, v]) => `${k}: ${v}`).join(' · ');
   say(`${f.title}${extra}:${kartiert} ${f.text}${angaben ? ` (${angaben})` : ''}`, { duration: 0, actions: actions.length ? actions : undefined });
@@ -274,7 +274,7 @@ function besonderheitenListe(p) {
   for (const x of f) (gruppen[x.type] ||= []).push(x);
   return [vspFehler, laedt, h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
     h('span', { class: 'feature-type' }, FEATURE_TYPES[t] || list[0].title),
-    t === 'vsp' ? h('ul', { class: 'feature-namen' }, list.map((x) => h('li', {}, h('strong', {}, x.objekt || x.title), h('small', { class: 'muted' }, x.abstand != null ? ` · ${x.abstand === 0 ? 'durch das Flurstück' : `${x.abstand} m entfernt`}` : ''))))
+    t === 'vsp' ? h('ul', { class: 'feature-namen' }, list.map((x) => h('li', {}, h('strong', {}, x.objekt || x.title), h('small', { class: 'muted' }, x.abstand != null ? ` · ${x.abstand === 0 ? 'direkt am Flurstück' : `${x.abstand} m entfernt`}` : ''))))
       : h('ul', { class: 'feature-namen' }, [...new Map(list.map((x) => [x.name || '', x])).values()].map((x) => h('li', {}, h('strong', {}, x.name || 'Art nicht angegeben'),
         (x.angaben || []).filter(([, v]) => !x.name || !x.name.includes(v)).length ? h('small', { class: 'muted' }, ` · ${(x.angaben || []).filter(([, v]) => !x.name || !x.name.includes(v)).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}`) : null))),
     h('p', {}, list[0].text),

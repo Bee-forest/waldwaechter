@@ -213,7 +213,7 @@ function zeigeBesonderheit(f, p) {
       toast('Verkehrssicherung im Maßnahmenplan – zweimal im Jahr');
     } }, schon ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern'));
   }
-  const extra = f.type === 'vsp' && f.abstand != null ? ` (${f.abstand === 0 ? 'direkt am bzw. im Flurstück' : `${f.abstand} m vom Flurstück`}${f.quelle === 'alkis' ? ', nach Kataster' : ''})` : '';
+  const extra = f.type === 'vsp' && f.laenge ? ` (an ${f.art || 'Straße'} entlang, ca. ${Math.round(f.laenge / 10) * 10} m Waldrand)` : '';
   const kartiert = f.type !== 'vsp' ? (f.name ? ` Kartiert als: ${f.name}.` : ' Die Art ist in der Kartierung nicht angegeben.') : '';
   const angaben = (f.angaben || []).filter(([, v]) => !f.name || !f.name.includes(v)).slice(0, 4).map(([k, v]) => `${k}: ${v}`).join(' · ');
   say(`${f.title}${extra}:${kartiert} ${f.text}${angaben ? ` (${angaben})` : ''}`, { duration: 0, actions: actions.length ? actions : undefined });
@@ -251,30 +251,22 @@ async function select(parcel, latlng) {
 
 function ladeBesonderheiten(parcel) {
   if (parcel.source !== 'alkis') return;
-  const zeigen = (f) => {
+  besonderheiten(parcel).then((f) => {
     FEAT.set(parcel.id, f);
     drawParcels();
     const host = document.getElementById('besonderheiten');
     if (host && selected?.parcel.id === parcel.id) fill(host, ...besonderheitenListe(parcel));
-  };
-  besonderheiten(parcel, zeigen).then(zeigen);
+  });
 }
 
 function besonderheitenListe(p) {
   const f = featuresOf(p);
-  const vspFehler = (f.fehler || []).includes('vsp')
-    ? h('div', { class: 'warn-line' }, 'Die Verkehrssicherung konnte gerade nicht geprüft werden (Straßendaten-Dienst nicht erreichbar oder ausgelastet). ',
-      h('button', { class: 'btn btn-small', onclick: () => { FEAT.delete(p.id); fill(document.getElementById('besonderheiten'), h('p', { class: 'muted' }, 'Prüfe erneut …')); ladeBesonderheiten(p); } }, 'Erneut prüfen'))
-    : null;
-  const NAMEN = { vsp: 'Verkehrssicherung', biotop: 'Biotope', lrt: 'Lebensraumtypen' };
-  const laedt = f.offen?.length ? h('p', { class: 'muted' }, `Suche noch: ${f.offen.map((k) => NAMEN[k]).join(', ')} …`) : null;
-  if (!f.length && laedt) return [vspFehler, laedt];
-  if (!f.length) return vspFehler ? [vspFehler] : [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.')];
+  if (!f.length) return [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.')];
   const gruppen = {};
   for (const x of f) (gruppen[x.type] ||= []).push(x);
-  return [vspFehler, laedt, h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
+  return [h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
     h('span', { class: 'feature-type' }, FEATURE_TYPES[t] || list[0].title),
-    t === 'vsp' ? h('ul', { class: 'feature-namen' }, list.map((x) => h('li', {}, h('strong', {}, x.objekt || x.title), h('small', { class: 'muted' }, x.abstand != null ? ` · ${x.abstand === 0 ? 'direkt am Flurstück' : `${x.abstand} m entfernt`}` : ''))))
+    t === 'vsp' ? h('strong', {}, list.length > 1 ? `${list.length} Stellen auf der Karte` : list[0].title)
       : h('ul', { class: 'feature-namen' }, [...new Map(list.map((x) => [x.name || '', x])).values()].map((x) => h('li', {}, h('strong', {}, x.name || 'Art nicht angegeben'),
         (x.angaben || []).filter(([, v]) => !x.name || !x.name.includes(v)).length ? h('small', { class: 'muted' }, ` · ${(x.angaben || []).filter(([, v]) => !x.name || !x.name.includes(v)).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}`) : null))),
     h('p', {}, list[0].text),

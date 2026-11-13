@@ -92,7 +92,7 @@ const SELTEN_GESCHUETZT = ['Gemeine Fichte', 'Gemeine Kiefer', 'Schwarzkiefer', 
 export function empfehle(a) {
   const gruende = [];
   let kand = PRODUKTE.filter((p) => {
-    if (a.ziel === 'fegen') return p.schutz.includes('fegen') && p.typ !== 'mittel' ? true : p.typ === 'mittel';
+    if (a.ziel === 'fegen') return p.typ === 'fegeschutz' || p.typ === 'mittel';
     if (a.ziel === 'leittrieb') return p.typ === 'terminal' || p.typ === 'mittel';
     return p.typ === 'huelle' || p.typ === 'gitter';
   });
@@ -110,20 +110,35 @@ export function empfehle(a) {
   if (!kand.length) return null;
   // Nadelholz: keine geschlossenen Kunststoffhüllen (Hitzestau) → Gitter oder Holz bevorzugen
   const nadelLastig = (a.nadelAnteil || 0) >= 0.5;
-  const kosten = (p) => brutto(p.netto) + (p.stab ? brutto(STAEBE[p.stab].netto) : 0) + (p.typ === 'mittel' ? -1e6 : 0);
+  const schatten = a.licht === 'schatten';
+  // Kosten je Pflanze (Streichmittel: Kanisterpreis je Richtwert-Pflanzenzahl)
+  const kosten = (p) => (p.typ === 'mittel' ? brutto(p.netto) / p.proKanister : brutto(p.netto)) + (p.stab ? brutto(STAEBE[p.stab].netto) : 0);
   const punkte = (p) => {
     let s = 0;
     if (nadelLastig && p.typ === 'huelle' && p.material === 'kunststoff') s -= 5;
     if (nadelLastig && (p.typ === 'gitter' || p.nadel)) s += 2;
+    // Unter Schirm/im Halbschatten: geschlossene Hüllen nehmen zu viel Licht → offenes Gitter bevorzugen
+    if (schatten && p.typ === 'gitter') s += 6;
+    if (schatten && p.typ === 'huelle') s -= 3;
     if (a.wichtig === 'preis') s -= kosten(p) * 2;
-    else { s += /tubex|dendron/i.test(p.id) ? 3 : 0; s += p.material !== 'kunststoff' ? 2 : 0; s -= kosten(p) * 0.3; }
-    if (p.typ === 'mittel' && a.ziel !== 'leittrieb' && a.ziel !== 'fegen') s -= 10;
+    else {
+      // langlebig/bewährt: belüftete Markenhülle bzw. mechanischer Schutz statt jährlich zu erneuerndem Mittel
+      s += /^tubex/.test(p.id) ? 4 : p.id === 'buck' ? 3 : p.id === 'freiwuchs' ? 1 : 0;
+      if (p.typ === 'mittel') s -= 4;
+      s -= kosten(p) * 0.3;
+    }
+    // Holzlatten lassen Licht durch: im Schatten besser als eine geschlossene Biohülle
+    if (schatten && p.id === 'dendron') s += 4;
+    if (a.erdoel === 'nein' && a.ziel === 'fegen' && p.typ === 'mittel') s += 1;
     return s;
   };
   kand.sort((x, y) => punkte(y) - punkte(x));
   const best = kand[0];
   if (nadelLastig && best.nadel) gruende.push('geeignet für Nadelholz (kein Hitzestau)');
-  gruende.push(a.wichtig === 'preis' ? 'günstigste passende Lösung' : 'langlebige, bewährte Lösung');
+  if (schatten && best.typ === 'gitter') gruende.push('offenes Gitter – genug Licht unter Schirm');
+  if (schatten && best.typ === 'huelle') gruende.push('geschlossene Hülle, obwohl schattig – nur so ist die gewählte Bedingung erfüllbar');
+  gruende.push(a.wichtig === 'preis' ? 'günstigste passende Lösung' : best.typ === 'mittel' ? 'einzige passende Lösung' : 'langlebige, bewährte Lösung');
+  if (kand.length === 1 && a.foerderung) gruende.push('die einzige förderfähige Hülle im Sortiment');
   return { produkt: best, gruende, warnung };
 }
 
@@ -177,7 +192,7 @@ export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foe
   // Auswahl: Menge der Punktindizes; ohne Karte Stückzahl je Baumart
   const sel = new Set();
   const listeStueck = Object.fromEntries((pp.arten || []).map((a) => [a.name, SELTEN_GESCHUETZT.includes(a.name) ? 0 : a.stueck]));
-  const s = { modus: 'alle', pinsel: 'an', antworten: antworten || { ziel: 'reh', erdoel: foerdern ? 'nein' : 'egal', foerderung: foerdern, wichtig: 'preis' }, produkt: null, eigen: {}, date: pflanzung.date ? new Date(pflanzung.date).toISOString().slice(0, 10) : '', note: '', parcelId: pflanzung.parcelId };
+  const s = { modus: 'alle', pinsel: 'an', antworten: antworten || { ziel: 'reh', erdoel: foerdern ? 'nein' : 'egal', foerderung: foerdern, wichtig: 'preis', licht: pflanzung?.pflanzplan?.art === 'voranbau' ? 'schatten' : 'hell' }, produkt: null, eigen: {}, date: pflanzung.date ? new Date(pflanzung.date).toISOString().slice(0, 10) : '', note: '', parcelId: pflanzung.parcelId };
   // ohne Pflanzung: Baumarten und Stückzahlen selbst eingeben
   const eigeneArten = ohne ? [{ name: '', stueck: 0 }] : null;
   const alleWaehlen = () => { sel.clear(); punkte.forEach((q, i) => { if (!SELTEN_GESCHUETZT.includes(q[2]) || namen.every((n) => SELTEN_GESCHUETZT.includes(n))) sel.add(i); }); };
@@ -285,7 +300,13 @@ export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foe
   const frage = (titel, key, optionen) => h('div', { class: 'q-group' },
     h('p', { class: 'sheet-label' }, titel),
     h('div', { class: 'q-cards' }, optionen.map(([v, t, u]) => h('button', { type: 'button', class: `q-option ${s.antworten[key] === v ? 'on' : ''}`, 'aria-pressed': String(s.antworten[key] === v),
-      onclick: () => { s.antworten[key] = v; s.produkt = null; renderUnten(); } }, h('span', { class: 'q-text' }, h('strong', {}, t), u ? h('small', {}, u) : null)))));
+      onclick: () => {
+        s.antworten[key] = v; s.produkt = null;
+        // Förderung gibt es nur für kunststofffreien Einzelschutz – die Antworten passen sich gegenseitig an
+        if (key === 'foerderung' && v === true) s.antworten.erdoel = 'nein';
+        if (key === 'erdoel' && v === 'egal' && s.antworten.foerderung) { s.antworten.foerderung = false; toast('Kunststoff wird nicht gefördert – „Förderung“ ist jetzt auf Nein gestellt.'); }
+        renderUnten();
+      } }, h('span', { class: 'q-text' }, h('strong', {}, t), u ? h('small', {}, u) : null)))));
   const produktKarte = (p, { gewaehlt = false, onWahl = null, n = 0 } = {}) => {
     const sl = stueckliste(p, n || 1, s.eigen);
     return h('div', { class: `es-produkt ${gewaehlt ? 'on' : ''}` },
@@ -321,6 +342,7 @@ export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foe
       h('h2', { class: 'step-title' }, 'Was soll der Schutz können?'),
       frage('Wovor schützen?', 'ziel', [['reh', 'Verbiss und Fegen durch Rehwild', 'üblich – 1,20 m'], ['hoch', 'Hoher Wilddruck, Schnee, Damwild', '1,50 m'], ['rot', 'Rotwild', '1,80 m'], ['fegen', 'Nur gegen Fegen', 'z. B. Stachelbäume'], ['leittrieb', 'Nur den Leittrieb (Nadelholz)', 'Klemmen oder Streichmittel']]),
       frage('Material', 'erdoel', [['nein', 'Nicht erdölbasiert', 'Holz, biobasiert, Schafwolle'], ['egal', 'Kunststoff ist in Ordnung', 'meist günstiger']]),
+      frage('Wie hell ist der Pflanzplatz?', 'licht', [['hell', 'Freifläche, sonnig'], ['schatten', 'Unter Schirm / Halbschatten', 'z. B. Voranbau']]),
       frage('Förderung beantragen?', 'foerderung', [[true, 'Ja', 'nur kunststofffrei ab 1,20 m'], [false, 'Nein']]),
       frage('Was ist dir wichtiger?', 'wichtig', [['preis', 'Möglichst günstig'], ['haltbar', 'Langlebig und bewährt']]),
       h('h2', { class: 'step-title' }, s.produkt && s.produkt !== emp?.produkt.id ? 'Deine Wahl' : 'Vorschlag'),

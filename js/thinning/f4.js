@@ -131,6 +131,21 @@ export function stufeZuBhd(bhd) {
   return s.id;
 }
 
+// ---------- Advanced-Zählweise: jeder Baum mit gemessenem BHD ----------
+
+/** Stärkeklasse aus dem BHD: dünn 7 ≤ BHD ≤ 25, mittel 25 < BHD ≤ 50, dick > 50; unter 7 cm → null */
+export function klasseAusBhd(bhd) {
+  if (!(bhd >= parameter().zaehlstufen_unter_50cm[0].von)) return null;
+  return bhd <= 25 ? 'duenn' : bhd <= 50 ? 'mittel' : 'dick';
+}
+/**
+ * Zählvolumen eines Baums mit gemessenem BHD (Advanced-Zählweise, alle Durchmesser).
+ * FESTLEGUNG: Es gilt der Tarif aus tarif_dick_gemessen samt Sicherheitsfaktor (1,07) auch unter 50 cm.
+ * Die Methode (Fassung 4) hat diese Variante nicht simuliert; der BHD aus der Kamera wird zusätzlich
+ * auf ganze cm aufgerundet. Kein Folgeeingriff-Faktor, weil der BHD jedes Mal neu gemessen wird.
+ */
+export const zaehlvolumenGemessen = (g, bhd, ho) => zaehlvolumenDick(g, bhd, ho);
+
 // ---------- Grundfläche (Mindestnutzung) ----------
 
 /** Grundfläche eines Baums (m²): Stufe → angerechneter BHD (Untergrenze), dick → gemessener BHD; g = π/4 · (BHD/100)² */

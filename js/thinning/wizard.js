@@ -602,6 +602,20 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   // Schritt 5 (Fassung 4): Rasterpunkte – Lage gibt die Methode vor, sie ist nicht veränderbar
+  /** Zählweise: Original (Stufen antippen, wie in Fassung 4) oder Advanced (jeder Baum per Kamera gemessen) */
+  function zaehlweiseWahl() {
+    const f = st.params, schonGezaehlt = (st.zaehler?.baeume?.length || measure()?.thinning?.zaehler?.baeume?.length || 0) > 0;
+    const opt = (id, titel, text) => h('button', { type: 'button', class: `q-option ${(f.zaehlweise || 'original') === id ? 'on' : ''}`, 'aria-pressed': String((f.zaehlweise || 'original') === id), disabled: schonGezaehlt,
+      onclick: () => { f.zaehlweise = id; if (st.plan) st.plan.zaehlweise = id; saveMeasure(); renderGrid(); } },
+      h('span', { class: 'q-text' }, h('strong', {}, titel), h('small', {}, text)));
+    return h('div', { class: 'q-group' },
+      h('p', { class: 'sheet-label' }, 'Zählweise'),
+      h('div', { class: 'q-cards' },
+        opt('original', 'Original', 'Bäume unter 50 cm über die BHD-Stufe antippen, dicke Bäume messen – so wie die Methode (Fassung 4) es vorsieht.'),
+        opt('advanced', 'Advanced: jeden Baum per Kamera messen', 'Jeder Baum wird mit der Kamera gemessen, sein Volumen aus dem exakten BHD berechnet. Genauer, aber langsamer; nicht in der Methode simuliert.')),
+      schonGezaehlt ? h('small', { class: 'muted' }, 'Es sind schon Bäume gezählt – die Zählweise bleibt für diesen Eingriff.') : null);
+  }
+  const advanced = () => (st.plan?.zaehlweise || st.params?.zaehlweise) === 'advanced';
   function renderGridF4(plan) {
     const pl = plan.planung;
     // Punkte ohne Baum (nach der Vorausrechnung) gar nicht erst anzeigen
@@ -618,6 +632,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', {}, h('span', { class: 'pv-n' }, rasterM(plan.raster)), h('span', {}, 'm Rasterabstand'))),
       h('p', {}, `Die Punkte liegen im Abstand von ${rasterM(plan.raster)} m mit zufälligem Versatz; die Methode gibt ihre Lage vor. Die gestrichelte Linie zeigt die Laufreihenfolge in Schlangenlinie. Am Punkt zeichnest du im Umkreis von ${plan.kreis} m aus, notfalls bis ${plan.ausweichen} m – höchstens ${F4.maxBaeumeJePunkt()} Bäume je Punkt, damit keine Löcher entstehen.${plan.planung.szenario === 3 ? ' Bei vielen dünnen Bäumen liegen die Punkte enger.' : ''}`),
       st.leerVorhersage.size ? h('p', { class: 'hint' }, `${st.leerVorhersage.size} von ${plan.points.length} Rasterpunkten bekommen nach der Menge voraussichtlich keinen Baum und sind ausgeblendet – dort musst du nicht hin. Die Auswahl wird nach jedem Punkt neu gerechnet.`) : null,
+      zaehlweiseWahl(),
       h('p', { class: 'hint' }, 'Im Wald ist oft kein Netz. Speichere die Karte vorher, solange du noch Empfang hast. Der Zählerstand wird ohne Netz im Gerät gespeichert.'),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn', onclick: () => { st.plan = null; go(1); } }, 'Angaben ändern'),
@@ -756,6 +771,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     await requestCompass();
     const warSchon = measure()?.status === 'arbeit';
     if (istF4() && !st.zaehler) await zaehlerLaden();
+    if (istF4()) st.plan.zaehlweise = st.params.zaehlweise || 'original';
     saveMeasure({ status: 'arbeit' });
     if (istF4()) store.update((x) => { const m = x.measures.find((y) => y.id === st.measureId); m.thinning.ersterEingriff ??= (st.plan.eingriffe.nr === 1 ? Date.now() : null); });
     zaehlerSpeichern();
@@ -1218,6 +1234,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     /** BHD per Foto messen; bis 50 cm zählt die passende Stufe, darüber das Volumen aus dem BHD */
     const zuordnen = (bhd) => {
       if (bhd < pl.stufen[0].von) return null;
+      if (advanced()) { const k = F4.klasseAusBhd(bhd); return k ? { v: F4.zaehlvolumenGemessen(pl.gruppe, bhd, st.params.ho), klasse: k, bhd } : null; }
       if (bhd > 50) return { v: F4.zaehlvolumenDick(pl.gruppe, bhd, st.params.ho), klasse: 'dick', bhd };
       const x = pl.stufen.find((y) => y.id === F4.stufeZuBhd(bhd));
       return x ? { v: x.v, klasse: x.klasse, stufe: x.id, bhd } : null;
@@ -1227,7 +1244,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         pruefe: (bhd) => {
           const b = zuordnen(bhd);
           if (!b) return `Unter ${pl.stufen[0].von} cm BHD – wird nicht gezählt.`;
-          const was = b.klasse === 'dick' ? `dick, ${fmt(b.v, 3)} m³` : `Stufe ${pl.stufen[b.stufe].name} (${K(b.klasse)}), ${fmt(b.v, 3)} m³`;
+          const was = b.klasse === 'dick' || b.stufe == null ? `${K(b.klasse)}, ${fmt(b.v, 3)} m³${advanced() ? ' (aus dem exakten BHD)' : ''}` : `Stufe ${pl.stufen[b.stufe].name} (${K(b.klasse)}), ${fmt(b.v, 3)} m³`;
           const g = z.sperre(b.v, pt.id);
           return `Wird gezählt als ${was}.${g === 'menge' ? ` ${MELDUNG_PASST_NICHT}` : g === 'punkt' ? ` ${MELDUNG_PUNKT_VOLL}` : ''}`;
         },
@@ -1237,9 +1254,9 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           if (!b) return { ok: false, text: `Unter ${pl.stufen[0].von} cm BHD – dieser Baum wird nicht gezählt.` };
           const g = z.sperre(b.v, pt.id);
           if (g) return { ok: false, text: g === 'punkt' ? MELDUNG_PUNKT_VOLL : MELDUNG_PASST_NICHT };
-          zuletzt = b.klasse === 'dick' ? 'dick' : `s${b.stufe}`;
+          zuletzt = b.klasse === 'dick' || b.stufe == null ? b.klasse : `s${b.stufe}`;
           auszeichnen({ ...b, kamera: { abstandCm: Math.round(r.abstandCm), quelle: r.abstandQuelle, referenz: r.referenz } });
-          const was = b.klasse === 'dick' ? `dick, ${fmt(b.v, 3)} m³` : `Stufe ${pl.stufen[b.stufe].name} (${K(b.klasse)}), ${fmt(b.v, 3)} m³`;
+          const was = b.klasse === 'dick' || b.stufe == null ? `${K(b.klasse)}, ${fmt(b.v, 3)} m³${advanced() ? ' aus dem exakten BHD' : ''}` : `Stufe ${pl.stufen[b.stufe].name} (${K(b.klasse)}), ${fmt(b.v, 3)} m³`;
           const hierJetzt = z.amPunkt(pt.id);
           return { ok: true, text: `Als ${was} zu den gezählten Bäumen hinzugefügt.`,
             stand: `Gezählt ${fmt(z.gezaehlt, 2)} von ${fmt(z.grenze, 2)} m³ · an diesem Punkt ${hierJetzt} von ${MAX_JE_PUNKT()} Bäumen`,
@@ -1251,7 +1268,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     let ausweichK = null;
     const karte = (k) => {
       const n = hierK(k), s = soll[k] || 0, fertig = s > 0 && n >= s;
-      const inhalt = k === 'dick'
+      const inhalt = advanced() ? null : k === 'dick'
         ? h('div', { class: 'dick-zeile' }, h('div', { class: 'mit-einheit' }, bhdFeld, h('span', {}, 'cm')), h('button', { type: 'button', class: `btn btn-primary ${zuletzt === 'dick' ? 'getippt' : ''}`, disabled: punktVoll, onclick: bhdZaehlen }, 'Zählen'))
         : h('div', { class: 'stufen-grid' }, pl.stufen.filter((x) => x.klasse === k).map(stufeBtn));
       const zahl = modus === 'punkt' && s > 0 ? `${n} / ${s}` : n ? `${n} gezählt` : '';
@@ -1288,18 +1305,19 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       mindestHierFertig ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), F4.mindestnutzungErfuellt(gIst, (st.plan.planung.flaecheHa ?? st.plan.areaHa)) ? 'Mindestnutzung erreicht.' : 'Baum gezählt – weiter zum nächsten Punkt.') : null,
       ausweichK ? h('p', { class: 'hint warn', role: 'note' }, `Kein Baum der Klasse ${K(ausweichK)} bis ${st.plan.ausweichen} m – bitte den ähnlichsten Baum auszeichnen (Durchmesser am nächsten an der Klasse ${K(ausweichK)}).`) : null,
       punktVoll ? null : oben.map(karte),
-      !punktVoll && unten.length ? h('details', { class: 'andere-staerke', open: !!ausweichK }, h('summary', {}, `Anderen Baum auszeichnen (${unten.map(K).join(', ')})`),
+      !punktVoll && unten.length && !advanced() ? h('details', { class: 'andere-staerke', open: !!ausweichK }, h('summary', {}, `Anderen Baum auszeichnen (${unten.map(K).join(', ')})`),
         h('p', { class: 'muted' }, 'Nicht vorgeschlagen, aber erlaubt, wenn hier kein passender Baum der vorgeschlagenen Stärke steht – die Menge gleicht sich an den nächsten Punkten aus.'),
         unten.map(karte)) : null,
-      punktVoll ? null : h('button', { type: 'button', class: 'btn btn-block bhdk-start', onclick: kameraMessen }, h('span', { html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>' }), 'BHD mit Kamera messen'),
+      advanced() && !punktVoll ? h('p', { class: 'muted' }, 'Advanced-Zählweise: Jeder Baum wird mit der Kamera gemessen – sein Volumen wird aus dem exakten BHD berechnet.') : null,
+      punktVoll ? null : h('button', { type: 'button', class: `btn btn-block bhdk-start ${advanced() ? 'btn-primary btn-large' : ''}`, onclick: kameraMessen }, h('span', { html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>' }), advanced() ? 'Baum mit Kamera messen und zählen' : 'BHD mit Kamera messen'),
       letzter ? h('div', { class: 'letzter' },
-        h('span', {}, `Zuletzt: ${letzter.klasse === 'dick' ? `dick, BHD ${fmt(letzter.bhd, 0)} cm` : `${pl.stufen[letzter.stufe]?.name}${letzter.bhd ? `, ${fmt(letzter.bhd, 0)} cm` : ''} (${K(letzter.klasse)})`}${letzter.kamera ? ' · Kamera' : ''} · ${fmt(letzter.v, 3)} m³`),
+        h('span', {}, `Zuletzt: ${letzter.klasse === 'dick' || letzter.stufe == null ? `${K(letzter.klasse)}, BHD ${fmt(letzter.bhd, 0)} cm` : `${pl.stufen[letzter.stufe]?.name}${letzter.bhd ? `, ${fmt(letzter.bhd, 0)} cm` : ''} (${K(letzter.klasse)})`}${letzter.kamera ? ' · Kamera' : ''} · ${fmt(letzter.v, 3)} m³`),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => { st.zaehler.rueckgaengig(letzter.id); zuletzt = null; fehlerMeldung = null; zaehlerSpeichern(); renderWorkF4(); } }, 'Rückgängig')) : null,
       hier.length > 1 ? h('details', { class: 'calc' }, h('summary', {}, `Alle ${hier.length} Bäume an diesem Punkt`),
         h('ul', { class: 'baum-liste' }, hier.slice().reverse().map((b) => h('li', {},
-          h('span', {}, b.klasse === 'dick' ? `dick, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name} (${K(b.klasse)})`, h('small', {}, ` · ${fmt(b.v, 3)} m³`)),
+          h('span', {}, b.klasse === 'dick' || b.stufe == null ? `${K(b.klasse)}, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name} (${K(b.klasse)})`, h('small', {}, ` · ${fmt(b.v, 3)} m³`)),
           h('button', { type: 'button', class: 'btn btn-small', 'aria-label': 'Baum rückgängig machen', onclick: () => { st.zaehler.rueckgaengig(b.id); fehlerMeldung = null; zaehlerSpeichern(); renderWorkF4(); } }, 'Rückgängig'))))) : null,
-      h('p', { class: 'hint warn' }, 'Stufe sorgfältig ansprechen, im Zweifel die höhere Stufe wählen; dicke Bäume immer messen.'),
+      h('p', { class: 'hint warn' }, advanced() ? 'Referenz genau an den Kanten markieren und das Foto gerade von vorn aufnehmen; bei ovalen Stämmen über Kreuz messen und den größeren Wert nehmen.' : 'Stufe sorgfältig ansprechen, im Zweifel die höhere Stufe wählen; dicke Bäume immer messen.'),
       h('details', { class: 'calc' }, h('summary', {}, 'Welche Bäume bevorzugt?'), h('p', {}, `${st.plan.auswahl[0].toUpperCase()}${st.plan.auswahl.slice(1)}.`)),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn', onclick: () => { working = null; fehlerMeldung = null; ausweichHinweis = null; page.classList.remove('w-mode'); highlightTarget(); renderHud(); } }, 'Zurück zur Navigation'),
@@ -1426,7 +1444,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
   function auswertungF4() {
     const z = st.zaehler, pl = st.plan.planung;
-    const jeStufe = pl.stufen.map((x) => { const bs = z.baeume.filter((b) => b.stufe === x.id && b.klasse !== 'dick'); return { stufe: x.name, klasse: x.klasse, anzahl: bs.length, m3: bs.reduce((a, b) => a + b.v, 0) }; });
+    const stufeVon = (b) => (b.klasse === 'dick' ? null : b.stufe ?? F4.stufeZuBhd(b.bhd));
+    const jeStufe = pl.stufen.map((x) => { const bs = z.baeume.filter((b) => stufeVon(b) === x.id); return { stufe: x.name, klasse: x.klasse, anzahl: bs.length, m3: bs.reduce((a, b) => a + b.v, 0) }; });
     const dicke = z.baeume.filter((b) => b.klasse === 'dick');
     const jeKlasse = ['duenn', 'mittel', 'dick'].map((k) => { const bs = z.baeume.filter((b) => b.klasse === k); return { klasse: k, anzahl: bs.length, m3: bs.reduce((a, b) => a + b.v, 0) }; });
     return { gezaehlt: z.gezaehlt, gezaehltHa: z.gezaehlt / (st.plan.areaHa || 1), gezaehltG: z.grundflaecheGezaehlt(), gJahrzehnt: gJahrzehnt(), mindestG: mindestG(), budget: z.budget, mengeHa: pl.mengeHa, baeume: z.baeume.length, jeStufe, jeKlasse, bhd: dicke.map((b) => b.bhd), abgeschlossen: Date.now() };
@@ -1457,14 +1476,14 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const zeilen = [
       ['Durchforstungsprotokoll', `Durchforstungshilfe ${st.plan.version}`],
       ['Datum', new Date().toLocaleString('de-DE')], ['Bestand', st.sel?.label || ''], ['Fläche (ha)', zahl(st.plan.areaHa, 4)],
-      ['Hauptbaumart', f.art], ['Baumartengruppe', pl.gruppe], ['Oberhöhe ho (m)', zahl(f.ho, 1)], ['Alter (Jahre)', f.alter ?? st.auto?.bestand?.alter ?? ''], ['B°', zahl(f.b, 2)],
+      ['Zählweise', advanced() ? 'Advanced – jeder Baum per Kamera gemessen, Volumen aus dem exakten BHD' : 'Original – Stufen'], ['Hauptbaumart', f.art], ['Baumartengruppe', pl.gruppe], ['Oberhöhe ho (m)', zahl(f.ho, 1)], ['Alter (Jahre)', f.alter ?? st.auto?.bestand?.alter ?? ''], ['B°', zahl(f.b, 2)],
       ['Überwiegende Stärke', { 1: 'dick', 2: 'mittel', 3: 'dünn' }[f.sz] || ''],
       ['Feld', `${pl.gruppe} | ${pl.hoehenklasse} | ${pl.bstufe} | ${pl.szenario}`], ['Zielmenge (m³/ha)', zahl(pl.zielmenge, 1)], ['Eingriff', `${st.plan.eingriffe.nr} von ${pl.eingriffe}`],
       ['Menge (m³/ha)', zahl(pl.mengeHa, 3)], ['Budget (m³)', zahl(z.budget, 3)], ['Gezählt (m³)', zahl(z.gezaehlt, 3)], ['Grundfläche gezählt (m²)', zahl(z.grundflaecheGezaehlt(), 4)], ['Grundfläche im Jahrzehnt (m²) / Mindestnutzung', `${zahl(gJahrzehnt(), 4)} / ${zahl(mindestG(), 4)}${measure()?.thinning?.f4?.mindestnutzung ? ` (${measure().thinning.f4.mindestnutzung})` : ''}`], ['Gezählt (m³/ha)', zahl(e.gezaehltHa, 3)],
       ['Hinweis', 'Gezählt ist eine vorsichtige Schätzung. Das tatsächlich geerntete Volumen liegt meist etwas darunter.'],
       [],
       ['Nr', 'Rasterpunkt', 'Stufe bzw. BHD (cm)', 'Klasse', 'Zählvolumen (m³)', 'Zeit'],
-      ...z.baeume.map((b, i) => [i + 1, b.punkt ?? 'Mindestnutzung', `${b.klasse === 'dick' ? zahl(b.bhd, 0) : `${pl.stufen[b.stufe]?.name}${b.bhd ? ` (gemessen ${zahl(b.bhd, 0)})` : ''}`}${b.kamera ? ' Kamera' : ''}`, F4.KLASSE_NAME[b.klasse], zahl(b.v), new Date(b.t).toLocaleString('de-DE')]),
+      ...z.baeume.map((b, i) => [i + 1, b.punkt ?? 'Mindestnutzung', `${b.klasse === 'dick' || b.stufe == null ? zahl(b.bhd, 0) : `${pl.stufen[b.stufe]?.name}${b.bhd ? ` (gemessen ${zahl(b.bhd, 0)})` : ''}`}${b.kamera ? ' Kamera' : ''}`, F4.KLASSE_NAME[b.klasse], zahl(b.v), new Date(b.t).toLocaleString('de-DE')]),
       [],
       ['Rasterpunkt', 'Breite', 'Länge', 'Status', 'Bäume', 'm³'],
       ...st.plan.points.map((p) => { const bs = z.baeume.filter((b) => b.punkt === p.id); return [p.id, p.at[0].toFixed(6), p.at[1].toFixed(6), { done: 'erledigt', skipped: 'übersprungen', open: 'offen', leer: 'ohne Baum, nicht angelaufen' }[p.status], bs.length, zahl(bs.reduce((a, b) => a + b.v, 0))]; }),
@@ -1483,6 +1502,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     doc.text(L0, y, 'Durchforstungsprotokoll', { bold: true, size: 18, farbe: [27, 77, 46] }); y += 18;
     doc.text(L0, y, `${st.sel?.label || 'Bestand'} · ${new Date().toLocaleDateString('de-DE')} · Durchforstungshilfe ${st.plan.version}`, { size: 9.5 }); y += 18;
     doc.text(L0, y, 'Eingaben', { bold: true, size: 11 }); y += 14;
+    zeile('Zählweise', advanced() ? `Advanced: jeder Baum per Kamera gemessen, Volumen aus dem exakten BHD (Tarif × ${String(F4.parameter().tarif_dick_gemessen.sicherheit).replace('.', ',')})` : 'Original: BHD-Stufen, dicke Bäume gemessen');
     zeile('Fläche', `${formatHa(st.plan.areaHa)}`); zeile('Hauptbaumart / Gruppe', `${f.art} / ${pl.gruppe}`);
     zeile('Oberhöhe ho', `${fmt(f.ho, 1)} m (${f.hoQuelle === 'lidar' ? 'LiDAR' : f.hoQuelle === 'alter' ? 'aus dem Alter geschätzt' : 'eigene Angabe'})`);
     zeile('Alter', f.alter ?? st.auto?.bestand?.alter ?? 'unbekannt'); zeile('Bestockungsgrad B°', `${fmt(f.b, 2)} (Stufe ${pl.bstufe})`);
@@ -1526,7 +1546,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     // Bäume
     doc.neueSeite(); y = 50;
     doc.text(L0, y, 'Ausgezeichnete Bäume', { bold: true, size: 11 }); y += 16;
-    z.baeume.forEach((b, i) => { if (y > 800) { doc.neueSeite(); y = 50; } doc.text(L0, y, `${i + 1}. Punkt ${b.punkt ?? '–'} · ${b.klasse === 'dick' ? `dick, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name}${b.bhd ? `, gemessen ${fmt(b.bhd, 0)} cm` : ''} (${F4.KLASSE_NAME[b.klasse]})`} · ${fmt(b.v, 3)} m³ · ${new Date(b.t).toLocaleString('de-DE')}`, { size: 8.5 }); y += 11; });
+    z.baeume.forEach((b, i) => { if (y > 800) { doc.neueSeite(); y = 50; } doc.text(L0, y, `${i + 1}. Punkt ${b.punkt ?? '–'} · ${b.klasse === 'dick' || b.stufe == null ? `${F4.KLASSE_NAME[b.klasse]}, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name}${b.bhd ? `, gemessen ${fmt(b.bhd, 0)} cm` : ''} (${F4.KLASSE_NAME[b.klasse]})`} · ${fmt(b.v, 3)} m³ · ${new Date(b.t).toLocaleString('de-DE')}`, { size: 8.5 }); y += 11; });
     return doc.blob();
   }
   function alsJpeg(blob) {

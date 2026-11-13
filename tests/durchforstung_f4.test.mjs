@@ -121,5 +121,8 @@ gleich('g dick 60 cm gemessen', F.grundflaecheBaum({ klasse: 'dick', bhd: 60 }),
 }
 // Raster: Szenario 3 → 12,5 m, sonst 25 m
 gleich('Raster Szenario 3', F.rasterAbstand(3), 12.5); gleich('Raster Szenario 1', F.rasterAbstand(1), 25);
+// Advanced-Zählweise
+gleich('Klasse 6 cm', F.klasseAusBhd(6), null); gleich('Klasse 25 cm', F.klasseAusBhd(25), 'duenn'); gleich('Klasse 25,5 cm', F.klasseAusBhd(25.5), 'mittel'); gleich('Klasse 50 cm', F.klasseAusBhd(50), 'mittel'); gleich('Klasse 51 cm', F.klasseAusBhd(51), 'dick');
+gleich('Volumen gemessen = Tarif', F.zaehlvolumenGemessen('Bu/Laub', 54, 22), 4.343);
 console.log(`${ok} Tests bestanden, ${fehler} Fehler`);
 process.exit(fehler ? 1 : 0);

@@ -261,10 +261,14 @@ function ladeBesonderheiten(parcel) {
 
 function besonderheitenListe(p) {
   const f = featuresOf(p);
-  if (!f.length) return [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.')];
+  const vspFehler = (f.fehler || []).includes('vsp')
+    ? h('div', { class: 'warn-line' }, 'Die Verkehrssicherung konnte gerade nicht geprüft werden (Straßendaten-Dienst nicht erreichbar oder ausgelastet). ',
+      h('button', { class: 'btn btn-small', onclick: () => { FEAT.delete(p.id); fill(document.getElementById('besonderheiten'), h('p', { class: 'muted' }, 'Prüfe erneut …')); ladeBesonderheiten(p); } }, 'Erneut prüfen'))
+    : null;
+  if (!f.length) return vspFehler ? [vspFehler] : [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.')];
   const gruppen = {};
   for (const x of f) (gruppen[x.type] ||= []).push(x);
-  return [h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
+  return [vspFehler, h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
     h('span', { class: 'feature-type' }, FEATURE_TYPES[t] || list[0].title),
     t === 'vsp' ? h('ul', { class: 'feature-namen' }, list.map((x) => h('li', {}, h('strong', {}, x.objekt || x.title), h('small', { class: 'muted' }, x.abstand != null ? ` · ${x.abstand === 0 ? 'durch das Flurstück' : `${x.abstand} m entfernt`}` : ''))))
       : h('ul', { class: 'feature-namen' }, [...new Map(list.map((x) => [x.name || '', x])).values()].map((x) => h('li', {}, h('strong', {}, x.name || 'Art nicht angegeben'),

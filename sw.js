@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v2.47.1';
+const VERSION = 'v2.47.2';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -114,7 +114,9 @@ async function networkFirst(req, name) {
     if (res.ok) cache.put(key, res.clone());
     return res;
   } catch {
-    return (await cache.match(key)) || new Response('{"elements":[]}', { headers: { 'Content-Type': 'application/json' } });
+    const alt = await cache.match(key);
+    if (alt) { const h = new Headers(alt.headers); h.set('X-Aus-Zwischenspeicher', '1'); return new Response(alt.body, { status: 200, headers: h }); }
+    return new Response('{"elements":[]}', { headers: { 'Content-Type': 'application/json', 'X-Offline': '1' } });
   }
 }
 

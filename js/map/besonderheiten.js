@@ -49,10 +49,24 @@ export function oeffentlich(tags = {}) {
 async function overpass(b, rand) {
   const k = 111320 * Math.cos(((b.s + b.n) / 2) * Math.PI / 180);
   const bb = [b.s - rand / 110540, b.w - rand / k, b.n + rand / 110540, b.e + rand / k].map((v) => v.toFixed(6)).join(',');
-  const q = `[out:json][timeout:25];(way["highway"](${bb});way["railway"](${bb});way["building"](${bb});way["amenity"="parking"](${bb}););out tags geom;`;
-  const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q) });
-  if (!res.ok) throw new Error('Overpass nicht erreichbar');
-  return (await res.json()).elements || [];
+  // „out geom“ liefert Tags, Knoten (für das Zusammenfassen von Straßenstücken) und Geometrie
+  const q = `[out:json][timeout:25];(way["highway"](${bb});way["railway"](${bb});way["building"](${bb});way["amenity"="parking"](${bb}););out geom;`;
+  // Der Hauptserver ist oft ausgelastet (429/504) – dann kurz warten und Ausweichserver probieren
+  const server = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+  let fehler = null;
+  for (let versuch = 0; versuch < server.length * 2; versuch++) {
+    const url = server[versuch % server.length];
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q), signal: ctl.signal });
+      clearTimeout(t);
+      // X-Offline: Ersatzantwort des Service-Workers ohne Netz – das ist kein „keine Straße“, sondern „nicht geprüft“
+      if (res.ok && !res.headers.get('X-Offline')) { const j = await res.json(); if (Array.isArray(j.elements)) return j.elements; }
+      fehler = new Error(`Overpass ${res.status}`);
+    } catch (e) { fehler = e; }
+    await new Promise((r) => setTimeout(r, 800 * (versuch + 1)));
+  }
+  throw fehler || new Error('Overpass nicht erreichbar');
 }
 
 /**
@@ -211,7 +225,17 @@ const cache = new Map();
 export function besonderheiten(p) {
   if (!p || p.source !== 'alkis') return Promise.resolve(p?.features || []);
   if (!cache.has(p.id)) {
-    const job = Promise.all([verkehrssicherung(p).catch(() => []), biotope(p).catch(() => []), lebensraumtypen(p).catch(() => [])]).then(([a, b2, c]) => [...a, ...b2, ...c]);
+    const fehler = [];
+    const job = Promise.all([
+      verkehrssicherung(p).catch((e) => { console.warn('Verkehrssicherung', e); fehler.push('vsp'); return []; }),
+      biotope(p).catch(() => { fehler.push('biotop'); return []; }),
+      lebensraumtypen(p).catch(() => { fehler.push('lrt'); return []; }),
+    ]).then(([a, b2, c]) => {
+      const alle = [...a, ...b2, ...c];
+      alle.fehler = fehler;
+      if (fehler.length) cache.delete(p.id); // beim nächsten Antippen erneut versuchen
+      return alle;
+    });
     cache.set(p.id, job);
     job.catch(() => cache.delete(p.id));
   }

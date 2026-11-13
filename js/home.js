@@ -251,12 +251,13 @@ async function select(parcel, latlng) {
 
 function ladeBesonderheiten(parcel) {
   if (parcel.source !== 'alkis') return;
-  besonderheiten(parcel).then((f) => {
+  const zeigen = (f) => {
     FEAT.set(parcel.id, f);
     drawParcels();
     const host = document.getElementById('besonderheiten');
     if (host && selected?.parcel.id === parcel.id) fill(host, ...besonderheitenListe(parcel));
-  });
+  };
+  besonderheiten(parcel, zeigen).then(zeigen);
 }
 
 function besonderheitenListe(p) {
@@ -265,10 +266,13 @@ function besonderheitenListe(p) {
     ? h('div', { class: 'warn-line' }, 'Die Verkehrssicherung konnte gerade nicht geprüft werden (Straßendaten-Dienst nicht erreichbar oder ausgelastet). ',
       h('button', { class: 'btn btn-small', onclick: () => { FEAT.delete(p.id); fill(document.getElementById('besonderheiten'), h('p', { class: 'muted' }, 'Prüfe erneut …')); ladeBesonderheiten(p); } }, 'Erneut prüfen'))
     : null;
+  const NAMEN = { vsp: 'Verkehrssicherung', biotop: 'Biotope', lrt: 'Lebensraumtypen' };
+  const laedt = f.offen?.length ? h('p', { class: 'muted' }, `Suche noch: ${f.offen.map((k) => NAMEN[k]).join(', ')} …`) : null;
+  if (!f.length && laedt) return [vspFehler, laedt];
   if (!f.length) return vspFehler ? [vspFehler] : [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.')];
   const gruppen = {};
   for (const x of f) (gruppen[x.type] ||= []).push(x);
-  return [vspFehler, h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
+  return [vspFehler, laedt, h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
     h('span', { class: 'feature-type' }, FEATURE_TYPES[t] || list[0].title),
     t === 'vsp' ? h('ul', { class: 'feature-namen' }, list.map((x) => h('li', {}, h('strong', {}, x.objekt || x.title), h('small', { class: 'muted' }, x.abstand != null ? ` · ${x.abstand === 0 ? 'durch das Flurstück' : `${x.abstand} m entfernt`}` : ''))))
       : h('ul', { class: 'feature-namen' }, [...new Map(list.map((x) => [x.name || '', x])).values()].map((x) => h('li', {}, h('strong', {}, x.name || 'Art nicht angegeben'),

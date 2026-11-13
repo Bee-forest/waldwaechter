@@ -509,9 +509,16 @@ export async function scanWmsLayer(url, layer, { s: so, w, n, e }, { maxPx = 102
     // Nur der Teil des kartierten Objekts, der in der Fläche liegt: der Punkt sitzt auf einem Bildpunkt,
     // der sicher zum Objekt UND zur Fläche gehört (nächster zum Schwerpunkt dieses Teils) –
     // dort wird auch die Sachauskunft abgefragt.
-    const { inPolys } = await import('../geo.js');
+    // Fläche einmal als Maske zeichnen (schnell) statt jeden Bildpunkt einzeln zu prüfen
+    const mk = document.createElement('canvas'); mk.width = W; mk.height = H;
+    const mc = mk.getContext('2d');
+    const zuPx = ([la, lo]) => [((mx(lo) - bb[0]) / (bb[2] - bb[0])) * W - 0.5, ((bb[3] - my(la)) / (bb[3] - bb[1])) * H - 0.5];
+    mc.beginPath();
+    for (const poly of innerhalb) for (const ring of poly) ring.forEach((q, i) => { const [x, y] = zuPx(q); i ? mc.lineTo(x, y) : mc.moveTo(x, y); });
+    mc.fillStyle = '#000'; mc.fill('evenodd');
+    const maske = mc.getImageData(0, 0, W, H).data;
     blobs = blobs.map((b) => {
-      const drin = b.px.filter((j) => inPolys(toLL(j % W, (j / W) | 0), innerhalb));
+      const drin = b.px.filter((j) => maske[j * 4 + 3] > 127);
       if (!drin.length) return null;
       let sx = 0, sy = 0;
       for (const j of drin) { sx += j % W; sy += (j / W) | 0; }

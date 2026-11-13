@@ -134,7 +134,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   const mapEl = h('div', { class: 'thin-map' });
   // Kartenleiste wie auf der Startseite: OSM/Luftbild und Standortkarte (ohne weitere Layer)
   const baseSwitch = h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Basiskarte' });
-  const locateBtn = h('button', { class: 'fab small', 'aria-label': 'Mein Standort', title: 'Mein Standort', html: icon.locate, onclick: () => locateMe() });
+  const locateBtn = h('button', { class: 'fab small ortung-btn ortung-aus', 'aria-label': 'Mein Standort live verfolgen', title: 'Mein Standort live verfolgen', html: icon.locate, onclick: () => locateMe() });
   const mapTools = h('div', { class: 'thin-map-tools' }, baseSwitch, locateBtn);
   const panel = h('div', { class: 'thin-panel' });
   const page = h('section', { class: 'page thin', role: 'dialog', 'aria-label': 'Durchforstung' },
@@ -157,24 +157,58 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     onclick: () => { base.setBasemap(k); store.update((x) => { x.settings.basemap = k; }); renderBaseSwitch(); },
   }, l)));
   renderBaseSwitch();
-  // Ortung: eigenen Standort anzeigen (im Bestand folgt die Karte dann wieder dem GPS)
-  let meMarker = null, meAcc = null;
-  function locateMe() {
-    if (st.step === 3 && lastPos) { follow = true; map.panTo(lastPos.latlng); renderHud(); return; }
-    if (!('geolocation' in navigator)) { toast('Dein Gerät kann keinen Standort bestimmen.'); return; }
-    locateBtn.classList.add('busy');
-    navigator.geolocation.getCurrentPosition((pos) => {
-      locateBtn.classList.remove('busy');
-      const ll = [pos.coords.latitude, pos.coords.longitude];
-      meMarker?.remove(); meAcc?.remove();
-      meAcc = L.circle(ll, { radius: pos.coords.accuracy, color: '#1F74B8', weight: 1, fillOpacity: 0.1, interactive: false }).addTo(map);
-      meMarker = L.marker(ll, { interactive: false, zIndexOffset: 1000, icon: L.divIcon({ className: 'me', html: '<span class="me-dot"></span>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
-      map.flyTo(ll, Math.max(map.getZoom(), 17));
-    }, (err) => {
-      locateBtn.classList.remove('busy');
-      toast(err.code === 1 ? 'Standort freigeben: in den Browser-Einstellungen für diese Seite erlauben.' : 'Standort gerade nicht verfügbar. Versuch es unter freiem Himmel erneut.');
-    }, { enableHighAccuracy: true, timeout: 15000 });
+  // ---------- Live-Standort mit Blickrichtung (in allen Schritten, ein einziges Symbol) ----------
+  // Zustände wie auf der Startseite: aus → folgen (Karte läuft mit) → an (verfolgt, Karte frei) → Tipp: wieder folgen.
+  // Während der Navigation im Bestand liefert die Navigation die Position – dasselbe Symbol, keine zweite Ortung.
+  let ortModus = 'aus', ortWatch = null, lastOrt = null, kompassAktiv = false;
+  const ORT_LABEL = { aus: 'Mein Standort live verfolgen', folgen: 'Standortverfolgung beenden', an: 'Karte wieder auf meinen Standort ausrichten' };
+  function ortKnopf() {
+    locateBtn.classList.remove('ortung-aus', 'ortung-folgen', 'ortung-an'); locateBtn.classList.add(`ortung-${ortModus}`);
+    locateBtn.setAttribute('aria-pressed', String(ortModus !== 'aus')); locateBtn.setAttribute('aria-label', ORT_LABEL[ortModus]); locateBtn.title = ORT_LABEL[ortModus];
   }
+  function locateMe() {
+    if (st.step === 3 && gps) { follow = true; ortModus = 'folgen'; ortKnopf(); if (lastPos) map.panTo(lastPos.latlng); renderHud(); return; }
+    if (!('geolocation' in navigator)) { toast('Dein Gerät kann keinen Standort bestimmen.'); return; }
+    if (ortModus === 'aus') { ortModus = 'folgen'; ortStart(); requestCompass(); toast('Standort wird live verfolgt – erneut tippen beendet.'); }
+    else if (ortModus === 'an') { ortModus = 'folgen'; if (lastOrt) map.flyTo(lastOrt.latlng, Math.max(map.getZoom(), 17)); }
+    else { ortModus = 'aus'; ortStop(); }
+    ortKnopf();
+  }
+  function ortStart() {
+    if (ortWatch != null) return;
+    let gemeldet = false;
+    ortWatch = navigator.geolocation.watchPosition((p) => {
+      zeigePos({ latlng: [p.coords.latitude, p.coords.longitude], accuracy: p.coords.accuracy, heading: p.coords.heading, speed: p.coords.speed });
+      if (st.step === 0 && st.mode === 'draw') aktualisiereStandortKnopf();
+    }, (err) => {
+      if (err.code === 1) { toast('Standort freigeben: in den Browser-Einstellungen für diese Seite erlauben.'); ortModus = 'aus'; ortStop(); ortKnopf(); return; }
+      if (!gemeldet) { gemeldet = true; toast('Standort gerade ungenau oder nicht verfügbar – es wird weiter gesucht.'); }
+    }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+  }
+  /** nur die eigene Ortung beenden; das Symbol bleibt, wenn die Navigation weiterläuft */
+  function ortStop({ symbolLassen = false } = {}) {
+    if (ortWatch != null) navigator.geolocation.clearWatch(ortWatch);
+    ortWatch = null;
+    if (!symbolLassen && !gps) { userLayer.clearLayers(); userDot = null; accCircle = null; lastOrt = null; }
+  }
+  let userDot = null, accCircle = null;
+  /** zeichnet DAS Standortsymbol (Punkt + Blickkegel) – einzige Stelle, an der es entsteht */
+  function zeigePos(pos) {
+    lastOrt = pos;
+    if (!userDot || !map.hasLayer(userDot)) {
+      userLayer.clearLayers();
+      userDot = L.marker(pos.latlng, { interactive: false, zIndexOffset: 1000, keyboard: false, icon: L.divIcon({ className: 'me', html: '<span class="me-dot"></span><span class="me-cone"></span>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(userLayer);
+      accCircle = L.circle(pos.latlng, { radius: pos.accuracy, color: '#1F74B8', weight: 1, opacity: 0.5, fillColor: '#1F74B8', fillOpacity: 0.08, interactive: false }).addTo(userLayer);
+      if (heading != null) setCone(heading);
+    } else { userDot.setLatLng(pos.latlng); accCircle.setLatLng(pos.latlng).setRadius(pos.accuracy || 0); }
+    // ohne Kompass: Laufrichtung aus dem GPS, wenn man geht
+    if (!kompassAktiv && pos.heading != null && !Number.isNaN(pos.heading) && (pos.speed == null || pos.speed > 0.7)) setCone(pos.heading);
+    if (!gps && ortModus === 'folgen') {
+      if (!zeigePos.gezeigt) { zeigePos.gezeigt = true; map.flyTo(pos.latlng, Math.max(map.getZoom(), 17)); }
+      else if (!map.getBounds().pad(-0.25).contains(pos.latlng)) map.panTo(pos.latlng, { animate: true });
+    }
+  }
+  map.on('dragstart', () => { if (ortModus === 'folgen' && !gps) { ortModus = 'an'; ortKnopf(); } });
   const ctxLayer = L.layerGroup().addTo(map);
   const selLayer = L.layerGroup().addTo(map);
   const gridLayer = L.layerGroup().addTo(map);
@@ -186,8 +220,11 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   let gps = null, follow = true, heading = null, prompted = new Set(), working = null, lastPos = null;
   let pointMarkers = [], targetIdx = -1;
 
+  let closing = false;
   function close() {
+    closing = true;
     stopNav();
+    ortStop();
     schliesseKamera({ neuZeichnen: false });
     map.remove();
     page.classList.add('closing');
@@ -269,8 +306,11 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
             inhalt: () => [h('strong', {}, `${s.name}: ${s.label}`), h('span', {}, `${s.species}${s.mix ? ` mit ${s.mix}` : ''}${s.age != null ? `, heute ca. ${s.age} Jahre` : ''}, ${s.anteilHa != null ? `ca. ${formatHa(s.anteilHa)} im Flurstück` : formatHa(areaHa(s.ring))}`)] })), 'Bestand auswählen')
         : h('p', { class: 'muted' }, 'Für deine Flächen ist im Waldverzeichnis kein Bestand hinterlegt. Wähle das ganze Flurstück oder zeichne den Bestand ein.'));
     } else {
+      standortKnopf = h('button', { class: 'btn btn-primary btn-block', onclick: eckeAmStandort });
+      aktualisiereStandortKnopf();
       content.append(
-        h('p', {}, 'Tippe in der Karte nacheinander auf die Eckpunkte des Bestands.'),
+        h('p', {}, 'Tippe in der Karte nacheinander auf die Eckpunkte des Bestands – oder geh die Grenze ab und setze die Ecken an deinem Standort.'),
+        standortKnopf,
         h('p', { class: 'hint' }, 'Eine eingezeichnete Fläche wird nicht mit den amtlichen Waldflächen abgeglichen – das Raster liegt auf der ganzen Fläche. So kannst du auch durchforsten, wenn die bekannten Daten nicht passen.'),
         h('p', { class: 'draw-status', 'aria-live': 'polite' }, st.draft.length >= 3 ? `${st.draft.length} Eckpunkte, ${formatHa(areaHa(st.draft))}` : `${st.draft.length} von mindestens 3 Eckpunkten`),
         h('div', { class: 'btn-row' },
@@ -285,6 +325,22 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     drawSelection(st.mode !== 'draw');
   }
 
+  // Eckpunkte beim Abgehen der Grenze am eigenen Standort setzen
+  let standortKnopf = null;
+  function aktualisiereStandortKnopf() {
+    if (!standortKnopf) return;
+    const gen = lastOrt?.accuracy;
+    fill(standortKnopf, h('span', { html: icon.locate }), ortWatch == null && !lastOrt ? 'Live-Standort einschalten' : lastOrt ? `Eckpunkt an meinem Standort setzen (± ${Math.round(gen || 0)} m)` : 'Warte auf GPS …');
+    standortKnopf.disabled = ortWatch != null && !lastOrt;
+  }
+  function eckeAmStandort() {
+    if (ortWatch == null && !lastOrt) { ortModus = 'folgen'; ortStart(); requestCompass(); ortKnopf(); aktualisiereStandortKnopf(); return; }
+    if (!lastOrt) { toast('Noch kein GPS-Signal – kurz warten.'); return; }
+    if ((lastOrt.accuracy || 0) > 25) toast(`GPS ungenau (± ${Math.round(lastOrt.accuracy)} m) – Punkt trotzdem gesetzt, notfalls später verschieben.`);
+    st.draft.push([...lastOrt.latlng]);
+    buzz('tick');
+    updateDraft();
+  }
   function updateDraft() {
     st.sel = st.draft.length >= 3 ? { ring: [...st.draft], label: `Eingezeichneter Bestand (${formatHa(areaHa(st.draft))})`, parcelId: null } : null;
     renderSelect();
@@ -900,14 +956,17 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     if (gps) return;
     const first = st.plan.points[Math.max(0, targetIdx)].at;
     gps = createPositionSource({ simulate: store.get().settings.simulateGps, start: destination(first, 190, 45) });
+    ortStop({ symbolLassen: true }); // nur eine Standortquelle – sonst zwei Symbole
+    ortModus = 'folgen'; ortKnopf();
     gps.start(onPos, (e) => { toast(e.message); renderHud(e.message); });
     keepAwake(true);
-    map.on('dragstart', () => { follow = false; renderHud(); });
+    map.on('dragstart', () => { if (!gps) return; follow = false; ortModus = 'an'; ortKnopf(); renderHud(); });
   }
 
   function stopNav() {
     gps?.stop(); gps = null;
     keepAwake(false);
+    if (ortModus !== 'aus' && !closing) { ortStart(); return; } // Live-Standort läuft nach der Navigation weiter (mit Kompass)
     window.removeEventListener('deviceorientationabsolute', onOrient);
     window.removeEventListener('deviceorientation', onOrient);
   }
@@ -935,7 +994,6 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     toast(`Neues Ziel: Rasterpunkt ${pt.id}`);
   }
 
-  let userDot, accCircle;
   function onPos(pos) {
     lastPos = pos;
     // GPS-Spur für das Protokoll (alle ≥ 5 m ein Punkt)
@@ -943,11 +1001,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       const l = st.spur[st.spur.length - 1];
       if (!l || distance([l[0], l[1]], pos.latlng) >= 5) { st.spur.push([Math.round(pos.latlng[0] * 1e6) / 1e6, Math.round(pos.latlng[1] * 1e6) / 1e6, Date.now()]); spurSpaeter(); }
     }
-    if (!userDot) {
-      userDot = L.marker(pos.latlng, { interactive: false, zIndexOffset: 1000, icon: L.divIcon({ className: 'me', html: '<span class="me-dot"></span><span class="me-cone"></span>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(userLayer);
-      accCircle = L.circle(pos.latlng, { radius: pos.accuracy, color: '#1F74B8', weight: 1, fillOpacity: 0.1, interactive: false }).addTo(userLayer);
-    } else { userDot.setLatLng(pos.latlng); accCircle.setLatLng(pos.latlng).setRadius(pos.accuracy); }
-    if (pos.heading != null && !Number.isNaN(pos.heading) && heading == null) setCone(pos.heading);
+    zeigePos(pos);
     if (follow) map.panTo(pos.latlng, { animate: true, duration: 0.5 });
     if (working || targetIdx < 0) return;
 
@@ -969,13 +1023,16 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         await DeviceOrientationEvent.requestPermission().catch(() => 'denied'); // ohne Zusage kommen einfach keine Daten
       }
+      window.removeEventListener('deviceorientationabsolute', onOrient); window.removeEventListener('deviceorientation', onOrient);
       window.addEventListener('deviceorientationabsolute', onOrient);
       window.addEventListener('deviceorientation', onOrient);
     } catch { /* kein Kompass */ }
   }
   function onOrient(e) {
-    const hd = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null);
+    let hd = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null);
     if (hd == null) return;
+    hd = (hd + (screen.orientation?.angle ?? window.orientation ?? 0) + 360) % 360; // Querformat ausgleichen
+    kompassAktiv = true;
     heading = hd;
     setCone(hd);
     const arrow = hud.querySelector('.hud-arrow');

@@ -175,6 +175,51 @@ export function vspAuswerten(polys, elemente, maxM = VSP_ABSTAND_M) {
   return out;
 }
 
+/** Diagnose der Verkehrssicherungsprüfung für ein Flurstück – Schritt für Schritt als Textzeilen */
+export async function vspDiagnose(p) {
+  const z = [];
+  const zeit = () => performance.now();
+  z.push(`Flurstück: ${p.gemarkung || ''} Flur ${p.flur || ''} Nr. ${p.nr || ''} (${p.id}), Quelle ${p.source}`);
+  z.push(`Nutzung laut Kataster: ${p.nutzungText || '(keine Angabe)'}`);
+  const teile = nutzungAnteile(p);
+  z.push(`Waldanteil erkannt: ${teile ? (teile.Wald > 0 ? `ja (${teile.Wald.toFixed(2)} ha)` : 'NEIN → Prüfung wird übersprungen') : 'keine Anteile lesbar → es wird geprüft'}`);
+  const polys = polysOf(p), b = bbox(polys.flat(2));
+  const k = 111320 * Math.cos(((b.s + b.n) / 2) * Math.PI / 180), r = VSP_ABSTAND_M + 10;
+  const bb = [b.s - r / 110540, b.w - r / k, b.n + r / 110540, b.e + r / k].map((v) => v.toFixed(6)).join(',');
+  const q = `[out:json][timeout:25];(way["highway"](${bb});way["railway"](${bb});way["building"](${bb});way["amenity"="parking"](${bb}););out geom;`;
+  let osm = null;
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']) {
+    const t0 = zeit();
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q), signal: ctl.signal });
+      clearTimeout(t);
+      const text = await res.text();
+      z.push(`${new URL(url).hostname}: HTTP ${res.status}${res.headers.get('X-Offline') ? ' (Ersatzantwort ohne Netz!)' : ''}, ${Math.round(zeit() - t0)} ms, ${text.length} Zeichen`);
+      if (res.ok && !osm) { try { osm = JSON.parse(text).elements || []; } catch { z.push('  → Antwort ist kein JSON: ' + text.slice(0, 120)); } }
+      else if (!res.ok) z.push('  → ' + text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 160));
+    } catch (e) { z.push(`${new URL(url).hostname}: FEHLER ${e.name}: ${e.message} nach ${Math.round(zeit() - t0)} ms`); }
+  }
+  if (osm) {
+    const wege = osm.filter((e) => e.tags?.highway || e.tags?.railway || e.tags?.amenity === 'parking');
+    const oeff = wege.filter((e) => oeffentlich(e.tags));
+    z.push(`OSM: ${osm.length} Objekte, ${wege.length} Wege/Bahn/Parkplätze, davon öffentlich ${oeff.length}, Gebäude ${osm.filter((e) => e.tags?.building).length}`);
+    const nichtOeff = wege.filter((e) => !oeffentlich(e.tags)).map((e) => `${e.tags.highway || e.tags.railway || e.tags.amenity}${e.tags.access ? `/${e.tags.access}` : ''}${e.tags.name ? ` ${e.tags.name}` : ''}`);
+    if (nichtOeff.length) z.push(`  nicht öffentlich gewertet: ${[...new Set(nichtOeff)].slice(0, 8).join('; ')}`);
+    const nah = vspAuswerten(polys, osm, 100000).sort((a, c) => a.abstand - c.abstand).slice(0, 6);
+    z.push(`  nächste Objekte: ${nah.map((f) => `${f.objekt} ${f.abstand} m`).join('; ') || 'keine'}`);
+    z.push(`  → i-Punkte (bis ${VSP_ABSTAND_M} m): ${vspAuswerten(polys, osm).map((f) => `${f.objekt} ${f.abstand} m`).join('; ') || 'keine'}`);
+  }
+  const t0 = zeit();
+  try {
+    const el = await vspAusAlkis(p, polys, b);
+    const nah = vspAuswerten(polys, el, 100000).sort((a, c) => a.abstand - c.abstand).slice(0, 3);
+    z.push(`Kataster: ${el.length} Straßen-/Bahnflurstücke geladen (${Math.round(zeit() - t0)} ms), nächste: ${nah.map((f) => `${f.abstand} m`).join(', ') || 'keine'}`);
+  } catch (e) { z.push(`Kataster: FEHLER ${e.message}`); }
+  z.push(`App-Version: ${(await caches.keys().catch(() => [])).filter((x) => /v\d/.test(x)).join(', ') || 'unbekannt'}`);
+  return z;
+}
+
 /**
  * Ersatz, wenn die Straßendaten (OpenStreetMap) nicht erreichbar sind: amtliche Flurstücke (ALKIS) der Umgebung
  * mit der Nutzung „Straßenverkehr“ oder „Bahnverkehr“. Straßenflurstücke gehören fast immer dem Straßenbaulastträger,

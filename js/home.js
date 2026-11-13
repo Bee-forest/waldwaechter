@@ -34,7 +34,22 @@ let rescueMarkers = null;
 /** Entfernt alles, was zur vorherigen Auswahl gehört (Umriss, „i“, Rettungspunkt-Linie) */
 function clearMarks() { selectionLayer?.clearLayers(); rescueMarkers?.remove(); rescueMarkers = null; }
 let ALL = [];
-const FEAT = new Map(); // Besonderheiten je Flurstück (Sitzung)
+const FEAT = new Map(); // Besonderheiten je Flurstück (Sitzung + Zwischenspeicher)
+// Besonderheiten (Verkehrssicherung, Biotope) der eigenen Flurstücke werden zwischengespeichert,
+// damit die „i“-Punkte gleich beim Start auf der Karte stehen – nicht erst nach dem Antippen.
+const FEAT_SPEICHER = 'waldwaechter.besonderheiten', FEAT_TAGE = 30;
+try {
+  const alt = JSON.parse(localStorage.getItem(FEAT_SPEICHER) || '{}');
+  for (const [id, e] of Object.entries(alt)) if (e?.t > Date.now() - FEAT_TAGE * 864e5 && Array.isArray(e.f)) FEAT.set(id, e.f);
+} catch { /* kein Zwischenspeicher */ }
+function featMerken(id, f) {
+  if (!f?.length) return; // leer kann auch „Dienst nicht erreichbar“ heißen – dann beim nächsten Start neu fragen
+  try {
+    const alt = JSON.parse(localStorage.getItem(FEAT_SPEICHER) || '{}');
+    alt[id] = { t: Date.now(), f };
+    localStorage.setItem(FEAT_SPEICHER, JSON.stringify(alt));
+  } catch { /* Speicher voll oder privat */ }
+}
 const featuresOf = (p) => FEAT.get(p.id) || p.features || [];
 
 const mine = (id) => store.get().parcels.find((p) => p.id === id);
@@ -166,7 +181,8 @@ export async function initHome(root) {
   ALL = await source.allParcels();
   drawParcels();
   applyLayerVisibility();
-  store.subscribe(async () => { ALL = await source.allParcels(); drawParcels(); applyLayerVisibility(); });
+  ladeEigeneBesonderheiten();
+  store.subscribe(async () => { ALL = await source.allParcels(); drawParcels(); applyLayerVisibility(); ladeEigeneBesonderheiten(); });
 }
 
 export function invalidateMap() { map?.invalidateSize(); }
@@ -246,10 +262,29 @@ async function select(parcel, latlng) {
   await renderInfo();
 }
 
+/** Besonderheiten aller eigenen Flurstücke im Hintergrund laden (nacheinander, nur was noch fehlt) */
+let eigeneLaeuft = false;
+async function ladeEigeneBesonderheiten() {
+  if (eigeneLaeuft) return;
+  eigeneLaeuft = true;
+  try {
+    const meine = new Set(store.get().parcels.map((x) => x.id));
+    const offen = ALL.filter((p) => meine.has(p.id) && p.source === 'alkis' && !FEAT.has(p.id));
+    for (const p of offen) {
+      try {
+        const f = await besonderheiten(p);
+        FEAT.set(p.id, f); featMerken(p.id, f);
+        drawParcels();
+      } catch { /* Dienst nicht erreichbar – beim Antippen erneut */ }
+    }
+  } finally { eigeneLaeuft = false; }
+}
+
 function ladeBesonderheiten(parcel) {
   if (parcel.source !== 'alkis') return;
   besonderheiten(parcel).then((f) => {
     FEAT.set(parcel.id, f);
+    featMerken(parcel.id, f);
     drawParcels();
     const host = document.getElementById('besonderheiten');
     if (host && selected?.parcel.id === parcel.id) fill(host, ...besonderheitenListe(parcel));
@@ -846,8 +881,6 @@ function openLayerSheet() {
         h('p', { class: 'sheet-label' }, g),
         OVERLAYS.filter((o) => o.group === g).map((o) => sw(o.key, o.label, { disabled: o.pending, note: o.pending ? 'wird gerade angebunden' : null })),
       ]),
-      h('p', { class: 'sheet-label' }, 'Zum Ausprobieren'),
-      sw('demo', 'Demo-Flächen (Raum Ilmenau)', { onchange: (e) => store.update((st) => { st.settings.demo = e.target.checked; st.settings.layers.demo = e.target.checked; }) }),
       h('p', { class: 'hint' }, 'Quellen: Geoportal Thüringen (© GDI-Th, dl-de/by-2-0), ThüringenForst, TLUBN, OpenStreetMap. Fachebenen erscheinen je nach Dienst erst ab einer bestimmten Zoomstufe.'),
     ),
     actions: [{ label: 'Fertig', value: true, primary: true }],

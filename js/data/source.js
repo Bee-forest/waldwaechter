@@ -14,7 +14,7 @@ import { wfsParcelAt, wfsSearch, localParcelAt, localSearch } from '../map/thuer
 import { store } from '../store.js';
 
 const cache = new Map(); // per WFS geladene Flurstücke dieser Sitzung
-const demoOn = () => store.get().settings.demo;
+const demoOn = () => false; // Demo-Flächen (Raum Ilmenau) entfernt – nur noch echte Flurstücke
 const stored = () => store.get().parcels.filter((p) => p.ring);
 
 function remember(list) { for (const p of list) cache.set(p.id, p); return list; }

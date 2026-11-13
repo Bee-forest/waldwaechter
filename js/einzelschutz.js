@@ -66,6 +66,57 @@ export const PRODUKTE = [
     // FESTLEGUNG: Richtwert 1 Kanister (5 l) je 1.000 Pflanzen – Menge im Angebot anpassen
     proKanister: 1000, text: 'Sprüh- und Streichmittel auf Schafwollbasis gegen Verbiss und Fegen. Muss jedes Jahr erneuert werden.', nadel: true },
 ];
+// ---------- Infos je Hülle: Versuche und Praxis, Aufbau, Quellen ----------
+const Q = {
+  lwf: { titel: 'LWF/TU Dresden: Mikroklima in Wuchshüllen (waldwissen.net)', url: 'https://www.waldwissen.net/de/waldwirtschaft/waldbau/waldverjuengung/mikroklima-in-handelsueblichen-und-biologisch-abbaubaren-wuchshuellen' },
+  lwfPdf: { titel: 'LWF aktuell 2/2024: Wuchshüllen im Test (PDF)', url: 'https://www.lwf.bayern.de/mam/cms04/waldbau-bergwald/bilder/a145_s7-11_schuldt.pdf' },
+  douglasie: { titel: 'Douglasie in drei Wuchshüllentypen, Baden-Württemberg (Allg. Forst- u. J.-Zeitung)', url: 'https://www.sauerlaender-verlag.com/en/?p=2814' },
+  praxis: { titel: 'Wuchshüllen in der forstlichen Praxis – Umfrage BW (waldwissen.net)', url: 'https://www.waldwissen.net/de/waldwirtschaft/waldbau/waldverjuengung/wuchshuellen-in-der-forstlichen-praxis' },
+  afz: { titel: 'AFZ-DerWald 22/2024: Holz statt Plastik – neue Wuchshüllen (PDF)', url: 'https://lms.wald.rlp.de/pluginfile.php/17524/mod_resource/content/1/AFZ_22_2024_Zusammenfassung.pdf' },
+  abbau: { titel: 'Abbaubarkeit von Wuchshüllen (waldwissen.net)', url: 'https://www.waldwissen.net/de/waldwirtschaft/waldbau/waldverjuengung/abbaubarkeit-von-wuchshuellen' },
+  merkblatt: { titel: 'LWF-Merkblatt 40: Wuchshüllen (PDF)', url: 'https://lfl.bayern.de/mam/cms04/service/dateien/rz_mb40_wuchshüllen_6seitig_wickelfalz_071222_web_bf.pdf' },
+  kwf: { titel: 'KWF: Prüfung von Einzelschutzlösungen, „KWF-Test Pflanzenschutz“ (PDF)', url: 'https://kwf2020.kwf-online.de/wp-content/uploads/2022/05/05_Kobov.pdf' },
+  wbs: { titel: 'WBS Materialsortiment Herbst 2026', url: WBS_URL },
+};
+const AUFBAU_HUELLE = [
+  'Stab auf der Hauptwindseite (meist West) dicht neben der Pflanze senkrecht einschlagen, etwa 30–40 cm tief, so dass er die Hülle oben überragt.',
+  'Hülle von oben über die Pflanze stülpen, ohne Triebe abzuknicken, und unten einige Zentimeter in den Boden drücken – so kommen Mäuse und Wind nicht darunter.',
+  'Hülle mit den beiliegenden Bindern (oben und unten) am Stab festmachen.',
+  'Begleitwuchs (Gras, Brombeere) in den ersten Jahren rund um die Hülle zurückdrängen.',
+  'Wenn der Baum oben herausgewachsen und stabil ist, Hülle und Stab abbauen und mitnehmen – Kunststoff darf nicht im Wald bleiben.',
+];
+const INFO = {
+  plantagard: { praxis: ['In einem Versuch der TU Dresden/LWF kam in Polypropylen-Hüllen von PlantaGard (Microvent) im Tagesmaximum etwa zwei Drittel des Lichts an (66 % der Freifläche).', 'An Douglasie in Baden-Württemberg waren Pflanzen in PlantaGard-Hüllen nach drei Jahren deutlich höher als ohne Hülle, aber etwas dünner im Wurzelhals – also schlanker.'],
+    aufbau: AUFBAU_HUELLE, quellen: ['lwf', 'douglasie', 'merkblatt', 'wbs'] },
+  freiwuchs: { praxis: ['Gitterhüllen sind luftiger: Laut einer Umfrage unter Förstern in Baden-Württemberg liegen die Vorteile der Gitterhülle genau in den Nachteilen der geschlossenen Wuchshüllen – und umgekehrt (kein Hitzestau, mehr Licht, aber weniger Treibhauseffekt).', 'An Douglasie wuchsen Pflanzen im PlantaGard-Gitter nach drei Jahren etwas höher als ohne Schutz, aber weniger stark als in geschlossenen Hüllen.'],
+    aufbau: ['Stab dicht neben der Pflanze einschlagen (30–40 cm tief).', 'Gitter zu einer Röhre formen bzw. über die Pflanze stülpen und am Stab mit Bindern befestigen.', 'Seitentriebe, die durch das Gitter wachsen, nicht abreißen.', 'Gitter abbauen, sobald der Leittrieb über Äserhöhe ist.'], quellen: ['praxis', 'douglasie', 'wbs'] },
+  tubex120: { praxis: ['In belüfteten Tubex-Ventex-Hüllen (Ventex Clear) kam im Mittel rund drei Viertel des Lichts an (78 % der Freifläche) – mehr als in den anderen geprüften Kunststoffhüllen.', 'Bei Elsbeere wuchsen die Pflanzen in Kunststoffhüllen im Versuch etwa 50 % mehr in die Höhe als ohne Hülle – allerdings auf Kosten der Stabilität.', 'An Douglasie in Baden-Württemberg hing die Vitalität nicht vom Hüllendurchmesser (8–12 cm) ab.'],
+    aufbau: AUFBAU_HUELLE, quellen: ['lwf', 'praxis', 'merkblatt', 'wbs'] },
+  dendron: { praxis: ['Dendron (Firma Walthmeyer) besteht aus 2 mm starkem Nadelholzfurnier; es gibt Laub-, Universal- und Nadelholz-Varianten.', 'Im Versuch der TU Dresden/LWF ließ die Holzhülle im Tagesmaximum am meisten Licht durch (77 % der Freifläche). Bei Elsbeere lag der Höhenzuwachs etwa 16 % über der Pflanze ohne Hülle – weniger Treibhauseffekt als in Kunststoff, dafür stabiler.'],
+    aufbau: ['Stab dicht neben der Pflanze einschlagen.', 'Furnierhülle aufstellen bzw. aufspreizen und um die Pflanze legen, am Stab befestigen (Montage laut Hersteller, z. B. mit Tacker oder Draht).', 'Die Hülle verrottet mit der Zeit und muss nicht eingesammelt werden – den Stab später entfernen oder ebenfalls verrotten lassen.'], quellen: ['afz', 'lwf', 'lwfPdf', 'wbs'] },
+  buck: { praxis: ['Biobasierte Hüllen sollen sich nach einigen Jahren abbauen. Bei abbaubaren Tubex-Hüllen etwa ist die volle Funktion auf 5 Jahre ausgelegt, danach folgen weitere 5 Jahre Abbau – für die Buck-Hülle bitte die Herstellerangaben prüfen.', 'Achtung Licht: Im LWF-Versuch kam in einer Biokunststoff-Hülle (PLA) nur gut ein Fünftel, in einer Papierhülle sogar nur rund ein Zehntel des Lichts an – undurchsichtige Biohüllen nur an sehr hellen Plätzen.'],
+    aufbau: AUFBAU_HUELLE.slice(0, 4).concat(['Abbaubare Hüllen müssen nicht eingesammelt werden; prüfe trotzdem, ob Reste stören.']), quellen: ['abbau', 'lwf', 'wbs'] },
+  stachel: { praxis: ['Stachelbäume halten den Rehbock vom Fegen ab, schützen aber nicht gegen Verbiss.'],
+    aufbau: ['Im Frühjahr vor der Fegezeit (ab April) dicht neben die Pflanze stecken, Stacheln zum Bäumchen.', 'Bei Laubholz mit hohem Verbissdruck zusätzlich Verbissschutz einsetzen.'], quellen: ['wbs'] },
+  klemmen: { praxis: ['Klemmen schützen nur die Knospe am Leittrieb – Seitentriebe bleiben ungeschützt. Vor allem für Nadelholz.'],
+    aufbau: ['Im Herbst vor dem Winterverbiss knapp unter der Endknospe auf den Leittrieb klemmen.', 'Jedes Jahr nach dem Austrieb auf den neuen Leittrieb umsetzen.'], quellen: ['wbs'] },
+  trico: { praxis: ['Streichmittel wirken nur eine Saison und müssen jedes Jahr erneuert werden; der Aufwand steigt mit der Pflanzenzahl.'],
+    aufbau: ['Bei trockenem, frostfreiem Wetter im Herbst (Winterverbiss) bzw. Frühjahr (Fegen) auf Leittrieb und obere Triebe sprühen oder streichen.', 'Gebrauchsanleitung und Aufwandmenge auf dem Kanister beachten.'], quellen: ['wbs'] },
+};
+INFO.tubex150 = INFO.tubex120; INFO.tubex180 = INFO.tubex120;
+
+/** Info-Fenster zu einer Hülle: Praxis und Versuche, Aufbau, KWF, Quellen */
+export function zeigeInfo(p) {
+  const inf = INFO[p.id] || { praxis: [], aufbau: [], quellen: ['wbs'] };
+  dialog({ title: p.name, actions: [{ label: 'Schließen', value: null }], body: h('div', { class: 'es-info' },
+    h('div', { class: 'es-info-kopf' }, h('div', { class: 'es-bild', html: BILD[p.bild] }), h('p', {}, p.text)),
+    inf.praxis.length ? h('div', {}, h('p', { class: 'sheet-label' }, 'Erfahrungen und Versuche'), h('ul', {}, inf.praxis.map((t) => h('li', {}, t)))) : null,
+    h('div', {}, h('p', { class: 'sheet-label' }, 'Aufbau'), h('ol', {}, inf.aufbau.map((t) => h('li', {}, t))), h('small', { class: 'muted' }, 'Allgemeine Hinweise – die Montageanleitung des Herstellers geht vor.')),
+    h('div', {}, h('p', { class: 'sheet-label' }, 'KWF-Prüfung'),
+      h('p', {}, 'Das KWF prüft Einzelschutz und vergibt das Gebrauchswertzeichen „KWF-Test Pflanzenschutz“. Ob dieses Produkt geprüft ist, steht auf der Verpackung bzw. in den Prüfberichten des KWF.')),
+    h('div', {}, h('p', { class: 'sheet-label' }, 'Quellen'), h('ul', { class: 'es-quellen' }, [...inf.quellen, 'kwf'].filter((k, i, a) => a.indexOf(k) === i).map((k) => h('li', {}, h('a', { href: Q[k].url, target: '_blank', rel: 'noopener' }, Q[k].titel)))))) });
+}
+
 const STAEBE = {
   akazie1500: { id: 'akazie1500', nr: 1, name: 'Akazienstab 1500×22×22 mm', netto: 0.80, bild: 'stab' },
   akazie2000: { id: 'akazie2000', nr: 2, name: 'Akazienstab 2000×22×22 mm', netto: 1.95, bild: 'stab' },
@@ -310,6 +361,7 @@ export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foe
   const produktKarte = (p, { gewaehlt = false, onWahl = null, n = 0 } = {}) => {
     const sl = stueckliste(p, n || 1, s.eigen);
     return h('div', { class: `es-produkt ${gewaehlt ? 'on' : ''}` },
+      h('button', { type: 'button', class: 'es-i', 'aria-label': `Infos zu ${p.name}: Erfahrungen, Aufbau, Prüfung`, onclick: () => zeigeInfo(p) }, 'i'),
       h('div', { class: 'es-bild', html: BILD[p.bild] }),
       h('div', { class: 'es-text' },
         h('strong', {}, p.name),

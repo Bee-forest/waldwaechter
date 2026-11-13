@@ -1069,3 +1069,9 @@ pre.diagnose { white-space: pre-wrap; word-break: break-word; font-size: 12px; l
 .es-arten span { padding: 4px 12px; border-radius: 99px; background: rgba(242,107,29,.12); border: 1px solid rgba(242,107,29,.4); }
 .es-eigen { display: grid; grid-template-columns: 1fr 90px auto; gap: 6px; align-items: center; }
 .es-eigen input { font: inherit; min-height: 44px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line, #cfd6cc); background: var(--surface); color: var(--ink); }
+.es-produkt { position: relative; }
+.es-i { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; background: var(--signal, #F26B1D); color: #fff; font: italic 700 17px/1 Georgia, serif; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.es-info { display: grid; gap: 12px; max-height: 65vh; overflow-y: auto; }
+.es-info ul, .es-info ol { margin: 4px 0; padding-left: 20px; display: grid; gap: 6px; }
+.es-info-kopf { display: grid; grid-template-columns: 84px 1fr; gap: 12px; align-items: start; }
+.es-quellen a { word-break: break-word; }

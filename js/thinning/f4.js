@@ -87,6 +87,8 @@ export function mengeEingriff(zielmenge, bisherGezaehlt, eingriffeGesamt, eingri
   if (!(verbleibend > 0)) return 0;
   return Math.max(0, Math.min(parameter().obergrenze_je_eingriff_m3ha, (zielmenge - bisherGezaehlt) / verbleibend));
 }
+/** Rasterabstand: 25 m, in Szenario 3 (viele dünne Bäume) 12,5 m */
+export const rasterAbstand = (sz) => (Number(sz) === 3 ? parameter().raster.abstand_m_szenario_3 : parameter().raster.abstand_m);
 /** Abstand zwischen den Eingriffen in Jahren: 10 / E */
 export const abstandJahre = (eingriffe) => 10 / eingriffe;
 
@@ -123,13 +125,26 @@ export function klasseDerStufe(stufe) {
 }
 /** Zählstufe zu einem BHD unter 50 cm (15 ≤ BHD < 25 → Stufe „15–25“ usw.) */
 export function stufeZuBhd(bhd) {
-  // FESTLEGUNG: Grenzwert gehört zur unteren Stufe (15 → 7–15, 25 → 15–25, 50 → 35–50),
-  // passend zu den Stärkeklassen „dünn 7 ≤ BHD ≤ 25, mittel 25 < BHD ≤ 50“.
   const st = parameter().zaehlstufen_unter_50cm;
   if (!(bhd >= st[0].von) || bhd > st[st.length - 1].bis) return null;
-  const s = st.find((x) => bhd <= x.bis);
-  return s ? s.id : null;
+  const s = st.find((x) => bhd < x.bis) || st[st.length - 1]; // genau 50 cm gehört noch zur Stufe 35–50 (dick erst über 50)
+  return s.id;
 }
+
+// ---------- Grundfläche (Mindestnutzung) ----------
+
+/** Grundfläche eines Baums (m²): Stufe → angerechneter BHD (Untergrenze), dick → gemessener BHD; g = π/4 · (BHD/100)² */
+export function grundflaecheBaum(b) {
+  const m = parameter().mindestnutzung;
+  const bhd = b.klasse === 'dick' || b.stufe == null ? Number(b.bhd) : Number(m.angerechneter_bhd_je_stufe_cm[String(b.stufe)]);
+  return bhd > 0 ? (Math.PI / 4) * (bhd / 100) ** 2 : 0;
+}
+/** Mindestnutzung erfüllt? gezählte Grundfläche ≥ 0,5 m²/ha × Fläche */
+export function mindestnutzungErfuellt(gezaehltG, flaecheHa) {
+  return gezaehltG >= parameter().mindestnutzung.grundflaeche_m2ha_je_jahrzehnt * flaecheHa - 1e-12;
+}
+/** Höchstzahl Bäume je Rasterpunkt und Eingriff */
+export const maxBaeumeJePunkt = () => parameter().raster.max_baeume_je_punkt;
 
 // ---------- Zähler (verbindlich) ----------
 
@@ -141,8 +156,11 @@ export class Zaehler {
   /**
    * @param {{ budget: number, punkte: number, hauptklasse: string, nebenklasse: string, anteilHaupt: number, vKlasse: Record<string, number> }} o
    */
-  constructor({ budget, punkte, hauptklasse, nebenklasse, anteilHaupt, vKlasse: vk }) {
+  constructor({ budget, punkte, hauptklasse, nebenklasse, anteilHaupt, vKlasse: vk, obergrenze = null, maxJePunkt = null }) {
     this.budget = budget;
+    this.obergrenze = obergrenze ?? budget; // 50 m³/ha × Fläche – nur für die Mindestnutzung relevant
+    this.maxJePunkt = maxJePunkt ?? maxBaeumeJePunkt();
+    this.mindest = false;
     this.punkte = punkte;
     this.hauptklasse = hauptklasse;
     this.nebenklasse = nebenklasse;
@@ -155,15 +173,27 @@ export class Zaehler {
   }
   get gezaehlt() { return this.baeume.reduce((a, b) => a + b.v, 0); }
   get rest() { return Math.max(0, this.budget - this.gezaehlt); }
-  /** Harte Sperre: ein Baum passt nur, wenn gezählt + v ≤ Budget */
-  darfAuszeichnen(v) { return v > 0 && this.gezaehlt + v <= this.budget; }
+  /** Geltende Grenze: Budget; bei der Mindestnutzung höchstens 50 m³/ha × Fläche */
+  get grenze() { return this.mindest ? Math.max(this.budget, this.obergrenze) : this.budget; }
+  /** Zahl der ausgezeichneten Bäume an einem Rasterpunkt */
+  amPunkt(punkt) { return punkt == null ? 0 : this.baeume.filter((b) => b.punkt === punkt).length; }
+  /** Gezählte Grundfläche (m²) – Stufen-Untergrenze bzw. gemessener BHD */
+  grundflaecheGezaehlt() { return this.baeume.reduce((a, b) => a + grundflaecheBaum(b), 0); }
+  /** Warum ein Baum nicht passt: 'menge' | 'punkt' | null */
+  sperre(v, punkt = null) {
+    if (!(v > 0) || this.gezaehlt + v > this.grenze) return 'menge';
+    if (punkt != null && this.amPunkt(punkt) >= this.maxJePunkt) return 'punkt';
+    return null;
+  }
+  /** Harte Sperre: gezählt + v ≤ Budget UND höchstens 3 Bäume am Punkt */
+  darfAuszeichnen(v, punkt = null) { return this.sperre(v, punkt) === null; }
   /**
    * Baum auszeichnen. Gibt den Baum zurück oder null, wenn er nicht mehr in die Menge passt.
    * baum: { v, klasse, stufe?, bhd?, punkt?, art? }
    */
   auszeichnen(baum) {
     const v = Number(baum.v);
-    if (!this.darfAuszeichnen(v)) return null;
+    if (!this.darfAuszeichnen(v, baum.punkt ?? null)) return null;
     const b = { ...baum, v, id: baum.id || `b${++this.nr}`, t: baum.t || Date.now() };
     this.baeume.push(b);
     if (b.klasse in this.defizit) this.defizit[b.klasse] -= v;
@@ -179,17 +209,18 @@ export class Zaehler {
   }
   /** Eintreffen am Punkt j (1-basiert): Zuteilung = (Budget − gezählt) / (P − j + 1), auf Haupt- und Nebenklasse verteilt */
   ankunft(punktId, j) {
-    if (this.angekommen.includes(punktId)) return this.vorschlag();
+    if (this.angekommen.includes(punktId)) return this.vorschlag(punktId);
     const zuteilung = this.rest / Math.max(1, this.punkte - j + 1);
     this.defizit[this.hauptklasse] += zuteilung * this.anteilHaupt;
     this.defizit[this.nebenklasse] += zuteilung * (1 - this.anteilHaupt);
     this.angekommen.push(punktId);
-    return this.vorschlag();
+    return this.vorschlag(punktId);
   }
-  /** Vorschlag: wiederholt die Klasse mit dem größten defizit / v_klasse wählen, solange defizit ≥ 0,5 × v_klasse */
-  vorschlag() {
+  /** Vorschlag: wiederholt die Klasse mit dem größten defizit / v_klasse wählen, solange defizit ≥ 0,5 × v_klasse – höchstens 3 Bäume je Punkt */
+  vorschlag(punkt = null) {
     const d = { ...this.defizit }, n = {};
-    for (let i = 0; i < 1000; i++) {
+    const frei = this.maxJePunkt - this.amPunkt(punkt);
+    for (let i = 0; i < frei; i++) {
       const c = KLASSEN.filter((k) => this.vk[k] > 0).sort((x, y) => d[y] / this.vk[y] - d[x] / this.vk[x])[0];
       if (!c || d[c] < 0.5 * this.vk[c]) break;
       n[c] = (n[c] || 0) + 1;
@@ -199,7 +230,8 @@ export class Zaehler {
   }
   /** Kopie zum Vorausrechnen (ohne erneute Prüfung, verändert den echten Stand nicht) */
   kopie() {
-    const z = new Zaehler({ budget: this.budget, punkte: this.punkte, hauptklasse: this.hauptklasse, nebenklasse: this.nebenklasse, anteilHaupt: this.anteilHaupt, vKlasse: this.vk });
+    const z = new Zaehler({ budget: this.budget, punkte: this.punkte, hauptklasse: this.hauptklasse, nebenklasse: this.nebenklasse, anteilHaupt: this.anteilHaupt, vKlasse: this.vk, obergrenze: this.obergrenze, maxJePunkt: this.maxJePunkt });
+    z.mindest = this.mindest;
     z.baeume = this.baeume.map((b) => ({ ...b })); z.defizit = { ...this.defizit }; z.angekommen = [...this.angekommen]; z.nr = this.nr;
     return z;
   }
@@ -215,16 +247,19 @@ export class Zaehler {
       if (z.angekommen.includes(id)) continue;
       const vs = z.ankunft(id, z.angekommen.length + 1);
       if (!vs.length) { leer.add(id); continue; }
-      for (const { klasse, anzahl } of vs) for (let i = 0; i < anzahl; i++) z.auszeichnen({ v: z.vk[klasse], klasse });
+      for (const { klasse, anzahl } of vs) for (let i = 0; i < anzahl; i++) z.auszeichnen({ v: z.vk[klasse], klasse, punkt: id });
     }
     return leer;
   }
   toJSON() {
-    return { budget: this.budget, punkte: this.punkte, hauptklasse: this.hauptklasse, nebenklasse: this.nebenklasse, anteilHaupt: this.anteilHaupt, vKlasse: this.vk, baeume: this.baeume, defizit: this.defizit, angekommen: this.angekommen, nr: this.nr };
+    return { mindest: this.mindest, budget: this.budget, punkte: this.punkte, hauptklasse: this.hauptklasse, nebenklasse: this.nebenklasse, anteilHaupt: this.anteilHaupt, vKlasse: this.vk, baeume: this.baeume, defizit: this.defizit, angekommen: this.angekommen, nr: this.nr };
   }
   /** Gespeicherten Stand laden – jeder Baum durchläuft erneut die Sperre (kein Umgehen über Import) */
-  static ausJSON(o, budgetVorgabe = null) {
-    const z = new Zaehler({ budget: budgetVorgabe ?? o.budget, punkte: o.punkte, hauptklasse: o.hauptklasse, nebenklasse: o.nebenklasse, anteilHaupt: o.anteilHaupt, vKlasse: o.vKlasse });
+  static ausJSON(o, budgetVorgabe = null, obergrenzeVorgabe = null) {
+    // Budget und Obergrenze kommen aus dem Plan, nie aus dem gespeicherten Stand
+    const budget = budgetVorgabe ?? o.budget;
+    const z = new Zaehler({ budget, punkte: o.punkte, hauptklasse: o.hauptklasse, nebenklasse: o.nebenklasse, anteilHaupt: o.anteilHaupt, vKlasse: o.vKlasse, obergrenze: obergrenzeVorgabe ?? budget });
+    z.mindest = !!o.mindest;
     z.nr = o.nr || 0;
     for (const b of o.baeume || []) z.auszeichnen(b);
     z.defizit = { ...z.defizit, ...(o.defizit || {}) };
@@ -251,5 +286,9 @@ export function planung({ art, nadel = null, ho, b, sz, flaecheHa, eingriffNr = 
     mengeHa: mHa, budget: mHa * flaecheHa, flaecheHa,
     hauptklasse: f.hauptklasse, nebenklasse: f.nebenklasse, anteilHaupt: f.anteil_haupt,
     stufen, vKlasse: vk, kleinstesStufenVolumen: Math.min(...stufen.map((s) => s.v)),
+    obergrenzeBestand: parameter().obergrenze_je_eingriff_m3ha * flaecheHa,
+    mindestG: parameter().mindestnutzung.grundflaeche_m2ha_je_jahrzehnt * flaecheHa,
+    letzterEingriff: eingriffNr >= E,
+    rasterAbstand: rasterAbstand(sz),
   };
 }

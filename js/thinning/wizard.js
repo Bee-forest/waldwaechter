@@ -393,7 +393,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       const b = st.auto?.bestand;
       help = b?.art
         ? (b.quelle === 'eigen' ? `Laut deinen Angaben zum Flurstück: ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.` : `Laut Baumartenkarte (Waldverzeichnis ThüringenForst, Stand ${b.stichtag || '?'}): ${b.text}${b.alter != null ? `, heute etwa ${b.alter} Jahre` : ''}. Passt das nicht, wähle die Hauptbaumart.`)
-        : st.auto?.loading ? 'Suche die Baumart in der Baumartenkarte …' : 'Wähle die Hauptbaumart (größter Flächen- oder Grundflächenanteil). Daraus ergibt sich die Baumartengruppe.';
+        : st.auto?.loading ? 'Suche die Baumart in der Baumartenkarte …' : `Wähle die Hauptbaumart – ${F4.parameter().hauptbaumart || 'die Baumart mit der größten Grundfläche in der Oberschicht'}. Daraus ergibt sich die Baumartengruppe.`;
       const gruppen = F4.parameter().baumartengruppen;
       const gelistet = Object.values(gruppen).flat();
       const ha = st.auto?.wald?.status === 'teil' ? st.auto.wald.waldHa : selHa();
@@ -405,7 +405,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('button', { type: 'button', class: 'btn btn-small', onclick: selbstEinzeichnen }, 'Teilfläche einzeichnen')) : null,
         f.art && !gelistet.includes(f.art) && !f.nadel ? h('p', { class: 'hint' }, `„${f.art}“ steht so nicht in der Liste – zugeordnet zur Gruppe ${F4.gruppe(f.art)}. Wähle sonst die passende Art.`) : null,
         // FESTLEGUNG: Mischbestände – die Hauptbaumart (größter Flächen- oder Grundflächenanteil) bestimmt die Gruppe
-        h('p', { class: 'muted' }, 'Mischbestand? Dann zählt die Art mit dem größten Flächen- bzw. Grundflächenanteil.'),
+        h('p', { class: 'muted' }, 'Mischbestand? Dann zählt die Art mit der größten Grundfläche in der Oberschicht – sie gilt für den ganzen Bestand.'),
         Object.entries(gruppen).map(([g, arten]) => h('div', { class: 'q-group' },
           h('p', { class: 'sheet-label' }, g),
           h('div', { class: 'q-chips' }, arten.map((a) => choice(f.art === a, () => { f.art = a; f.nadel = null; renderParams(); }, a))))),
@@ -506,7 +506,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
           h('div', { class: 'raster-rule' },
             h('strong', {}, `Hauptklasse ${K(pl.hauptklasse)} (${Math.round(pl.anteilHaupt * 100)} %), Nebenklasse ${K(pl.nebenklasse)} (${Math.round((1 - pl.anteilHaupt) * 100)} %)`),
             h('small', {}, 'Am Punkt schlägt die App vor, wie viele Bäume welcher Klasse passen. Feste Baumzahlen je Punkt gibt es nicht – verbindlich ist nur die Menge.'),
-            h('small', {}, `Raster ${fmt(plan.raster, 0)} m mit zufälligem Versatz, ${plan.points.length} Punkte in Schlangenlinie, Prüfkreis ${plan.kreis} m, Ausweichen bis ${plan.ausweichen} m.${plan.rasterVerkleinert ? ` Wegen der kleinen Fläche auf ${fmt(plan.raster, 0)} m verkleinert, damit mindestens 8 Punkte im Bestand liegen.` : ''}`)),
+            h('small', {}, `Raster ${rasterM(plan.raster)} m mit zufälligem Versatz, ${plan.points.length} Punkte in Schlangenlinie, Prüfkreis ${plan.kreis} m, Ausweichen bis ${plan.ausweichen} m.${plan.rasterVerkleinert ? ` Wegen der kleinen Fläche auf ${rasterM(plan.raster)} m verkleinert, damit mindestens 8 Punkte im Bestand liegen.` : ''}`)),
           h('details', { class: 'calc' }, h('summary', {}, 'Zählvolumen je Baum'),
             h('ul', {}, pl.stufen.map((x) => h('li', {}, `${x.name} (${K(x.klasse)}): ${fmt(x.v, 3)} m³`)),
               h('li', {}, 'über 50 cm: BHD messen, Zählvolumen nach Tarif'))),
@@ -614,8 +614,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('div', {}, h('span', { class: 'pv-n' }, sichtbar), h('span', {}, 'Rasterpunkte anzulaufen')),
         h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.budget, 2)), h('span', {}, 'm³ Menge dieses Eingriffs')),
         h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.mengeHa, 1)), h('span', {}, 'm³/ha')),
-        h('div', {}, h('span', { class: 'pv-n' }, fmt(plan.raster, 0)), h('span', {}, 'm Rasterabstand'))),
-      h('p', {}, `Die Punkte liegen im Abstand von ${fmt(plan.raster, 0)} m mit zufälligem Versatz; die Methode gibt ihre Lage vor. Die gestrichelte Linie zeigt die Laufreihenfolge in Schlangenlinie. Am Punkt zeichnest du im Umkreis von ${plan.kreis} m aus, notfalls bis ${plan.ausweichen} m.`),
+        h('div', {}, h('span', { class: 'pv-n' }, rasterM(plan.raster)), h('span', {}, 'm Rasterabstand'))),
+      h('p', {}, `Die Punkte liegen im Abstand von ${rasterM(plan.raster)} m mit zufälligem Versatz; die Methode gibt ihre Lage vor. Die gestrichelte Linie zeigt die Laufreihenfolge in Schlangenlinie. Am Punkt zeichnest du im Umkreis von ${plan.kreis} m aus, notfalls bis ${plan.ausweichen} m – höchstens ${F4.maxBaeumeJePunkt()} Bäume je Punkt, damit keine Löcher entstehen.${plan.planung.szenario === 3 ? ' Bei vielen dünnen Bäumen liegen die Punkte enger.' : ''}`),
       st.leerVorhersage.size ? h('p', { class: 'hint' }, `${st.leerVorhersage.size} von ${plan.points.length} Rasterpunkten bekommen nach der Menge voraussichtlich keinen Baum und sind ausgeblendet – dort musst du nicht hin. Die Auswahl wird nach jedem Punkt neu gerechnet.`) : null,
       h('p', { class: 'hint' }, 'Im Wald ist oft kein Netz. Speichere die Karte vorher, solange du noch Empfang hast. Der Zählerstand wird ohne Netz im Gerät gespeichert.'),
       h('div', { class: 'btn-row' },
@@ -627,8 +627,12 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   // ---------- Fassung 4: Mengenzähler ----------
   const istF4 = () => st.plan?.methode === 'f4';
+  const rasterM = (v) => (Number(v) % 1 ? fmt(v, 1) : fmt(v, 0));
   /** Rasterpunkt ohne Baum: nicht anzeigen, nicht anlaufen */
-  const ausgeblendet = (p) => p.status === 'leer' || (p.status === 'open' && !!st.leerVorhersage?.has(p.id));
+  const ausgeblendet = (p) => {
+    if (st.auffuellen?.art === 'mindest' && !st.auffuellen.fertig && st.auffuellen.liste.includes(p.id)) return false;
+    return p.status === 'leer' || (p.status === 'open' && !!st.leerVorhersage?.has(p.id));
+  };
   /** Offene Punkte in Laufreihenfolge ab Index from */
   function offeneAb(from = 0) {
     const pts = st.plan.points, out = [];
@@ -655,17 +659,25 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
   function zaehlerNeu() {
     const pl = st.plan.planung;
-    return new F4.Zaehler({ budget: pl.budget, punkte: st.plan.points.length, hauptklasse: pl.hauptklasse, nebenklasse: pl.nebenklasse, anteilHaupt: pl.anteilHaupt, vKlasse: pl.vKlasse });
+    return new F4.Zaehler({ budget: pl.budget, obergrenze: obergrenzeBestand(), punkte: st.plan.points.length, hauptklasse: pl.hauptklasse, nebenklasse: pl.nebenklasse, anteilHaupt: pl.anteilHaupt, vKlasse: pl.vKlasse });
   }
+  /** 50 m³/ha × Fläche – die Mindestnutzung darf das Budget überschreiten, diese Grenze nie */
+  const obergrenzeBestand = () => F4.parameter().obergrenze_je_eingriff_m3ha * (st.plan.planung.flaecheHa ?? st.plan.areaHa);
+  /** 0,5 m²/ha × Fläche */
+  const mindestG = () => F4.parameter().mindestnutzung.grundflaeche_m2ha_je_jahrzehnt * (st.plan.planung.flaecheHa ?? st.plan.areaHa);
+  /** Gezählte Grundfläche im Jahrzehnt: frühere Eingriffe der Serie + dieser Eingriff */
+  const gJahrzehnt = () => bisherGezaehltG(st.plan.eingriffe?.nr || 1) + st.zaehler.grundflaecheGezaehlt();
+  const MAX_JE_PUNKT = () => F4.maxBaeumeJePunkt();
   /** Gespeicherten Zählerstand laden – jeder Baum läuft erneut durch die Sperre, das Budget kommt aus dem Plan */
   async function zaehlerLaden() {
     if (!istF4()) return;
     const ausIdb = st.measureId ? await standLaden(st.measureId).catch(() => null) : null;
     const quelle = ausIdb?.zaehler || measure()?.thinning?.zaehler || null;
-    st.zaehler = quelle ? F4.Zaehler.ausJSON(quelle, st.plan.planung.budget) : zaehlerNeu();
+    if (quelle && st.plan.planung.letzterEingriff == null) st.plan.planung.letzterEingriff = (st.plan.eingriffe?.nr || 1) >= (st.plan.eingriffe?.anzahl || 1);
+    st.zaehler = quelle ? F4.Zaehler.ausJSON(quelle, st.plan.planung.budget, obergrenzeBestand()) : zaehlerNeu();
     st.spur = ausIdb?.spur || measure()?.thinning?.spur || [];
     st.auffuellen = ausIdb?.auffuellen ?? measure()?.thinning?.auffuellen ?? null;
-    st.mindest = ausIdb?.mindest ?? false;
+    st.mindest = false; // Mindestnutzung läuft jetzt als Rundgang (st.auffuellen.art === 'mindest')
   }
   let speicherTimer = null;
   /** Nach jedem Tippen lokal speichern (IndexedDB) */
@@ -675,6 +687,13 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
   function spurSpaeter() { clearTimeout(speicherTimer); speicherTimer = setTimeout(zaehlerSpeichern, 8000); }
   /** Bisher gezählte Menge (m³/ha) aller früheren Eingriffe derselben Serie */
+  /** Bisher gezählte Grundfläche (m²) aller früheren Eingriffe derselben Serie (für die Mindestnutzung je Jahrzehnt) */
+  function bisherGezaehltG(eingriffNr) {
+    const serie = measure()?.thinning?.serie;
+    if (!serie || eingriffNr <= 1) return 0;
+    return store.get().measures.filter((m) => m.type === 'durchforstung' && m.id !== st.measureId && (m.thinning?.serie === serie || m.id === serie) && (m.thinning?.params?.eingriffNr || 1) < eingriffNr && m.thinning?.plan?.methode === 'f4')
+      .reduce((a, m) => a + (m.thinning.f4?.gezaehltG ?? (m.thinning.zaehler?.baeume || []).reduce((x, b) => x + F4.grundflaecheBaum(b), 0)), 0);
+  }
   function bisherGezaehltHa(eingriffNr) {
     const serie = measure()?.thinning?.serie;
     if (!serie) return 0;
@@ -834,8 +853,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     fill(panel, hud);
     const m = measure();
     if (m?.status === 'fertig') { renderFinished(); return; }
-    targetIdx = st.auffuellen ? st.plan.points.findIndex((p) => p.id === st.auffuellen.liste[st.auffuellen.pos]) : istF4() && !st.mindest ? naechsterF4(0) : nextOpenIndex(0);
-    if (st.mindest) { startNav(); renderWorkF4(); return; }
+    if (st.auffuellen?.fertig) st.auffuellen = null;
+    targetIdx = st.auffuellen ? st.plan.points.findIndex((p) => p.id === st.auffuellen.liste[st.auffuellen.pos]) : istF4() ? naechsterF4(0) : nextOpenIndex(0);
     if (targetIdx < 0) { finish(); return; }
     highlightTarget();
     startNav();
@@ -932,7 +951,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   function renderHud(errorMsg) {
-    if (working || st.mindest) return;
+    if (working) return;
     if (!st.plan.points[targetIdx]) return;
     if (page.classList.contains('w-mode')) { page.classList.remove('w-mode'); setTimeout(() => map.invalidateSize(), 50); }
     const pts = st.plan.points;
@@ -955,7 +974,9 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         ),
       ),
       istF4() && st.zaehler ? zaehlerLeiste() : null,
-      st.auffuellen ? h('p', { class: 'hint' }, `Auffüllen auf dem Rückweg: Punkt ${st.auffuellen.pos + 1} von ${st.auffuellen.liste.length}.`) : null,
+      st.auffuellen ? h('p', { class: 'hint' }, st.auffuellen.art === 'mindest'
+        ? `Mindestnutzung: Punkt ${st.auffuellen.pos + 1} von ${st.auffuellen.liste.length} – Grundfläche ${fmt(gJahrzehnt(), 3)} von ${fmt(mindestG(), 3)} m²`
+        : `Auffüllen auf dem Rückweg: Punkt ${st.auffuellen.pos + 1} von ${st.auffuellen.liste.length}.`) : null,
       h('div', { class: 'hud-meta' },
         h('span', { class: `gps-chip ${acc == null ? '' : acc <= 10 ? 'good' : acc <= 25 ? 'ok' : 'bad'}` }, sim ? 'GPS simuliert' : acc != null ? `GPS ±${Math.round(acc)} m` : 'GPS: kein Signal'),
         h('span', {}, `${done} erledigt, ${pts.filter((p) => p.status !== 'done' && !ausgeblendet(p)).length} offen`),
@@ -977,7 +998,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const ok = await dialog({
       mascot: true,
       title: isFirst ? 'Befindest du dich am ersten Rasterpunkt und möchtest starten?' : `Befindest du dich am Rasterpunkt ${pt.id} und möchtest starten?`,
-      body: istF4() ? (st.auffuellen ? 'Rückweg zum Auffüllen: Hier zuerst die Hauptklasse, dann die Nebenklasse auszeichnen, solange etwas passt.' : 'Am Punkt schlägt dir die App vor, wie viele Bäume welcher Stärke passen.') : `Hier sind ${pointTotal(pt)} ${pointTotal(pt) === 1 ? 'Baum' : 'Bäume'} zu entnehmen.`,
+      body: istF4() ? (st.auffuellen?.art === 'mindest' ? 'Mindestnutzung: Hier den schwächsten passenden Baum auszeichnen – dünn vor mittel vor dick.' : st.auffuellen ? 'Rückweg zum Auffüllen: Hier zuerst die Hauptklasse, dann die Nebenklasse auszeichnen, solange etwas passt.' : 'Am Punkt schlägt dir die App vor, wie viele Bäume welcher Stärke passen.') : `Hier sind ${pointTotal(pt)} ${pointTotal(pt) === 1 ? 'Baum' : 'Bäume'} zu entnehmen.`,
       actions: [{ label: 'Noch nicht', value: false }, { label: 'Starten', value: true, primary: true }],
     });
     if (ok && st.step === 3) startWork(i);
@@ -1057,6 +1078,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function skipPoint() {
     const pt = st.plan.points[targetIdx];
+    if (istF4() && st.auffuellen) { working = pt; punktFertigF4(); return; } // im Rundgang: einfach weiter
     pt.status = 'skipped';
     saveMeasure();
     const nxt = istF4() ? naechsterF4(targetIdx + 1) : nextOpenIndex(targetIdx + 1);
@@ -1121,6 +1143,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   // ---------- Fassung 4: Auszeichnen mit Mengenzähler ----------
   const MELDUNG_PASST_NICHT = 'Dieser Baum passt nicht mehr in die Menge.';
+  const MELDUNG_PUNKT_VOLL = `An diesem Punkt sind schon ${F4.maxBaeumeJePunkt()} Bäume ausgezeichnet – bitte zum nächsten Punkt.`;
   const offenePunkte = () => st.plan.points.filter((p) => (p.status === 'open' || p.status === 'skipped') && !ausgeblendet(p)).length;
   /** Ständig sichtbar: gezählt, Rest (m³ und %), Rest je Punkt, Fortschritt */
   function zaehlerLeiste() {
@@ -1129,6 +1152,15 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const anzulaufen = done + offenePunkte();
     const proz = z.budget > 0 ? Math.round((z.rest / z.budget) * 100) : 0;
     const jePunkt = z.rest / Math.max(1, offenePunkte());
+    if (st.auffuellen?.art === 'mindest' && !st.auffuellen.fertig) {
+      const g = gJahrzehnt(), gs = mindestG(), og = obergrenzeBestand();
+      return h('div', { class: 'zaehler-leiste', role: 'status', 'aria-live': 'polite' },
+        h('div', { class: 'zaehler-balken' }, h('span', { style: `width:${gs > 0 ? Math.min(100, (g / gs) * 100) : 0}%` })),
+        h('div', { class: 'zaehler-werte' },
+          h('span', {}, h('b', {}, `${fmt(g, 3)} m²`), ` Grundfläche von ${fmt(gs, 3)} m²`),
+          h('span', {}, h('b', {}, `${fmt(z.gezaehlt, 2)} m³`), ` gezählt, Grenze ${fmt(og, 2)} m³ (${fmt(F4.parameter().obergrenze_je_eingriff_m3ha, 0)} m³/ha)`),
+          h('span', {}, `Rundgang Punkt ${st.auffuellen.pos + 1} / ${st.auffuellen.liste.length}`)));
+    }
     return h('div', { class: 'zaehler-leiste', role: 'status', 'aria-live': 'polite' },
       h('div', { class: 'zaehler-balken' }, h('span', { style: `width:${z.budget > 0 ? Math.min(100, (z.gezaehlt / z.budget) * 100) : 0}%` })),
       h('div', { class: 'zaehler-werte' },
@@ -1138,8 +1170,10 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('span', {}, `Punkte ${done} / ${anzulaufen}`)));
   }
   function auszeichnen(baum) {
-    const b = st.zaehler.auszeichnen({ ...baum, punkt: working?.id ?? null });
-    if (!b) { buzz('arrive'); toast(MELDUNG_PASST_NICHT); fehlerMeldung = MELDUNG_PASST_NICHT; zuletzt = null; renderWorkF4(); return; }
+    const punkt = working?.id ?? null;
+    const grund = st.zaehler.sperre(Number(baum.v), punkt);
+    const b = grund ? null : st.zaehler.auszeichnen({ ...baum, punkt });
+    if (!b) { const msg = grund === 'punkt' ? MELDUNG_PUNKT_VOLL : MELDUNG_PASST_NICHT; buzz('arrive'); toast(msg); fehlerMeldung = msg; zuletzt = null; renderWorkF4(); return; }
     fehlerMeldung = null;
     buzz('tick');
     zaehlerSpeichern();
@@ -1151,19 +1185,21 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const pt = working;
     const z = st.zaehler, pl = st.plan.planung;
     const K = (k) => F4.KLASSE_NAME[k];
-    const modus = st.mindest ? 'mindest' : st.auffuellen ? 'auffuellen' : 'punkt';
-    const hier = z.baeume.filter((b) => (pt ? b.punkt === pt.id : b.punkt == null));
+    const modus = st.auffuellen?.art === 'mindest' ? 'mindest' : st.auffuellen ? 'auffuellen' : 'punkt';
+    const max = MAX_JE_PUNKT();
+    const hier = z.baeume.filter((b) => b.punkt === pt.id);
     const hierK = (k) => hier.filter((b) => b.klasse === k).length;
     const hierS = (id) => hier.filter((b) => b.stufe === id && b.klasse !== 'dick').length;
+    const punktVoll = hier.length >= max;
     // Soll je Klasse = Vorschlag beim Eintreffen am Punkt (bleibt stehen, damit „1 / 2“ hochzählt)
     const soll = {};
     if (modus === 'punkt') {
-      const vs = pt.vorschlag || z.vorschlag().map((x) => ({ ...x, anzahl: x.anzahl + hierK(x.klasse) }));
+      const vs = pt.vorschlag || z.vorschlag(pt.id).map((x) => ({ ...x, anzahl: x.anzahl + hierK(x.klasse) }));
       for (const x of vs) soll[x.klasse] = x.anzahl;
     }
     const passtNichts = !z.darfAuszeichnen(pl.kleinstesStufenVolumen);
     const stufeBtn = (x) => {
-      const n = hierS(x.id), passt = z.darfAuszeichnen(x.v);
+      const n = hierS(x.id), passt = z.darfAuszeichnen(x.v, pt.id);
       return h('button', { type: 'button', class: `stufe-btn ${passt ? '' : 'passt-nicht'} ${zuletzt === `s${x.id}` ? 'getippt' : ''}`, 'aria-label': `Baum ${x.name} BHD auszeichnen, ${fmt(x.v, 3)} m³${n ? `, hier schon ${n}` : ''}`,
         onclick: () => { zuletzt = `s${x.id}`; auszeichnen({ v: x.v, klasse: x.klasse, stufe: x.id }); } },
         h('strong', {}, x.name), h('small', {}, `${fmt(x.v, 3)} m³`), n ? h('span', { class: 'stufe-n' }, `${n}×`) : null);
@@ -1173,42 +1209,52 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const bhdZaehlen = () => {
       const bhd = Number(String(bhdFeld.value).trim().replace(',', '.'));
       if (!bhdFeld.value.trim() || !Number.isFinite(bhd)) { toast('Bitte den gemessenen BHD in cm eingeben.'); bhdFeld.focus(); return; }
-      if (bhd <= 50) { toast('Dick heißt über 50 cm BHD. Dünnere Bäume bitte über die Stufen oben zählen.'); return; }
+      if (bhd <= 50) { toast('Dick heißt über 50 cm BHD. Dünnere Bäume bitte über die Stufen zählen.'); return; }
       if (bhd > 250) { toast('Bitte den BHD in Zentimetern eingeben.'); return; }
       bhdEingabe = ''; zuletzt = 'dick';
       auszeichnen({ v: F4.zaehlvolumenDick(pl.gruppe, bhd, st.params.ho), klasse: 'dick', bhd });
     };
+    let ausweichK = null;
     const karte = (k) => {
       const n = hierK(k), s = soll[k] || 0, fertig = s > 0 && n >= s;
       const inhalt = k === 'dick'
-        ? h('div', { class: 'dick-zeile' }, h('div', { class: 'mit-einheit' }, bhdFeld, h('span', {}, 'cm')), h('button', { type: 'button', class: `btn btn-primary ${zuletzt === 'dick' ? 'getippt' : ''}`, onclick: bhdZaehlen }, 'Zählen'))
+        ? h('div', { class: 'dick-zeile' }, h('div', { class: 'mit-einheit' }, bhdFeld, h('span', {}, 'cm')), h('button', { type: 'button', class: `btn btn-primary ${zuletzt === 'dick' ? 'getippt' : ''}`, disabled: punktVoll, onclick: bhdZaehlen }, 'Zählen'))
         : h('div', { class: 'stufen-grid' }, pl.stufen.filter((x) => x.klasse === k).map(stufeBtn));
       const zahl = modus === 'punkt' && s > 0 ? `${n} / ${s}` : n ? `${n} gezählt` : '';
       return h('section', { class: `klasse-karte ${fertig ? 'fertig' : ''} ${s > 0 ? 'soll' : ''}` },
         h('div', { class: 'klasse-kopf' },
           h('strong', {}, `${K(k)}`, h('small', {}, k === 'duenn' ? ' 7–25 cm' : k === 'mittel' ? ' über 25–50 cm' : ' über 50 cm, BHD messen')),
           zahl ? h('span', { class: 'klasse-zahl' }, fertig ? h('span', { html: icon.check }) : null, zahl) : null),
-        inhalt);
+        inhalt,
+        // Ausweichregel: kein Baum der verlangten Klasse bis 15 m → ähnlichster Baum
+        s > 0 && !fertig && !punktVoll ? h('button', { type: 'button', class: 'link-btn', onclick: () => { ausweichHinweis = k; renderWorkF4(); } }, `Kein Baum der Klasse ${K(k)} bis ${st.plan.ausweichen} m?`) : null);
     };
+    if (ausweichHinweis && soll[ausweichHinweis]) ausweichK = ausweichHinweis;
     const klassen = ['duenn', 'mittel', 'dick'];
     let oben = klassen, unten = [];
     if (modus === 'punkt' && Object.keys(soll).length) { oben = klassen.filter((k) => soll[k]); unten = klassen.filter((k) => !soll[k]); }
     if (modus === 'auffuellen') oben = [pl.hauptklasse, pl.nebenklasse, ...klassen.filter((k) => k !== pl.hauptklasse && k !== pl.nebenklasse)];
     const alleFertig = modus === 'punkt' && Object.keys(soll).length > 0 && Object.entries(soll).every(([k, a]) => hierK(k) >= a);
-    const kopf = modus === 'mindest' ? ['Mindestnutzung', 'Bisher ist nichts gezählt. Zeichne den schwächsten passenden Baum aus: zuerst dünn, dann mittel, dann dick.']
+    const gIst = gJahrzehnt(), gSoll = mindestG();
+    const kopf = modus === 'mindest' ? [`Mindestnutzung an Punkt ${pt.id}`, `Hier den schwächsten passenden Baum auszeichnen – dünn vor mittel vor dick. Grundfläche bisher ${fmt(gIst, 3)} von ${fmt(gSoll, 3)} m².`]
       : modus === 'auffuellen' ? [`Auffüllen an Punkt ${pt.id}`, `Rückweg: zuerst ${K(pl.hauptklasse)}, dann ${K(pl.nebenklasse)} auszeichnen, solange etwas passt.`]
         : [`Rasterpunkt ${pt.id}`, Object.keys(soll).length
           ? `Hier etwa ${Object.entries(soll).map(([k, a]) => `${a} ${a === 1 ? 'Baum' : 'Bäume'} ${K(k)}`).join(' und ')} auszeichnen – im Umkreis von ${st.plan.kreis} m, notfalls bis ${st.plan.ausweichen} m.`
           : 'Hier ist nach der Menge kein Baum nötig.'];
     const letzter = hier[hier.length - 1];
+    const mindestHierFertig = modus === 'mindest' && hier.length > (st.auffuellen.vorher?.[pt.id] ?? 0);
     fill(hud,
       h('div', { class: 'work-head' }, h('p', { class: 'hud-label' }, kopf[0]), h('p', {}, kopf[1])),
       zaehlerLeiste(),
+      h('p', { class: `punkt-zahl ${punktVoll ? 'voll' : ''}` }, `${hier.length} von höchstens ${max} Bäumen an diesem Punkt`),
       fehlerMeldung ? h('p', { class: 'warn-line', role: 'alert' }, fehlerMeldung) : null,
-      passtNichts ? h('p', { class: 'warn-line' }, 'Die Menge ist ausgeschöpft – es passt kein Baum mehr.') : null,
-      alleFertig ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Vorschlag erfüllt – du kannst den Punkt abschließen.') : null,
-      oben.map(karte),
-      unten.length ? h('details', { class: 'andere-staerke' }, h('summary', {}, `Anderen Baum auszeichnen (${unten.map(K).join(', ')})`),
+      punktVoll ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), MELDUNG_PUNKT_VOLL) : null,
+      passtNichts && modus !== 'mindest' ? h('p', { class: 'warn-line' }, 'Die Menge ist ausgeschöpft – es passt kein Baum mehr.') : null,
+      alleFertig && !punktVoll ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Vorschlag erfüllt – du kannst den Punkt abschließen.') : null,
+      mindestHierFertig ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), F4.mindestnutzungErfuellt(gIst, (st.plan.planung.flaecheHa ?? st.plan.areaHa)) ? 'Mindestnutzung erreicht.' : 'Baum gezählt – weiter zum nächsten Punkt.') : null,
+      ausweichK ? h('p', { class: 'hint warn', role: 'note' }, `Kein Baum der Klasse ${K(ausweichK)} bis ${st.plan.ausweichen} m – bitte den ähnlichsten Baum auszeichnen (Durchmesser am nächsten an der Klasse ${K(ausweichK)}).`) : null,
+      punktVoll ? null : oben.map(karte),
+      !punktVoll && unten.length ? h('details', { class: 'andere-staerke', open: !!ausweichK }, h('summary', {}, `Anderen Baum auszeichnen (${unten.map(K).join(', ')})`),
         h('p', { class: 'muted' }, 'Nicht vorgeschlagen, aber erlaubt, wenn hier kein passender Baum der vorgeschlagenen Stärke steht – die Menge gleicht sich an den nächsten Punkten aus.'),
         unten.map(karte)) : null,
       letzter ? h('div', { class: 'letzter' },
@@ -1218,30 +1264,49 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('ul', { class: 'baum-liste' }, hier.slice().reverse().map((b) => h('li', {},
           h('span', {}, b.klasse === 'dick' ? `dick, BHD ${fmt(b.bhd, 0)} cm` : `${pl.stufen[b.stufe]?.name} (${K(b.klasse)})`, h('small', {}, ` · ${fmt(b.v, 3)} m³`)),
           h('button', { type: 'button', class: 'btn btn-small', 'aria-label': 'Baum rückgängig machen', onclick: () => { st.zaehler.rueckgaengig(b.id); fehlerMeldung = null; zaehlerSpeichern(); renderWorkF4(); } }, 'Rückgängig'))))) : null,
-      h('p', { class: 'hint warn' }, 'Stufen sorgfältig ansprechen und dicke Bäume wirklich messen (Maßband). Wer zu niedrig tippt oder zu klein misst, kann die 50 m³/ha im Einzelfall überschreiten.'),
+      h('p', { class: 'hint warn' }, 'Stufe sorgfältig ansprechen, im Zweifel die höhere Stufe wählen; dicke Bäume immer messen.'),
       h('details', { class: 'calc' }, h('summary', {}, 'Welche Bäume bevorzugt?'), h('p', {}, `${st.plan.auswahl[0].toUpperCase()}${st.plan.auswahl.slice(1)}.`)),
       h('div', { class: 'btn-row' },
-        modus === 'mindest'
-          ? h('button', { class: 'btn btn-primary btn-large', disabled: z.gezaehlt <= 0 && !passtNichts, onclick: () => { st.mindest = false; abschlussF4(); } }, h('span', { html: icon.check }), 'Eingriff abschließen')
-          : [h('button', { class: 'btn', onclick: () => { working = null; fehlerMeldung = null; page.classList.remove('w-mode'); highlightTarget(); renderHud(); } }, 'Zurück zur Navigation'),
-            modus === 'auffuellen' ? h('button', { class: 'btn', onclick: () => abschlussF4() }, 'Auffüllen beenden') : null,
-            h('button', { class: `btn btn-primary btn-large ${alleFertig ? 'puls' : ''}`, onclick: completePoint }, h('span', { html: icon.check }), modus === 'auffuellen' ? 'Weiter auf dem Rückweg' : 'Punkt abschließen')]),
+        h('button', { class: 'btn', onclick: () => { working = null; fehlerMeldung = null; ausweichHinweis = null; page.classList.remove('w-mode'); highlightTarget(); renderHud(); } }, 'Zurück zur Navigation'),
+        modus === 'auffuellen' ? h('button', { class: 'btn', onclick: () => { st.auffuellen.fertig = true; nachAuffuellen(); } }, 'Auffüllen beenden') : null,
+        h('button', { class: `btn btn-primary btn-large ${alleFertig || punktVoll || mindestHierFertig ? 'puls' : ''}`, onclick: completePoint }, h('span', { html: icon.check }),
+          modus === 'auffuellen' ? 'Weiter auf dem Rückweg' : modus === 'mindest' ? (mindestHierFertig ? 'Weiter' : 'Hier kein passender Baum – weiter') : 'Punkt abschließen')),
     );
     if (zuletzt) setTimeout(() => hud.querySelectorAll('.getippt').forEach((e) => e.classList.remove('getippt')), 700);
     setTimeout(() => map.invalidateSize(), 50);
   }
+  let ausweichHinweis = null;
+  /** Nächster Punkt eines Rundgangs (Auffüllen bzw. Mindestnutzung) */
+  function rundgangWeiter() {
+    const r = st.auffuellen;
+    r.pos++;
+    if (r.pos >= r.liste.length && r.art === 'mindest') {
+      // reihum: neue Runde, solange in der letzten Runde etwas dazukam und Punkte mit weniger als 3 Bäumen bleiben
+      const frei = st.plan.points.filter((p) => st.zaehler.amPunkt(p.id) < MAX_JE_PUNKT()).map((p) => p.id);
+      if (r.neuInRunde && frei.length) { r.liste = frei; r.pos = 0; r.runde = (r.runde || 1) + 1; r.neuInRunde = 0; }
+    }
+    zaehlerSpeichern(); saveMeasure();
+    return r.pos < r.liste.length;
+  }
   function punktFertigF4() {
     const pt = working;
     page.classList.remove('w-mode');
-    fehlerMeldung = null;
+    fehlerMeldung = null; ausweichHinweis = null;
     if (st.auffuellen) {
+      const r = st.auffuellen;
       working = null;
-      st.auffuellen.pos++;
-      zaehlerSpeichern();
-      // Auffüllen endet, sobald kein Baum mehr passt oder der Rückweg zu Ende ist
-      if (!st.zaehler.darfAuszeichnen(st.plan.planung.kleinstesStufenVolumen) || st.auffuellen.pos >= st.auffuellen.liste.length) { abschlussF4(); return; }
-      targetIdx = st.plan.points.findIndex((p) => p.id === st.auffuellen.liste[st.auffuellen.pos]);
+      if (r.art === 'mindest') {
+        if (st.zaehler.amPunkt(pt.id) > (r.vorher?.[pt.id] ?? 0)) r.neuInRunde = (r.neuInRunde || 0) + 1;
+        if (F4.mindestnutzungErfuellt(gJahrzehnt(), st.plan.planung.flaecheHa ?? st.plan.areaHa)) { r.fertig = true; abschlussF4(); return; }
+        if (!rundgangWeiter()) { r.fertig = true; r.nichtErreicht = true; abschlussF4(); return; }
+      } else {
+        // Auffüllen endet, sobald kein Baum mehr passt oder der Rückweg zu Ende ist
+        if (!st.zaehler.darfAuszeichnen(st.plan.planung.kleinstesStufenVolumen) || !rundgangWeiter()) { r.fertig = true; nachAuffuellen(); return; }
+      }
+      targetIdx = st.plan.points.findIndex((p) => p.id === r.liste[r.pos]);
+      if (r.art === 'mindest') (r.vorher ||= {})[r.liste[r.pos]] = st.zaehler.amPunkt(r.liste[r.pos]);
       prompted.delete(st.plan.points[targetIdx].id);
+      drawGrid(st.plan.points, { numbers: true });
       highlightTarget(); renderHud();
       return;
     }
@@ -1257,29 +1322,48 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const n = st.plan.points[nxt];
     say(`Punkt ${pt.id} erledigt. Weiter zu Punkt ${n.id}: ${formatDist(distance(pt.at, n.at))} Richtung ${compassLabel(bearing(pt.at, n.at))}.`, { duration: 4500 });
   }
-  /** Nach dem letzten Punkt: Mindestnutzung, Auffüllen oder Abschluss */
+  /** Nach dem letzten Punkt: Auffüllen anbieten, danach Mindestnutzung prüfen, dann Abschluss */
   async function endeF4() {
     const z = st.zaehler, klein = st.plan.planung.kleinstesStufenVolumen;
-    if (z.gezaehlt <= 0 && z.darfAuszeichnen(klein)) {
-      // Mindestnutzung: es wird immer etwas genutzt
-      st.mindest = true; working = null; zaehlerSpeichern();
-      targetIdx = -1; highlightTarget();
-      renderWorkF4();
-      return;
-    }
-    if (!st.auffuellen && z.darfAuszeichnen(klein) && st.plan.points.some((p) => p.status === 'done')) {
+    const freiePunkte = st.plan.points.filter((p) => p.status === 'done' && z.amPunkt(p.id) < MAX_JE_PUNKT());
+    if (!st.auffuellen && z.darfAuszeichnen(klein) && freiePunkte.length) {
       const ja = await dialog({ title: 'Noch Menge übrig – auffüllen?',
-        body: h('div', {}, h('p', {}, `Es sind noch ${fmt(z.rest, 2)} m³ übrig. Die App führt dich auf dem Rückweg über die Punkte in umgekehrter Reihenfolge.`),
+        body: h('div', {}, h('p', {}, `Es sind noch ${fmt(z.rest, 2)} m³ übrig. Die App führt dich auf dem Rückweg über die Punkte in umgekehrter Reihenfolge – nur über Punkte mit weniger als ${MAX_JE_PUNKT()} Bäumen.`),
           h('p', {}, `Dort zuerst ${F4.KLASSE_NAME[st.plan.planung.hauptklasse]}, dann ${F4.KLASSE_NAME[st.plan.planung.nebenklasse]} auszeichnen. Der Rückweg endet, sobald kein Baum mehr passt.`)),
-        actions: [{ label: 'Nein, abschließen', value: false }, { label: 'Rückweg starten', value: true, primary: true }] });
+        actions: [{ label: 'Nein, weiter', value: false }, { label: 'Rückweg starten', value: true, primary: true }] });
       if (ja) {
-        st.auffuellen = { liste: st.plan.points.filter((p) => p.status === 'done').map((p) => p.id).reverse(), pos: 0 };
+        st.auffuellen = { art: 'auffuellen', liste: freiePunkte.map((p) => p.id).reverse(), pos: 0 };
         zaehlerSpeichern(); saveMeasure();
         targetIdx = st.plan.points.findIndex((p) => p.id === st.auffuellen.liste[0]);
         prompted.clear(); highlightTarget(); renderHud();
         return;
       }
     }
+    nachAuffuellen();
+  }
+  /**
+   * Mindestnutzung 0,5 m²/ha je Jahrzehnt: Nach dem letzten Eingriff des Jahrzehnts reihum über die Rasterpunkte,
+   * je Punkt (mit weniger als 3 Bäumen) den schwächsten passenden Baum – bis die Grundfläche erreicht ist.
+   * Das Budget darf dabei überschritten werden, 50 m³/ha × Fläche nie.
+   * FESTLEGUNG: Gezählt wird die Grundfläche aller Eingriffe des Jahrzehnts (frühere Eingriffe der Serie + dieser).
+   */
+  async function nachAuffuellen() {
+    const ha = st.plan.planung.flaecheHa ?? st.plan.areaHa;
+    const letzter = st.plan.planung.letzterEingriff ?? ((st.plan.eingriffe?.nr || 1) >= (st.plan.eingriffe?.anzahl || 1));
+    const frei = st.plan.points.filter((p) => st.zaehler.amPunkt(p.id) < MAX_JE_PUNKT()).map((p) => p.id);
+    if (letzter && st.auffuellen?.art !== 'mindest' && !F4.mindestnutzungErfuellt(gJahrzehnt(), ha) && frei.length) {
+      await dialog({ title: 'Mindestnutzung',
+        body: h('div', {}, h('p', {}, `Im Jahrzehnt soll mindestens ${fmt(F4.parameter().mindestnutzung.grundflaeche_m2ha_je_jahrzehnt, 1)} m²/ha Grundfläche genutzt werden – hier ${fmt(mindestG(), 3)} m². Bisher gezählt: ${fmt(gJahrzehnt(), 3)} m².`),
+          h('p', {}, 'Die App führt dich reihum über die Rasterpunkte. Zeichne je Punkt den schwächsten passenden Baum aus – dünn vor mittel vor dick. Dabei darf die Menge dieses Eingriffs überschritten werden, aber nie 50 m³/ha.')),
+        actions: [{ label: 'Los geht’s', value: true, primary: true }] });
+      st.zaehler.mindest = true;
+      st.auffuellen = { art: 'mindest', liste: frei, pos: 0, runde: 1, neuInRunde: 0, vorher: { [frei[0]]: st.zaehler.amPunkt(frei[0]) } };
+      zaehlerSpeichern(); saveMeasure();
+      targetIdx = st.plan.points.findIndex((p) => p.id === frei[0]);
+      prompted.clear(); drawGrid(st.plan.points, { numbers: true }); highlightTarget(); startNav(); renderHud();
+      return;
+    }
+    if (letzter && st.auffuellen?.art !== 'mindest' && !F4.mindestnutzungErfuellt(gJahrzehnt(), ha)) st.auffuellen = { art: 'mindest', liste: [], pos: 0, fertig: true, nichtErreicht: true };
     abschlussF4();
   }
   /** Schritt 7: Abschluss – Ergebnis speichern, Protokoll als Anhang */
@@ -1289,6 +1373,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     working = null; st.auffuellen = st.auffuellen ? { ...st.auffuellen, fertig: true } : null; st.mindest = false;
     const z = st.zaehler, pl = st.plan.planung;
     const ergebnis = auswertungF4();
+    if (st.auffuellen?.art === 'mindest') { ergebnis.mindestnutzung = F4.mindestnutzungErfuellt(gJahrzehnt(), pl.flaecheHa ?? st.plan.areaHa) ? 'erreicht' : 'nicht ganz erreicht'; }
     saveMeasure({ status: 'fertig', finishedAt: Date.now() });
     store.update((x) => { const m = x.measures.find((y) => y.id === st.measureId); m.thinning.f4 = ergebnis; });
     zaehlerSpeichern();
@@ -1309,7 +1394,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const jeStufe = pl.stufen.map((x) => { const bs = z.baeume.filter((b) => b.stufe === x.id && b.klasse !== 'dick'); return { stufe: x.name, klasse: x.klasse, anzahl: bs.length, m3: bs.reduce((a, b) => a + b.v, 0) }; });
     const dicke = z.baeume.filter((b) => b.klasse === 'dick');
     const jeKlasse = ['duenn', 'mittel', 'dick'].map((k) => { const bs = z.baeume.filter((b) => b.klasse === k); return { klasse: k, anzahl: bs.length, m3: bs.reduce((a, b) => a + b.v, 0) }; });
-    return { gezaehlt: z.gezaehlt, gezaehltHa: z.gezaehlt / (st.plan.areaHa || 1), budget: z.budget, mengeHa: pl.mengeHa, baeume: z.baeume.length, jeStufe, jeKlasse, bhd: dicke.map((b) => b.bhd), abgeschlossen: Date.now() };
+    return { gezaehlt: z.gezaehlt, gezaehltHa: z.gezaehlt / (st.plan.areaHa || 1), gezaehltG: z.grundflaecheGezaehlt(), gJahrzehnt: gJahrzehnt(), mindestG: mindestG(), budget: z.budget, mengeHa: pl.mengeHa, baeume: z.baeume.length, jeStufe, jeKlasse, bhd: dicke.map((b) => b.bhd), abgeschlossen: Date.now() };
   }
   function renderFertigF4() {
     const pts = st.plan.points;
@@ -1340,7 +1425,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       ['Hauptbaumart', f.art], ['Baumartengruppe', pl.gruppe], ['Oberhöhe ho (m)', zahl(f.ho, 1)], ['Alter (Jahre)', f.alter ?? st.auto?.bestand?.alter ?? ''], ['B°', zahl(f.b, 2)],
       ['Überwiegende Stärke', { 1: 'dick', 2: 'mittel', 3: 'dünn' }[f.sz] || ''],
       ['Feld', `${pl.gruppe} | ${pl.hoehenklasse} | ${pl.bstufe} | ${pl.szenario}`], ['Zielmenge (m³/ha)', zahl(pl.zielmenge, 1)], ['Eingriff', `${st.plan.eingriffe.nr} von ${pl.eingriffe}`],
-      ['Menge (m³/ha)', zahl(pl.mengeHa, 3)], ['Budget (m³)', zahl(z.budget, 3)], ['Gezählt (m³)', zahl(z.gezaehlt, 3)], ['Gezählt (m³/ha)', zahl(e.gezaehltHa, 3)],
+      ['Menge (m³/ha)', zahl(pl.mengeHa, 3)], ['Budget (m³)', zahl(z.budget, 3)], ['Gezählt (m³)', zahl(z.gezaehlt, 3)], ['Grundfläche gezählt (m²)', zahl(z.grundflaecheGezaehlt(), 4)], ['Grundfläche im Jahrzehnt (m²) / Mindestnutzung', `${zahl(gJahrzehnt(), 4)} / ${zahl(mindestG(), 4)}${measure()?.thinning?.f4?.mindestnutzung ? ` (${measure().thinning.f4.mindestnutzung})` : ''}`], ['Gezählt (m³/ha)', zahl(e.gezaehltHa, 3)],
       ['Hinweis', 'Gezählt ist eine vorsichtige Schätzung. Das tatsächlich geerntete Volumen liegt meist etwas darunter.'],
       [],
       ['Nr', 'Rasterpunkt', 'Stufe bzw. BHD (cm)', 'Klasse', 'Zählvolumen (m³)', 'Zeit'],
@@ -1373,7 +1458,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     zeile('Zielmenge im Jahrzehnt', `${fmt(pl.zielmenge, 1)} m³/ha, ${pl.eingriffe} Eingriff${pl.eingriffe > 1 ? 'e' : ''}`);
     zeile('Dieser Eingriff', `${st.plan.eingriffe.nr} von ${pl.eingriffe}: ${fmt(pl.mengeHa, 2)} m³/ha = ${fmt(z.budget, 2)} m³ im Bestand`);
     zeile('Gezählt', `${fmt(z.gezaehlt, 2)} m³ = ${fmt(e.gezaehltHa, 2)} m³/ha (${z.budget > 0 ? Math.round((z.gezaehlt / z.budget) * 100) : 0} % der Menge)`);
-    zeile('Rasterpunkte', `${st.plan.points.filter((p) => p.status === 'done').length} erledigt, ${st.plan.points.filter((p) => p.status === 'leer').length} ohne Baum ausgelassen, ${st.plan.points.length} gesamt, Raster ${fmt(st.plan.raster, 0)} m`);
+    zeile('Grundfläche', `${fmt(z.grundflaecheGezaehlt(), 3)} m² in diesem Eingriff, ${fmt(gJahrzehnt(), 3)} m² im Jahrzehnt (Mindestnutzung ${fmt(mindestG(), 3)} m²)${e.mindestnutzung || measure()?.thinning?.f4?.mindestnutzung ? ` – ${e.mindestnutzung || measure().thinning.f4.mindestnutzung}` : ''}`);
+    zeile('Rasterpunkte', `${st.plan.points.filter((p) => p.status === 'done').length} erledigt, ${st.plan.points.filter((p) => p.status === 'leer').length} ohne Baum ausgelassen, ${st.plan.points.length} gesamt, Raster ${rasterM(st.plan.raster)} m`);
     zeile('GPS-Spur', `${st.spur.length} Punkte`);
     y += 6; doc.text(L0, y, 'Bäume je Stufe bzw. Klasse', { bold: true, size: 11 }); y += 14;
     e.jeStufe.forEach((x) => zeile(`${x.stufe} (${F4.KLASSE_NAME[x.klasse]})`, `${x.anzahl} Bäume, ${fmt(x.m3, 3)} m³`));

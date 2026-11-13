@@ -131,7 +131,7 @@ export function computePlanMethode(sel, p, wald = null) {
 }
 
 // ---------- Fassung 4: Mengenzähler (siehe f4.js) ----------
-import { parameter, planung as planungF4 } from './f4.js';
+import { parameter, planung as planungF4, rasterAbstand } from './f4.js';
 
 /** Fläche (ha) der Auswahl: amtlich, Waldanteil oder geometrisch */
 export function flaecheDerAuswahl(sel, wald = null) {
@@ -145,7 +145,7 @@ export function flaecheDerAuswahl(sel, wald = null) {
 }
 
 /** Rasterpunkte nach Fassung 4: quadratisches Raster, zufälliger Versatz 0–Abstand in x und y, Schlangenlinie, nur Punkte im Polygon */
-export function rasterF4(sel, wald, offsetRel) {
+export function rasterF4(sel, wald, offsetRel, sz = null) {
   const { sh, polys, clip } = flaecheDerAuswahl(sel, wald);
   const R = parameter().raster;
   const punkteBei = (abstand) => {
@@ -155,13 +155,15 @@ export function rasterF4(sel, wald, offsetRel) {
     else if (wald?.status === 'teil') g = g.filter((pt) => imWald(wald, pt));
     return g.filter((pt) => inPolys(pt, clip || polys)); // nur Punkte innerhalb des Polygons (kein Ersatzpunkt)
   };
-  let abstand = R.abstand_m;
+  // Raster 25 m, in Szenario 3 (viele dünne Bäume) 12,5 m
+  const start = rasterAbstand(sz);
+  let abstand = start;
   let grid = punkteBei(abstand);
-  // FESTLEGUNG: Kleine Flächen – weniger als 8 Punkte → Abstand verkleinern, bis mindestens 8 Punkte im Polygon liegen, aber nicht unter 15 m.
-  // Prüfkreis und Ausweichradius bleiben gleich. (Regel nicht simuliert.)
-  const MIN_PUNKTE = 8, MIN_ABSTAND = 15;
-  while (grid.length < MIN_PUNKTE && abstand > MIN_ABSTAND) { abstand = Math.max(MIN_ABSTAND, abstand - 1); grid = punkteBei(abstand); }
-  return { grid, abstand, verkleinert: abstand < R.abstand_m };
+  // FESTLEGUNG: Kleine Flächen – weniger als 8 Punkte → Abstand verkleinern, bis mindestens 8 Punkte im Polygon liegen,
+  // aber nicht unter 15 m (Szenario 3: nicht unter 10 m). Prüfkreis und Ausweichradius bleiben gleich. (Regel nicht simuliert.)
+  const MIN_PUNKTE = 8, MIN_ABSTAND = Number(sz) === 3 ? 10 : 15;
+  while (grid.length < MIN_PUNKTE && abstand > MIN_ABSTAND) { abstand = Math.max(MIN_ABSTAND, abstand - (start > 15 ? 1 : 0.5)); grid = punkteBei(abstand); }
+  return { grid, abstand, verkleinert: abstand < start };
 }
 
 /**
@@ -173,7 +175,7 @@ export function computePlanF4(sel, f, wald = null) {
   f.eingriffNr ??= 1;
   // Versatz in x und y zufällig zwischen 0 und Rasterabstand, je Eingriff neu – einmal gewählt bleibt er für diesen Eingriff fest
   f.offset ??= [Math.random(), Math.random()];
-  const r = rasterF4(sel, wald, f.offset);
+  const r = rasterF4(sel, wald, f.offset, f.sz);
   const pl = planungF4({ art: f.art, nadel: f.nadel, ho: f.ho, b: f.b, sz: f.sz, flaecheHa: ha, eingriffNr: f.eingriffNr, bisherGezaehltHa: f.bisherGezaehltHa || 0 });
   const R = parameter().raster;
   return {

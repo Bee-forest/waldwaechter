@@ -1,6 +1,6 @@
 {
- "version": "Fassung 4, Stand 11.11.2026",
- "einheiten": "Volumen m³ (Fm) je ha, BHD cm, Höhe m",
+ "version": "Fassung 4, Stand 13.11.2026",
+ "einheiten": "Volumen m³ (Fm) je ha, Grundfläche m²/ha, BHD cm, Höhe m",
  "obergrenze_je_eingriff_m3ha": 50,
  "eingriffe_regel": [
   {
@@ -16,11 +16,23 @@
    "eingriffe": 3
   }
  ],
+ "mindestnutzung": {
+  "grundflaeche_m2ha_je_jahrzehnt": 0.5,
+  "angerechneter_bhd_je_stufe_cm": {
+   "0": 7,
+   "1": 15,
+   "2": 25,
+   "3": 35
+  },
+  "dick": "gemessener BHD",
+  "regel": "Ist nach dem letzten Eingriff des Jahrzehnts weniger als 0,5 m²/ha gezählt, reihum an den Rasterpunkten je Punkt den schwächsten passenden Baum (dünn vor mittel vor dick) auszeichnen, bis 0,5 m²/ha erreicht sind; dabei darf das gezählte Volumen dieses Eingriffs 50 m³/ha nicht überschreiten."
+ },
  "staerkeklassen": {
   "duenn": "7 ≤ BHD ≤ 25",
   "mittel": "25 < BHD ≤ 50",
   "dick": "BHD > 50"
  },
+ "hauptbaumart": "Baumart mit der größten Grundfläche in Schicht 1 (Oberschicht); sie gilt für den Gesamtbestand",
  "baumartengruppen": {
   "Fi/Ta/Dgl": [
    "Fichte",
@@ -79,8 +91,12 @@
  },
  "raster": {
   "abstand_m": 25,
+  "abstand_m_szenario_3": 12.5,
+  "max_baeume_je_punkt": 3,
   "pruefkreis_m": 10,
-  "ausweich_m": 15
+  "ausweich_m": 15,
+  "je_eingriff_neu": true,
+  "ausweichregel": "Steht bis 15 m kein Baum der verlangten Stärkeklasse, wird der ähnlichste Baum gewählt (Durchmesser am nächsten an der verlangten Klasse); die App zeigt dazu einen schriftlichen Hinweis."
  },
  "zaehlstufen_unter_50cm": [
   {
@@ -114,74 +130,74 @@
   "koeffizienten": {
    "Fi/Ta/Dgl": {
     "0": {
-     "a": -0.91755,
-     "b": -0.56924
+     "a": -0.9647,
+     "b": -0.55437
     },
     "1": {
-     "a": -2.42367,
-     "b": 0.33823
+     "a": -2.44121,
+     "b": 0.34343
     },
     "2": {
-     "a": -1.96966,
-     "b": 0.51014
+     "a": -1.98966,
+     "b": 0.51609
     },
     "3": {
-     "a": -1.11875,
-     "b": 0.50546
+     "a": -1.15108,
+     "b": 0.51494
     }
    },
    "Ki/Lä": {
     "0": {
-     "a": -2.34544,
-     "b": -0.15663
+     "a": -2.37154,
+     "b": -0.14539
     },
     "1": {
-     "a": -3.51636,
-     "b": 0.66796
+     "a": -3.50218,
+     "b": 0.66426
     },
     "2": {
-     "a": -2.22827,
-     "b": 0.56994
+     "a": -2.20685,
+     "b": 0.56436
     },
     "3": {
-     "a": -2.43337,
-     "b": 0.88668
+     "a": -2.42529,
+     "b": 0.88452
     }
    },
    "Bu/Laub": {
     "0": {
-     "a": -1.31832,
-     "b": -0.43669
+     "a": -1.28437,
+     "b": -0.44895
     },
     "1": {
-     "a": -3.57874,
-     "b": 0.7028
+     "a": -3.59221,
+     "b": 0.70664
     },
     "2": {
-     "a": -2.50941,
-     "b": 0.6936
+     "a": -2.5195,
+     "b": 0.69637
     },
     "3": {
-     "a": -2.3833,
-     "b": 0.90369
+     "a": -2.36533,
+     "b": 0.89856
     }
    },
    "Eiche": {
     "0": {
-     "a": -1.28354,
-     "b": -0.4418
+     "a": -1.31878,
+     "b": -0.42986
     },
     "1": {
-     "a": -3.64464,
-     "b": 0.74016
+     "a": -3.63694,
+     "b": 0.73797
     },
     "2": {
-     "a": -2.56987,
-     "b": 0.72277
+     "a": -2.58351,
+     "b": 0.7269
     },
     "3": {
-     "a": -2.52806,
-     "b": 0.95932
+     "a": -2.55654,
+     "b": 0.96772
     }
    }
   }
@@ -191,24 +207,86 @@
   "sicherheit": 1.07,
   "koeffizienten": {
    "Bu/Laub": {
-    "b0": -9.34386,
-    "b1": 2.67167,
-    "b2": 0.02774
+    "b0": -9.33774,
+    "b1": 2.67415,
+    "b2": 0.02311
    },
    "Eiche": {
-    "b0": -9.29131,
-    "b1": 2.6171,
-    "b2": 0.06011
+    "b0": -9.29251,
+    "b1": 2.61642,
+    "b2": 0.06145
    },
    "Fi/Ta/Dgl": {
-    "b0": -8.58983,
-    "b1": 2.72954,
-    "b2": -0.268
+    "b0": -8.59373,
+    "b1": 2.72841,
+    "b2": -0.26567
    },
    "Ki/Lä": {
-    "b0": -9.33259,
-    "b1": 2.58723,
-    "b2": 0.06359
+    "b0": -9.3454,
+    "b1": 2.58204,
+    "b2": 0.07417
+   }
+  }
+ },
+ "zaehlvolumen_klasse_fuer_vorschlag": {
+  "zweck": "nur für den Vorschlag „wie viele Bäume welcher Klasse am Punkt“",
+  "formel": "v = exp(a + b * ln(ho)) * 1.2",
+  "koeffizienten": {
+   "Fi/Ta/Dgl": {
+    "duenn": {
+     "a": -3.28921,
+     "b": 0.46901
+    },
+    "mittel": {
+     "a": -4.78888,
+     "b": 1.45967
+    },
+    "dick": {
+     "a": -1.70512,
+     "b": 0.87258
+    }
+   },
+   "Ki/Lä": {
+    "duenn": {
+     "a": -5.31807,
+     "b": 1.10846
+    },
+    "mittel": {
+     "a": -5.17205,
+     "b": 1.60717
+    },
+    "dick": {
+     "a": -1.72108,
+     "b": 0.88602
+    }
+   },
+   "Bu/Laub": {
+    "duenn": {
+     "a": -4.74154,
+     "b": 0.91572
+    },
+    "mittel": {
+     "a": -5.57748,
+     "b": 1.73118
+    },
+    "dick": {
+     "a": -2.7649,
+     "b": 1.22203
+    }
+   },
+   "Eiche": {
+    "duenn": {
+     "a": -5.04571,
+     "b": 1.03808
+    },
+    "mittel": {
+     "a": -6.23973,
+     "b": 1.96774
+    },
+    "dick": {
+     "a": -2.7514,
+     "b": 1.24003
+    }
    }
   }
  },
@@ -222,7 +300,7 @@
    "zielmenge_m3ha": 25.8,
    "eingriffe": 1,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -234,7 +312,7 @@
    "zielmenge_m3ha": 29.0,
    "eingriffe": 1,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -246,9 +324,9 @@
    "zielmenge_m3ha": 62.4,
    "eingriffe": 2,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.245
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -258,9 +336,9 @@
    "zielmenge_m3ha": 67.3,
    "eingriffe": 2,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.245
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -270,9 +348,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.11
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -282,9 +360,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.256
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -294,9 +372,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.247
+   "faktor_zaehlvolumen_folgeeingriff": 1.245
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -306,9 +384,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.225
+   "faktor_zaehlvolumen_folgeeingriff": 1.224
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -318,9 +396,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "dick",
-   "anteil_haupt": 0.01,
+   "anteil_haupt": 0.06,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.254
+   "faktor_zaehlvolumen_folgeeingriff": 1.246
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -330,7 +408,7 @@
    "zielmenge_m3ha": 16.4,
    "eingriffe": 1,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -342,7 +420,7 @@
    "zielmenge_m3ha": 18.5,
    "eingriffe": 1,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -354,9 +432,9 @@
    "zielmenge_m3ha": 46.3,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.245
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -366,9 +444,9 @@
    "zielmenge_m3ha": 46.3,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.245
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -378,9 +456,9 @@
    "zielmenge_m3ha": 68.3,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.11
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -390,9 +468,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.256
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -402,9 +480,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.247
+   "faktor_zaehlvolumen_folgeeingriff": 1.245
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -414,9 +492,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.225
+   "faktor_zaehlvolumen_folgeeingriff": 1.224
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -426,9 +504,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.99,
+   "anteil_haupt": 0.36,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.254
+   "faktor_zaehlvolumen_folgeeingriff": 1.246
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -500,43 +578,43 @@
    "hauptklasse": "duenn",
    "anteil_haupt": 0.88,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.248
+   "faktor_zaehlvolumen_folgeeingriff": 1.256
   },
   {
    "gruppe": "Fi/Ta/Dgl",
    "hoehe": "<25",
    "bstufe": "1,0",
    "szenario": 3,
-   "zielmenge_m3ha": 55.0,
+   "zielmenge_m3ha": 52.6,
    "eingriffe": 2,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.88,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.247
+   "faktor_zaehlvolumen_folgeeingriff": 1.245
   },
   {
    "gruppe": "Fi/Ta/Dgl",
    "hoehe": "<25",
    "bstufe": "1,1",
    "szenario": 3,
-   "zielmenge_m3ha": 55.5,
+   "zielmenge_m3ha": 53.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.88,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.225
+   "faktor_zaehlvolumen_folgeeingriff": 1.224
   },
   {
    "gruppe": "Fi/Ta/Dgl",
    "hoehe": "<25",
    "bstufe": ">=1,2",
    "szenario": 3,
-   "zielmenge_m3ha": 55.5,
+   "zielmenge_m3ha": 53.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.88,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.254
+   "faktor_zaehlvolumen_folgeeingriff": 1.246
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -555,7 +633,7 @@
    "hoehe": "25-30",
    "bstufe": "0,5",
    "szenario": 1,
-   "zielmenge_m3ha": 24.6,
+   "zielmenge_m3ha": 23.1,
    "eingriffe": 1,
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
@@ -644,7 +722,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.097
+   "faktor_zaehlvolumen_folgeeingriff": 1.096
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -752,7 +830,7 @@
    "hauptklasse": "mittel",
    "anteil_haupt": 0.9,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.097
+   "faktor_zaehlvolumen_folgeeingriff": 1.096
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -771,7 +849,7 @@
    "hoehe": "25-30",
    "bstufe": "0,5",
    "szenario": 3,
-   "zielmenge_m3ha": 9.0,
+   "zielmenge_m3ha": 9.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
@@ -795,7 +873,7 @@
    "hoehe": "25-30",
    "bstufe": "0,7",
    "szenario": 3,
-   "zielmenge_m3ha": 21.6,
+   "zielmenge_m3ha": 21.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
@@ -860,7 +938,7 @@
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.097
+   "faktor_zaehlvolumen_folgeeingriff": 1.096
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -968,7 +1046,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.8,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.068
+   "faktor_zaehlvolumen_folgeeingriff": 1.067
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -1011,7 +1089,7 @@
    "hoehe": ">=30",
    "bstufe": "0,7",
    "szenario": 2,
-   "zielmenge_m3ha": 40.4,
+   "zielmenge_m3ha": 40.3,
    "eingriffe": 2,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.78,
@@ -1076,7 +1154,7 @@
    "hauptklasse": "mittel",
    "anteil_haupt": 0.78,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.068
+   "faktor_zaehlvolumen_folgeeingriff": 1.067
   },
   {
    "gruppe": "Fi/Ta/Dgl",
@@ -1086,7 +1164,7 @@
    "zielmenge_m3ha": 9.0,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1098,7 +1176,7 @@
    "zielmenge_m3ha": 11.9,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1110,7 +1188,7 @@
    "zielmenge_m3ha": 18.5,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1119,10 +1197,10 @@
    "hoehe": ">=30",
    "bstufe": "0,7",
    "szenario": 3,
-   "zielmenge_m3ha": 21.6,
+   "zielmenge_m3ha": 18.5,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1134,7 +1212,7 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.069
   },
@@ -1146,7 +1224,7 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.068
   },
@@ -1158,7 +1236,7 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.074
   },
@@ -1170,7 +1248,7 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.064
   },
@@ -1182,9 +1260,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.068
+   "faktor_zaehlvolumen_folgeeingriff": 1.067
   },
   {
    "gruppe": "Ki/Lä",
@@ -1239,7 +1317,7 @@
    "hoehe": "<25",
    "bstufe": "0,8",
    "szenario": 1,
-   "zielmenge_m3ha": 36.8,
+   "zielmenge_m3ha": 37.3,
    "eingriffe": 1,
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
@@ -1251,7 +1329,7 @@
    "hoehe": "<25",
    "bstufe": "0,9",
    "szenario": 1,
-   "zielmenge_m3ha": 46.5,
+   "zielmenge_m3ha": 47.3,
    "eingriffe": 2,
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
@@ -1275,7 +1353,7 @@
    "hoehe": "<25",
    "bstufe": "1,1",
    "szenario": 1,
-   "zielmenge_m3ha": 56.6,
+   "zielmenge_m3ha": 63.1,
    "eingriffe": 2,
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
@@ -1302,7 +1380,7 @@
    "zielmenge_m3ha": 4.0,
    "eingriffe": 1,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1314,7 +1392,7 @@
    "zielmenge_m3ha": 6.0,
    "eingriffe": 1,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1326,7 +1404,7 @@
    "zielmenge_m3ha": 7.6,
    "eingriffe": 1,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1338,7 +1416,7 @@
    "zielmenge_m3ha": 23.4,
    "eingriffe": 1,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1347,10 +1425,10 @@
    "hoehe": "<25",
    "bstufe": "0,8",
    "szenario": 2,
-   "zielmenge_m3ha": 23.4,
+   "zielmenge_m3ha": 23.8,
    "eingriffe": 1,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1359,10 +1437,10 @@
    "hoehe": "<25",
    "bstufe": "0,9",
    "szenario": 2,
-   "zielmenge_m3ha": 23.4,
+   "zielmenge_m3ha": 23.8,
    "eingriffe": 1,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1374,7 +1452,7 @@
    "zielmenge_m3ha": 41.3,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": 1.062
   },
@@ -1386,7 +1464,7 @@
    "zielmenge_m3ha": 46.8,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": 1.053
   },
@@ -1395,10 +1473,10 @@
    "hoehe": "<25",
    "bstufe": ">=1,2",
    "szenario": 2,
-   "zielmenge_m3ha": 61.3,
+   "zielmenge_m3ha": 62.1,
    "eingriffe": 2,
    "hauptklasse": "mittel",
-   "anteil_haupt": 0.81,
+   "anteil_haupt": 0.83,
    "nebenklasse": "dick",
    "faktor_zaehlvolumen_folgeeingriff": 1.053
   },
@@ -1410,7 +1488,7 @@
    "zielmenge_m3ha": 4.2,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1422,7 +1500,7 @@
    "zielmenge_m3ha": 6.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1434,7 +1512,7 @@
    "zielmenge_m3ha": 9.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1446,7 +1524,7 @@
    "zielmenge_m3ha": 13.8,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1458,7 +1536,7 @@
    "zielmenge_m3ha": 13.8,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1467,10 +1545,10 @@
    "hoehe": "<25",
    "bstufe": "0,9",
    "szenario": 3,
-   "zielmenge_m3ha": 20.4,
+   "zielmenge_m3ha": 20.5,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1482,7 +1560,7 @@
    "zielmenge_m3ha": 30.3,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1491,10 +1569,10 @@
    "hoehe": "<25",
    "bstufe": "1,1",
    "szenario": 3,
-   "zielmenge_m3ha": 34.6,
+   "zielmenge_m3ha": 33.0,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1503,10 +1581,10 @@
    "hoehe": "<25",
    "bstufe": ">=1,2",
    "szenario": 3,
-   "zielmenge_m3ha": 35.0,
+   "zielmenge_m3ha": 35.5,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.75,
+   "anteil_haupt": 0.76,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1551,7 +1629,7 @@
    "hoehe": "25-30",
    "bstufe": "0,7",
    "szenario": 1,
-   "zielmenge_m3ha": 32.4,
+   "zielmenge_m3ha": 31.8,
    "eingriffe": 1,
    "hauptklasse": "dick",
    "anteil_haupt": 0.84,
@@ -1599,7 +1677,7 @@
    "hoehe": "25-30",
    "bstufe": "1,1",
    "szenario": 1,
-   "zielmenge_m3ha": 71.3,
+   "zielmenge_m3ha": 65.3,
    "eingriffe": 2,
    "hauptklasse": "dick",
    "anteil_haupt": 0.84,
@@ -1616,7 +1694,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.84,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.083
+   "faktor_zaehlvolumen_folgeeingriff": 1.081
   },
   {
    "gruppe": "Ki/Lä",
@@ -1707,7 +1785,7 @@
    "hoehe": "25-30",
    "bstufe": "1,1",
    "szenario": 2,
-   "zielmenge_m3ha": 69.6,
+   "zielmenge_m3ha": 61.9,
    "eingriffe": 2,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.81,
@@ -1724,7 +1802,7 @@
    "hauptklasse": "mittel",
    "anteil_haupt": 0.81,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.083
+   "faktor_zaehlvolumen_folgeeingriff": 1.081
   },
   {
    "gruppe": "Ki/Lä",
@@ -1734,7 +1812,7 @@
    "zielmenge_m3ha": 4.0,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1746,7 +1824,7 @@
    "zielmenge_m3ha": 5.6,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1758,7 +1836,7 @@
    "zielmenge_m3ha": 8.1,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1767,10 +1845,10 @@
    "hoehe": "25-30",
    "bstufe": "0,7",
    "szenario": 3,
-   "zielmenge_m3ha": 11.9,
+   "zielmenge_m3ha": 11.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1782,7 +1860,7 @@
    "zielmenge_m3ha": 13.8,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1794,7 +1872,7 @@
    "zielmenge_m3ha": 17.6,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -1806,7 +1884,7 @@
    "zielmenge_m3ha": 44.6,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.054
   },
@@ -1815,10 +1893,10 @@
    "hoehe": "25-30",
    "bstufe": "1,1",
    "szenario": 3,
-   "zielmenge_m3ha": 69.6,
+   "zielmenge_m3ha": 61.9,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.056
   },
@@ -1830,9 +1908,9 @@
    "zielmenge_m3ha": 80.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.23,
+   "anteil_haupt": 0.24,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.083
+   "faktor_zaehlvolumen_folgeeingriff": 1.081
   },
   {
    "gruppe": "Ki/Lä",
@@ -2192,7 +2270,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.226
+   "faktor_zaehlvolumen_folgeeingriff": 1.231
   },
   {
    "gruppe": "Bu/Laub",
@@ -2204,7 +2282,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.226
+   "faktor_zaehlvolumen_folgeeingriff": 1.231
   },
   {
    "gruppe": "Bu/Laub",
@@ -2216,7 +2294,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.226
+   "faktor_zaehlvolumen_folgeeingriff": 1.231
   },
   {
    "gruppe": "Bu/Laub",
@@ -2240,7 +2318,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.226
+   "faktor_zaehlvolumen_folgeeingriff": 1.231
   },
   {
    "gruppe": "Bu/Laub",
@@ -2252,7 +2330,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.85,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.244
+   "faktor_zaehlvolumen_folgeeingriff": 1.251
   },
   {
    "gruppe": "Bu/Laub",
@@ -2295,7 +2373,7 @@
    "hoehe": "<25",
    "bstufe": "0,6",
    "szenario": 2,
-   "zielmenge_m3ha": 27.5,
+   "zielmenge_m3ha": 27.3,
    "eingriffe": 1,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.88,
@@ -2307,7 +2385,7 @@
    "hoehe": "<25",
    "bstufe": "0,7",
    "szenario": 2,
-   "zielmenge_m3ha": 27.5,
+   "zielmenge_m3ha": 27.3,
    "eingriffe": 1,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.88,
@@ -2348,7 +2426,7 @@
    "hauptklasse": "mittel",
    "anteil_haupt": 0.88,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.226
+   "faktor_zaehlvolumen_folgeeingriff": 1.231
   },
   {
    "gruppe": "Bu/Laub",
@@ -2360,7 +2438,7 @@
    "hauptklasse": "mittel",
    "anteil_haupt": 0.88,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.244
+   "faktor_zaehlvolumen_folgeeingriff": 1.251
   },
   {
    "gruppe": "Bu/Laub",
@@ -2403,7 +2481,7 @@
    "hoehe": "<25",
    "bstufe": "0,6",
    "szenario": 3,
-   "zielmenge_m3ha": 15.7,
+   "zielmenge_m3ha": 15.6,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.84,
@@ -2415,7 +2493,7 @@
    "hoehe": "<25",
    "bstufe": "0,7",
    "szenario": 3,
-   "zielmenge_m3ha": 15.7,
+   "zielmenge_m3ha": 15.6,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.84,
@@ -2427,7 +2505,7 @@
    "hoehe": "<25",
    "bstufe": "0,8",
    "szenario": 3,
-   "zielmenge_m3ha": 22.4,
+   "zielmenge_m3ha": 20.9,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.84,
@@ -2463,19 +2541,19 @@
    "hoehe": "<25",
    "bstufe": "1,1",
    "szenario": 3,
-   "zielmenge_m3ha": 43.6,
+   "zielmenge_m3ha": 43.3,
    "eingriffe": 2,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.84,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.244
+   "faktor_zaehlvolumen_folgeeingriff": 1.251
   },
   {
    "gruppe": "Bu/Laub",
    "hoehe": "<25",
    "bstufe": ">=1,2",
    "szenario": 3,
-   "zielmenge_m3ha": 43.6,
+   "zielmenge_m3ha": 43.3,
    "eingriffe": 2,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.84,
@@ -2523,7 +2601,7 @@
    "hoehe": "25-30",
    "bstufe": "0,7",
    "szenario": 1,
-   "zielmenge_m3ha": 47.0,
+   "zielmenge_m3ha": 43.7,
    "eingriffe": 2,
    "hauptklasse": "dick",
    "anteil_haupt": 0.82,
@@ -2552,7 +2630,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.82,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.099
+   "faktor_zaehlvolumen_folgeeingriff": 1.088
   },
   {
    "gruppe": "Bu/Laub",
@@ -2576,7 +2654,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.82,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.101
+   "faktor_zaehlvolumen_folgeeingriff": 1.097
   },
   {
    "gruppe": "Bu/Laub",
@@ -2588,7 +2666,7 @@
    "hauptklasse": "dick",
    "anteil_haupt": 0.82,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.093
+   "faktor_zaehlvolumen_folgeeingriff": 1.083
   },
   {
    "gruppe": "Bu/Laub",
@@ -2607,7 +2685,7 @@
    "hoehe": "25-30",
    "bstufe": "0,5",
    "szenario": 2,
-   "zielmenge_m3ha": 13.5,
+   "zielmenge_m3ha": 13.2,
    "eingriffe": 1,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.8,
@@ -2660,7 +2738,7 @@
    "hauptklasse": "mittel",
    "anteil_haupt": 0.8,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.099
+   "faktor_zaehlvolumen_folgeeingriff": 1.088
   },
   {
    "gruppe": "Bu/Laub",
@@ -2684,7 +2762,7 @@
    "hauptklasse": "mittel",
    "anteil_haupt": 0.8,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.101
+   "faktor_zaehlvolumen_folgeeingriff": 1.097
   },
   {
    "gruppe": "Bu/Laub",
@@ -2696,14 +2774,14 @@
    "hauptklasse": "mittel",
    "anteil_haupt": 0.8,
    "nebenklasse": "dick",
-   "faktor_zaehlvolumen_folgeeingriff": 1.093
+   "faktor_zaehlvolumen_folgeeingriff": 1.083
   },
   {
    "gruppe": "Bu/Laub",
    "hoehe": "25-30",
    "bstufe": "<0,5",
    "szenario": 3,
-   "zielmenge_m3ha": 6.8,
+   "zielmenge_m3ha": 7.0,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
@@ -2715,7 +2793,7 @@
    "hoehe": "25-30",
    "bstufe": "0,5",
    "szenario": 3,
-   "zielmenge_m3ha": 11.3,
+   "zielmenge_m3ha": 10.6,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
@@ -2727,7 +2805,7 @@
    "hoehe": "25-30",
    "bstufe": "0,6",
    "szenario": 3,
-   "zielmenge_m3ha": 11.3,
+   "zielmenge_m3ha": 10.6,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
@@ -2739,7 +2817,7 @@
    "hoehe": "25-30",
    "bstufe": "0,7",
    "szenario": 3,
-   "zielmenge_m3ha": 20.0,
+   "zielmenge_m3ha": 18.5,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
@@ -2768,7 +2846,7 @@
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.099
+   "faktor_zaehlvolumen_folgeeingriff": 1.088
   },
   {
    "gruppe": "Bu/Laub",
@@ -2792,7 +2870,7 @@
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.101
+   "faktor_zaehlvolumen_folgeeingriff": 1.097
   },
   {
    "gruppe": "Bu/Laub",
@@ -2804,7 +2882,7 @@
    "hauptklasse": "duenn",
    "anteil_haupt": 0.28,
    "nebenklasse": "mittel",
-   "faktor_zaehlvolumen_folgeeingriff": 1.093
+   "faktor_zaehlvolumen_folgeeingriff": 1.083
   },
   {
    "gruppe": "Bu/Laub",
@@ -2847,7 +2925,7 @@
    "hoehe": ">=30",
    "bstufe": "0,7",
    "szenario": 1,
-   "zielmenge_m3ha": 51.4,
+   "zielmenge_m3ha": 51.7,
    "eingriffe": 2,
    "hauptklasse": "dick",
    "anteil_haupt": 0.78,
@@ -3030,7 +3108,7 @@
    "zielmenge_m3ha": 7.7,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3042,7 +3120,7 @@
    "zielmenge_m3ha": 13.0,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3054,7 +3132,7 @@
    "zielmenge_m3ha": 18.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3063,10 +3141,10 @@
    "hoehe": ">=30",
    "bstufe": "0,7",
    "szenario": 3,
-   "zielmenge_m3ha": 23.0,
+   "zielmenge_m3ha": 22.9,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3078,7 +3156,7 @@
    "zielmenge_m3ha": 35.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3090,7 +3168,7 @@
    "zielmenge_m3ha": 55.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.07
   },
@@ -3102,7 +3180,7 @@
    "zielmenge_m3ha": 55.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.071
   },
@@ -3114,7 +3192,7 @@
    "zielmenge_m3ha": 55.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.067
   },
@@ -3126,7 +3204,7 @@
    "zielmenge_m3ha": 55.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.17,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.06
   },
@@ -3135,7 +3213,7 @@
    "hoehe": "<25",
    "bstufe": "<0,5",
    "szenario": 1,
-   "zielmenge_m3ha": 10.5,
+   "zielmenge_m3ha": 10.6,
    "eingriffe": 1,
    "hauptklasse": "dick",
    "anteil_haupt": 0.84,
@@ -3183,7 +3261,7 @@
    "hoehe": "<25",
    "bstufe": "0,8",
    "szenario": 1,
-   "zielmenge_m3ha": 45.1,
+   "zielmenge_m3ha": 47.0,
    "eingriffe": 2,
    "hauptklasse": "dick",
    "anteil_haupt": 0.84,
@@ -3291,7 +3369,7 @@
    "hoehe": "<25",
    "bstufe": "0,8",
    "szenario": 2,
-   "zielmenge_m3ha": 28.7,
+   "zielmenge_m3ha": 29.9,
    "eingriffe": 1,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.81,
@@ -3303,7 +3381,7 @@
    "hoehe": "<25",
    "bstufe": "0,9",
    "szenario": 2,
-   "zielmenge_m3ha": 39.5,
+   "zielmenge_m3ha": 40.0,
    "eingriffe": 1,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.81,
@@ -3315,7 +3393,7 @@
    "hoehe": "<25",
    "bstufe": "1,0",
    "szenario": 2,
-   "zielmenge_m3ha": 39.5,
+   "zielmenge_m3ha": 40.0,
    "eingriffe": 1,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.81,
@@ -3351,10 +3429,10 @@
    "hoehe": "<25",
    "bstufe": "<0,5",
    "szenario": 3,
-   "zielmenge_m3ha": 3.9,
+   "zielmenge_m3ha": 4.0,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3366,7 +3444,7 @@
    "zielmenge_m3ha": 5.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3378,7 +3456,7 @@
    "zielmenge_m3ha": 12.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3390,7 +3468,7 @@
    "zielmenge_m3ha": 12.4,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3399,10 +3477,10 @@
    "hoehe": "<25",
    "bstufe": "0,8",
    "szenario": 3,
-   "zielmenge_m3ha": 16.4,
+   "zielmenge_m3ha": 17.1,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3411,10 +3489,10 @@
    "hoehe": "<25",
    "bstufe": "0,9",
    "szenario": 3,
-   "zielmenge_m3ha": 22.9,
+   "zielmenge_m3ha": 23.3,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3423,10 +3501,10 @@
    "hoehe": "<25",
    "bstufe": "1,0",
    "szenario": 3,
-   "zielmenge_m3ha": 22.9,
+   "zielmenge_m3ha": 23.3,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3438,7 +3516,7 @@
    "zielmenge_m3ha": 34.9,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3450,7 +3528,7 @@
    "zielmenge_m3ha": 34.9,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.71,
+   "anteil_haupt": 0.72,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3678,7 +3756,7 @@
    "zielmenge_m3ha": 4.1,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3687,10 +3765,10 @@
    "hoehe": "25-30",
    "bstufe": "0,5",
    "szenario": 3,
-   "zielmenge_m3ha": 5.4,
+   "zielmenge_m3ha": 5.6,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3702,7 +3780,7 @@
    "zielmenge_m3ha": 8.9,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3711,10 +3789,10 @@
    "hoehe": "25-30",
    "bstufe": "0,7",
    "szenario": 3,
-   "zielmenge_m3ha": 10.1,
+   "zielmenge_m3ha": 10.5,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3726,7 +3804,7 @@
    "zielmenge_m3ha": 19.6,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3738,7 +3816,7 @@
    "zielmenge_m3ha": 27.9,
    "eingriffe": 1,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": null
   },
@@ -3750,7 +3828,7 @@
    "zielmenge_m3ha": 55.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.055
   },
@@ -3762,7 +3840,7 @@
    "zielmenge_m3ha": 55.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.042
   },
@@ -3774,7 +3852,7 @@
    "zielmenge_m3ha": 55.0,
    "eingriffe": 2,
    "hauptklasse": "duenn",
-   "anteil_haupt": 0.18,
+   "anteil_haupt": 0.19,
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.045
   },
@@ -3819,7 +3897,7 @@
    "hoehe": ">=30",
    "bstufe": "0,7",
    "szenario": 1,
-   "zielmenge_m3ha": 26.3,
+   "zielmenge_m3ha": 26.4,
    "eingriffe": 1,
    "hauptklasse": "dick",
    "anteil_haupt": 0.77,
@@ -3927,7 +4005,7 @@
    "hoehe": ">=30",
    "bstufe": "0,7",
    "szenario": 2,
-   "zielmenge_m3ha": 17.1,
+   "zielmenge_m3ha": 17.4,
    "eingriffe": 1,
    "hauptklasse": "mittel",
    "anteil_haupt": 0.72,
@@ -4035,7 +4113,7 @@
    "hoehe": ">=30",
    "bstufe": "0,7",
    "szenario": 3,
-   "zielmenge_m3ha": 9.8,
+   "zielmenge_m3ha": 10.0,
    "eingriffe": 1,
    "hauptklasse": "duenn",
    "anteil_haupt": 0.18,
@@ -4102,67 +4180,5 @@
    "nebenklasse": "mittel",
    "faktor_zaehlvolumen_folgeeingriff": 1.025
   }
- ],
- "zaehlvolumen_klasse_fuer_vorschlag": {
-  "zweck": "nur zur Berechnung des Vorschlags „wie viele Bäume welcher Klasse am Punkt“; gezählt wird mit Stufen-/Tarifwert",
-  "formel": "v = exp(a + b * ln(ho)) * 1.2",
-  "koeffizienten": {
-   "Fi/Ta/Dgl": {
-    "duenn": {
-     "a": -3.24503,
-     "b": 0.45542
-    },
-    "mittel": {
-     "a": -4.78449,
-     "b": 1.45816
-    },
-    "dick": {
-     "a": -1.63482,
-     "b": 0.85249
-    }
-   },
-   "Ki/Lä": {
-    "duenn": {
-     "a": -5.33512,
-     "b": 1.11267
-    },
-    "mittel": {
-     "a": -5.17182,
-     "b": 1.60715
-    },
-    "dick": {
-     "a": -1.73694,
-     "b": 0.89053
-    }
-   },
-   "Bu/Laub": {
-    "duenn": {
-     "a": -4.75301,
-     "b": 0.92027
-    },
-    "mittel": {
-     "a": -5.58604,
-     "b": 1.73357
-    },
-    "dick": {
-     "a": -2.76821,
-     "b": 1.22279
-    }
-   },
-   "Eiche": {
-    "duenn": {
-     "a": -5.03112,
-     "b": 1.03292
-    },
-    "mittel": {
-     "a": -6.18658,
-     "b": 1.9521
-    },
-    "dick": {
-     "a": -2.74355,
-     "b": 1.2377
-    }
-   }
-  }
- }
+ ]
 }

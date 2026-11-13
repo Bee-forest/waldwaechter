@@ -318,6 +318,7 @@ async function openNewMeasure({ parcelId, antragId = null } = {}) {
   };
   const oeffne = (k) => starte(k, (foerdern) => {
     if (k === 'zaunbau') openZaunPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
+    else if (k === 'einzelschutz') import('./einzelschutz.js').then(({ openEinzelschutzPlanung }) => openEinzelschutzPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) }));
     else if (k === 'pflanzung') openPflanzPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
     else formularSeite(k, foerdern);
   });

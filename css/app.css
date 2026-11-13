@@ -1065,3 +1065,7 @@ pre.diagnose { white-space: pre-wrap; word-break: break-word; font-size: 12px; l
 .es-tags span.gruen { background: rgba(46,158,79,.14); color: #1E6B35; font-weight: 600; }
 .es-alle { display: grid; gap: 4px; max-height: 65vh; overflow-y: auto; }
 .es-text .btn { justify-self: start; }
+.es-arten { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.es-arten span { padding: 4px 12px; border-radius: 99px; background: rgba(242,107,29,.12); border: 1px solid rgba(242,107,29,.4); }
+.es-eigen { display: grid; grid-template-columns: 1fr 90px auto; gap: 6px; align-items: center; }
+.es-eigen input { font: inherit; min-height: 44px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line, #cfd6cc); background: var(--surface); color: var(--ink); }

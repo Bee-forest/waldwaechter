@@ -9,6 +9,7 @@ import { formatHa } from './geo.js';
 import { SAETZE } from './foerder-formular.js';
 import { miniKarte } from './flaeche.js';
 import { gespeichertesLayout, flaechenRinge } from './pflanzlayout.js';
+import { WBS as PFLANZ_WBS } from './pflanzpreise.js';
 
 // Kategorien wie in der Maßnahmenliste (für Förderung und Historie)
 export const SCHUTZ_ARTEN = [
@@ -144,11 +145,30 @@ export function stueckliste(p, n, eigen = {}) {
 const euro = (v) => `${Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 const zahl = (v) => { const t = String(v ?? '').trim().replace(/\s|€/g, ''); if (!t) return null; const n = Number(/,/.test(t) ? t.replace(/\./g, '').replace(',', '.') : t); return Number.isFinite(n) ? n : null; };
 
+const pflanzungsName = (m) => {
+  const p = store.get().parcels.find((x) => x.id === m.parcelId);
+  const n = (m.pflanzplan?.arten || []).reduce((a, x) => a + (x.stueck || 0), 0) || Number(m.details?.count) || 0;
+  const wann = m.date ? new Date(m.date).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' }) : 'ohne Termin';
+  const arten = [...new Set(artenAusPflanzung(m).map((a) => a.name))].slice(0, 2).join(', ');
+  return `${arten ? `${arten} · ` : ''}${n ? `${n.toLocaleString('de-DE')} Pflanzen` : 'Stückzahl offen'} · ${p ? `Flurstück ${p.nr}, ${p.gemarkung}` : 'ohne Fläche'} · ${wann}${m.status === 'fertig' ? ' · erledigt' : ''}`;
+};
+/** Aus einer Pflanzungsmaßnahme ohne Pflanzplan (z. B. von Hand angelegt) die Baumarten lesen */
+const artenAusPflanzung = (m) => (m?.pflanzplan?.arten?.length ? m.pflanzplan.arten
+  : String(m?.details?.species || '').split(/,\s*/).filter(Boolean).map((name, i, all) => ({ name, stueck: i === 0 ? Number(m.details?.count) || 0 : 0 })));
+
 /**
- * @param {{ pflanzung: object, foerdern?: boolean, onSaved?: (id) => void, onAbbruch?: () => void }} o
- *   pflanzung: gebuchte Pflanzungsmaßnahme (mit pflanzplan.arten, flaeche, date, parcelId)
+ * @param {{ pflanzung?: object|null, parcelId?: string, foerdern?: boolean, onSaved?: (id) => void, onAbbruch?: () => void }} o
+ *   pflanzung: Pflanzungsmaßnahme (mit pflanzplan.arten, flaeche, date, parcelId) – ohne sie wird gefragt,
+ *   welche Pflanzung geschützt werden soll (auch eine parallel angelegte), oder die Stückzahl selbst eingegeben.
  */
-export function openEinzelschutzPlanung({ pflanzung, foerdern = false, onSaved, onAbbruch = null }) {
+export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foerdern = false, onSaved, onAbbruch = null, antworten = null }) {
+  const pflanzungen = store.get().measures.filter((m) => m.type === 'pflanzung').sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  if (pflanzung === null && pflanzungen.length) {
+    pflanzung = pflanzungen.find((m) => m.parcelId === parcelId && m.status !== 'fertig') || null;
+  }
+  const ohne = !pflanzung;
+  pflanzung ||= { id: null, parcelId: parcelId || store.get().parcels[0]?.id || null, pflanzplan: { arten: [] } };
+  if (!pflanzung.pflanzplan?.arten?.length && !ohne) pflanzung = { ...pflanzung, pflanzplan: { ...(pflanzung.pflanzplan || {}), arten: artenAusPflanzung(pflanzung) } };
   const pp = pflanzung.pflanzplan || {};
   const lay = (() => { try { return gespeichertesLayout(pflanzung); } catch { return null; } })();
   const punkte = lay?.punkte || [];
@@ -157,16 +177,21 @@ export function openEinzelschutzPlanung({ pflanzung, foerdern = false, onSaved, 
   // Auswahl: Menge der Punktindizes; ohne Karte Stückzahl je Baumart
   const sel = new Set();
   const listeStueck = Object.fromEntries((pp.arten || []).map((a) => [a.name, SELTEN_GESCHUETZT.includes(a.name) ? 0 : a.stueck]));
-  const s = { modus: 'alle', pinsel: 'an', antworten: { ziel: 'reh', erdoel: foerdern ? 'nein' : 'egal', foerderung: foerdern, wichtig: 'preis' }, produkt: null, eigen: {}, date: pflanzung.date ? new Date(pflanzung.date).toISOString().slice(0, 10) : '', note: '' };
+  const s = { modus: 'alle', pinsel: 'an', antworten: antworten || { ziel: 'reh', erdoel: foerdern ? 'nein' : 'egal', foerderung: foerdern, wichtig: 'preis' }, produkt: null, eigen: {}, date: pflanzung.date ? new Date(pflanzung.date).toISOString().slice(0, 10) : '', note: '', parcelId: pflanzung.parcelId };
+  // ohne Pflanzung: Baumarten und Stückzahlen selbst eingeben
+  const eigeneArten = ohne ? [{ name: '', stueck: 0 }] : null;
   const alleWaehlen = () => { sel.clear(); punkte.forEach((q, i) => { if (!SELTEN_GESCHUETZT.includes(q[2]) || namen.every((n) => SELTEN_GESCHUETZT.includes(n))) sel.add(i); }); };
   alleWaehlen();
-  let gespeichert = false, karte = null, marker = [];
+  let gespeichert = false, wechsel = false, karte = null, marker = [];
   const body = h('div', { class: 'einzelschutz' });
-  const page = openPage('Einzelschutz planen', body, { onClose: () => { karte?.remove(); if (!gespeichert) onAbbruch?.(); } });
+  const page = openPage('Einzelschutz planen', body, { onClose: () => { karte?.remove(); if (!gespeichert && !wechsel) onAbbruch?.(); } });
+  /** andere Pflanzung wählen: Seite mit dieser Pflanzung neu aufbauen (Antworten bleiben) */
+  const wechsleZu = (m) => { wechsel = true; page.close(); openEinzelschutzPlanung({ pflanzung: m || false, parcelId: s.parcelId, foerdern, onSaved, onAbbruch, antworten: s.antworten }); };
 
   const zaehlung = () => {
     const je = Object.fromEntries(namen.map((n) => [n, 0]));
-    if (punkte.length) for (const i of sel) je[punkte[i][2]] = (je[punkte[i][2]] || 0) + 1;
+    if (eigeneArten) { for (const k of Object.keys(je)) delete je[k]; for (const a of eigeneArten) if (a.name.trim() && a.stueck > 0) je[a.name.trim()] = (je[a.name.trim()] || 0) + a.stueck; }
+    else if (punkte.length) for (const i of sel) je[punkte[i][2]] = (je[punkte[i][2]] || 0) + 1;
     else Object.assign(je, listeStueck);
     const n = Object.values(je).reduce((a, b) => a + b, 0);
     const nadel = Object.entries(je).reduce((a, [k, v]) => a + (nadelArt(k) ? v : 0), 0);
@@ -215,14 +240,30 @@ export function openEinzelschutzPlanung({ pflanzung, foerdern = false, onSaved, 
   const unten = h('div', {});
   function renderOben() {
     const z = zaehlung();
+    const artenNamen = [...new Set(PFLANZ_WBS.map((a) => a.art))].sort((a, b) => a.localeCompare(b, 'de'));
     fill(oben,
       foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Gefördert wird kunststofffreier Einzelschutz ab 1,20 m.')) : null,
-      h('h2', { class: 'step-title' }, 'Welche Pflanzen sollen geschützt werden?'),
-      h('p', { class: 'muted' }, `Aus der Pflanzung übernommen: ${(pp.arten || []).reduce((x, a) => x + a.stueck, 0).toLocaleString('de-DE')} Pflanzen auf ${formatHa(pflanzung.flaeche?.ha || 0)}.`),
-      h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Auswahl der Pflanzen' },
+      h('h2', { class: 'step-title' }, 'Welche Pflanzung soll geschützt werden?'),
+      h('label', {}, 'Pflanzung', h('select', { onchange: (e) => wechsleZu(e.target.value ? pflanzungen.find((m) => m.id === e.target.value) : false) },
+        h('option', { value: '', selected: ohne }, 'Keine Pflanzung – Stückzahl selbst eingeben'),
+        pflanzungen.map((m) => h('option', { value: m.id, selected: m.id === pflanzung.id }, pflanzungsName(m))))),
+      !pflanzungen.length ? h('small', { class: 'muted' }, 'Noch keine Pflanzung angelegt – du kannst die Stückzahl selbst eingeben.') : null,
+      ohne ? h('div', {},
+        h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; } },
+          h('option', { value: '' }, 'ohne Flächenzuordnung'), store.get().parcels.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
+        h('datalist', { id: 'es-arten' }, artenNamen.map((n) => h('option', { value: n }))),
+        h('p', { class: 'sheet-label' }, 'Baumarten und Anzahl der zu schützenden Pflanzen'),
+        h('ul', { class: 'pflanz-liste' }, eigeneArten.map((a, i) => h('li', { class: 'es-eigen' },
+          h('input', { type: 'text', list: 'es-arten', placeholder: 'Baumart, z. B. Rotbuche', value: a.name, onchange: (e) => { a.name = e.target.value; renderOben(); renderUnten(); } }),
+          h('input', { type: 'number', min: 0, step: 1, inputmode: 'numeric', placeholder: 'Stück', value: a.stueck || '', onchange: (e) => { a.stueck = Math.max(0, Math.round(Number(e.target.value) || 0)); renderOben(); renderUnten(); } }),
+          eigeneArten.length > 1 ? h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Zeile entfernen', onclick: () => { eigeneArten.splice(i, 1); renderOben(); renderUnten(); } }, '✕') : null))),
+        h('button', { type: 'button', class: 'btn btn-small', onclick: () => { eigeneArten.push({ name: '', stueck: 0 }); renderOben(); } }, '+ Weitere Baumart')) : null,
+      ohne ? null : h('h2', { class: 'step-title' }, 'Welche Pflanzen sollen geschützt werden?'),
+      ohne ? null : h('p', { class: 'muted' }, `Aus der Pflanzung übernommen: ${(pp.arten || []).reduce((x, a) => x + (a.stueck || 0), 0).toLocaleString('de-DE')} Pflanzen${pflanzung.flaeche?.ha ? ` auf ${formatHa(pflanzung.flaeche.ha)}` : ''}.`),
+      ohne ? null : h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Auswahl der Pflanzen' },
         [['alle', 'Alle Pflanzen'], ['einzeln', 'Einzelne auswählen']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.modus === k),
           onclick: () => { s.modus = k; if (k === 'alle') { alleWaehlen(); farben(); } renderOben(); renderUnten(); } }, l))),
-      punkte.length ? null : h('p', { class: 'hint' }, 'Für diese Pflanzung gibt es keine Pflanzkarte – wähle die Stückzahl je Baumart.'),
+      punkte.length || ohne ? null : h('p', { class: 'hint' }, 'Für diese Pflanzung gibt es keine Pflanzkarte – wähle die Stückzahl je Baumart.'),
       s.modus === 'einzeln' && punkte.length ? h('div', {},
         h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Werkzeug' },
           [['an', 'Auswählen'], ['aus', 'Abwählen'], ['karte', 'Karte verschieben']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.pinsel === k), onclick: () => { s.pinsel = k; renderOben(); } }, l))),
@@ -234,10 +275,10 @@ export function openEinzelschutzPlanung({ pflanzung, foerdern = false, onSaved, 
         h('div', { class: 'btn-row' },
           h('button', { type: 'button', class: 'btn btn-small', onclick: () => { punkte.forEach((_, i) => sel.add(i)); farben(); renderOben(); renderUnten(); } }, 'Alle wählen'),
           h('button', { type: 'button', class: 'btn btn-small', onclick: () => { sel.clear(); farben(); renderOben(); renderUnten(); } }, 'Keine'))) : null,
-      !punkte.length ? h('ul', { class: 'pflanz-liste' }, (pp.arten || []).map((a) => h('li', {},
+      !punkte.length && !ohne ? h('ul', { class: 'pflanz-liste' }, (pp.arten || []).map((a) => h('li', {},
         h('label', {}, h('strong', {}, a.name), h('span', { class: 'muted' }, ` · ${a.stueck.toLocaleString('de-DE')} gepflanzt`),
           h('input', { type: 'number', min: 0, max: a.stueck, value: listeStueck[a.name], onchange: (e) => { listeStueck[a.name] = Math.max(0, Math.min(a.stueck, Math.round(Number(e.target.value) || 0))); renderUnten(); } }))))) : null,
-      h('ul', { class: 'mat-kurz' }, Object.entries(z.je).filter(([, v]) => v).map(([k, v]) => h('li', {}, `${k}: ${v.toLocaleString('de-DE')}`))));
+      h('div', { class: 'es-arten' }, Object.entries(z.je).filter(([, v]) => v).map(([k, v]) => h('span', {}, h('strong', {}, v.toLocaleString('de-DE')), ` ${k}`))));
   }
 
   // ---------- Fragen, Empfehlung, Stückliste ----------
@@ -317,10 +358,10 @@ export function openEinzelschutzPlanung({ pflanzung, foerdern = false, onSaved, 
     const hoeheText = p.hoehe ? `${(p.hoehe / 100).toLocaleString('de-DE', { minimumFractionDigits: 2 })} m` : '';
     const arten = Object.entries(z.je).filter(([, v]) => v > 0).map(([name, stueck]) => ({ name, stueck }));
     store.update((st) => st.measures.push({
-      id, type: 'einzelschutz', parcelId: pflanzung.parcelId, date: s.date ? new Date(s.date).getTime() : null, status: 'geplant', createdAt: Date.now(), note: s.note.trim(),
+      id, type: 'einzelschutz', parcelId: ohne ? s.parcelId : pflanzung.parcelId, date: s.date ? new Date(s.date).getTime() : null, status: 'geplant', createdAt: Date.now(), note: s.note.trim(),
       details: { art: p.kat, produkt: p.name, species: arten.map((a) => a.name).join(', '), count: String(z.n), hoehe: hoeheText, stab: p.stab ? STAEBE[p.stab].name : 'ohne Stab', preis: String(Math.round(sl.jePflanze * 100) / 100).replace('.', ','), material: kunststofffrei(p) ? 'kunststofffrei' : p.material === 'kunststoff' ? 'kunststoff' : p.material },
       flaeche: pflanzung.flaeche ? JSON.parse(JSON.stringify(pflanzung.flaeche)) : undefined,
-      schutz: { pflanzungId: pflanzung.id, produkt: p.id, material: kunststofffrei(p) ? 'kunststofffrei' : p.material, hoeheCm: p.hoehe, arten,
+      schutz: { pflanzungId: pflanzung.id || null, produkt: p.id, material: kunststofffrei(p) ? 'kunststofffrei' : p.material, hoeheCm: p.hoehe, arten,
         auswahl: punkte.length && s.modus === 'einzeln' ? [...sel].map((i) => punkte[i][4]) : null,
         material_liste: sl.zeilen.map((zl) => ({ name: zl.name, menge: zl.menge, einheit: zl.einheit, preis: zl.preis })) },
       kosten: Math.round(sl.summe * 100) / 100,

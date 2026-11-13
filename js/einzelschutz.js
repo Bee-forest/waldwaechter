@@ -32,6 +32,7 @@ const BILD = {
   belueftet: SVG('<rect x="26" y="14" width="22" height="76" rx="3" fill="#D3DEC5" stroke="#6E8B4E" stroke-width="2"/>' + [22, 34, 46, 58].map((y) => `<circle cx="32" cy="${y}" r="2" fill="#6E8B4E"/><circle cx="42" cy="${y + 6}" r="2" fill="#6E8B4E"/>`).join('') + '<rect x="51" y="8" width="4" height="84" fill="#A0784F"/><path d="M37 14c-2-6 2-9 4-10" stroke="#2E7D32" stroke-width="3" fill="none"/>'),
   gitter: SVG('<rect x="24" y="14" width="26" height="76" rx="3" fill="none" stroke="#5B7F3A" stroke-width="2"/>' + [0, 1, 2, 3, 4, 5, 6].map((i) => `<path d="M24 ${18 + i * 11}l26 9M50 ${18 + i * 11}l-26 9" stroke="#5B7F3A" stroke-width="1.4"/>`).join('') + '<rect x="53" y="8" width="4" height="84" fill="#A0784F"/><path d="M37 30v-24" stroke="#2E7D32" stroke-width="3"/><path d="M37 16l-7-5M37 22l7-5" stroke="#2E7D32" stroke-width="2.5"/>'),
   holz: SVG(Array.from({ length: 6 }, (_, i) => `<rect x="${24 + i * 4.4}" y="14" width="3.6" height="76" rx="1" fill="${i % 2 ? '#C79A63' : '#D8AE78'}"/>`).join('') + '<path d="M23 30h28M23 70h28" stroke="#7A5A33" stroke-width="2"/><rect x="54" y="8" width="4" height="84" fill="#A0784F"/>'),
+  netzbio: SVG('<rect x="24" y="14" width="26" height="76" rx="6" fill="#F1E6C8" stroke="#B59A5A" stroke-width="2"/>' + Array.from({ length: 8 }, (_, i) => `<path d="M24 ${20 + i * 9}q13 6 26 0" stroke="#B59A5A" stroke-width="1.6" fill="none"/>`).join('') + [30, 37, 44].map((x) => `<path d="M${x} 14v76" stroke="#C9B37A" stroke-width="1.2"/>`).join('') + '<rect x="53" y="8" width="4" height="84" fill="#A0784F"/><path d="M37 14c-2-6 2-9 4-10" stroke="#2E7D32" stroke-width="3" fill="none"/>'),
   bio: SVG('<rect x="26" y="14" width="22" height="76" rx="3" fill="#E5D9B6" stroke="#9C8A52" stroke-width="2"/><path d="M31 30c6-6 12 0 6 6s-12 0 -6-6z" fill="#7FA35A"/><rect x="51" y="8" width="4" height="84" fill="#A0784F"/>'),
   stachel: SVG('<rect x="37" y="16" width="5" height="74" fill="#5E7D3E"/>' + [22, 32, 42, 52, 62, 72].map((y, i) => `<path d="M${i % 2 ? 42 : 37} ${y}l${i % 2 ? 10 : -10} -4" stroke="#5E7D3E" stroke-width="3" stroke-linecap="round"/>`).join('') + '<path d="M26 90c4-20 6-40 4-70" stroke="#2E7D32" stroke-width="3" fill="none"/>'),
   klemme: SVG('<path d="M40 90V24" stroke="#2E7D32" stroke-width="4"/><path d="M40 40l-12-8M40 52l12-8M40 64l-12-8" stroke="#2E7D32" stroke-width="3"/><path d="M33 16c0-6 14-6 14 0v10c0 4-14 4-14 0z" fill="#E0A32E" stroke="#9C6B10" stroke-width="2"/>'),
@@ -57,8 +58,8 @@ export const PRODUKTE = [
     text: 'Belüftet, 1,80 m – gegen Rotwild.', nadel: false },
   { id: 'dendron', nr: 117, name: 'Wuchshülle aus Holz – Dendron', netto: 3.73, typ: 'huelle', kat: 'Wuchshülle', hoehe: 120, material: 'holz', schutz: ['verbiss', 'fegen'], stab: 'akazie1500', bild: 'holz',
     text: 'Aus Holz, kunststofffrei und verrottbar – muss nicht wieder eingesammelt werden. Förderfähig.', nadel: true },
-  { id: 'buck', nr: 132, name: 'Buck Bio-Wuchshülle', netto: 5.75, typ: 'huelle', kat: 'Wuchshülle', hoehe: 120, material: 'bio', schutz: ['verbiss', 'fegen'], stab: 'akazie1500', bild: 'bio',
-    text: 'Biobasierte, kunststofffreie Hülle – baut sich ab und muss nicht eingesammelt werden. Förderfähig.', nadel: false },
+  { id: 'buck', nr: 132, name: 'Buckshülle (Bio-Wuchshülle in Netzform)', netto: 5.75, typ: 'gitter', kat: 'Wuchshülle', hoehe: 120, material: 'bio', schutz: ['verbiss', 'fegen'], stab: 'akazie1500', bild: 'netzbio', url: 'https://www.buckshuelle.de/',
+    text: 'Netzförmige Hülle aus nachwachsenden Rohstoffen (Baumwolle und Maisstärke), licht- und luftdurchlässig, kunststofffrei und vollständig abbaubar. KWF-Gebrauchswertzeichen. Förderfähig.', nadel: true },
   { id: 'stachel', nr: 92, name: 'PlantaGard Stachelbäume', netto: 0.92, typ: 'fegeschutz', kat: 'Fegeschutz (Spirale, Fegestab)', hoehe: 120, material: 'kunststoff', schutz: ['fegen'], stab: null, bild: 'stachel',
     text: 'Stachelstab neben die Pflanze – hält den Rehbock vom Fegen ab. Kein Verbissschutz.', nadel: true },
   { id: 'klemmen', nr: 99, name: 'Verbissschutzklemmen', netto: 15.46 / 100, einheitText: '15,46 € je 100 Stück', typ: 'terminal', kat: 'Terminaltriebschutz', hoehe: 0, material: 'kunststoff', schutz: ['leittrieb'], stab: null, bild: 'klemme',
@@ -78,6 +79,7 @@ const Q = {
   merkblatt: { titel: 'LWF-Merkblatt 40: Wuchshüllen (PDF)', url: 'https://lfl.bayern.de/mam/cms04/service/dateien/rz_mb40_wuchshüllen_6seitig_wickelfalz_071222_web_bf.pdf' },
   kwf: { titel: 'KWF: Prüfung von Einzelschutzlösungen, „KWF-Test Pflanzenschutz“ (PDF)', url: 'https://kwf2020.kwf-online.de/wp-content/uploads/2022/05/05_Kobov.pdf' },
   wbs: { titel: 'WBS Materialsortiment Herbst 2026', url: WBS_URL },
+  buck: { titel: 'Buckshülle – Herstellerseite', url: 'https://www.buckshuelle.de/' },
 };
 const AUFBAU_HUELLE = [
   'Stab auf der Hauptwindseite (meist West) dicht neben der Pflanze senkrecht einschlagen, etwa 30–40 cm tief, so dass er die Hülle oben überragt.',
@@ -95,8 +97,13 @@ const INFO = {
     aufbau: AUFBAU_HUELLE, quellen: ['lwf', 'praxis', 'merkblatt', 'wbs'] },
   dendron: { praxis: ['Dendron (Firma Walthmeyer) besteht aus 2 mm starkem Nadelholzfurnier; es gibt Laub-, Universal- und Nadelholz-Varianten.', 'Im Versuch der TU Dresden/LWF ließ die Holzhülle im Tagesmaximum am meisten Licht durch (77 % der Freifläche). Bei Elsbeere lag der Höhenzuwachs etwa 16 % über der Pflanze ohne Hülle – weniger Treibhauseffekt als in Kunststoff, dafür stabiler.'],
     aufbau: ['Stab dicht neben der Pflanze einschlagen.', 'Furnierhülle aufstellen bzw. aufspreizen und um die Pflanze legen, am Stab befestigen (Montage laut Hersteller, z. B. mit Tacker oder Draht).', 'Die Hülle verrottet mit der Zeit und muss nicht eingesammelt werden – den Stab später entfernen oder ebenfalls verrotten lassen.'], quellen: ['afz', 'lwf', 'lwfPdf', 'wbs'] },
-  buck: { praxis: ['Die Buck Bio-Wuchshülle ist kunststofffrei und damit förderfähig. Biobasierte Hüllen bauen sich nach einigen Jahren ab – bei abbaubaren Tubex-Hüllen etwa ist die volle Funktion auf 5 Jahre ausgelegt, danach folgen weitere 5 Jahre Abbau; die genaue Standzeit der Buck-Hülle steht in den Herstellerangaben.', 'Achtung Licht: Im LWF-Versuch kam in einer Biokunststoff-Hülle (PLA) nur gut ein Fünftel, in einer Papierhülle sogar nur rund ein Zehntel des Lichts an – undurchsichtige Biohüllen nur an sehr hellen Plätzen.'],
-    aufbau: AUFBAU_HUELLE.slice(0, 4).concat(['Abbaubare Hüllen müssen nicht eingesammelt werden; prüfe trotzdem, ob Reste stören.']), quellen: ['abbau', 'lwf', 'wbs'] },
+  buck: { praxis: [
+    'Laut Hersteller schützt die Buckshülle mindestens fünf Jahre vor Verbiss und Fegen und auch vor Konkurrenzvegetation, Frost und Sturm. Sie wiegt nur rund 130 g.',
+    'Ein Förster berichtet laut Hersteller, dass die Zersetzung am Waldboden nach ein bis zwei Jahren sichtbar beginnt.',
+    'Ausgezeichnet mit dem KWF-Gebrauchswertzeichen im Bereich Pflanzenschutz (Juli 2025) und dem Zeichen „OK biobased“ (TÜV Austria).',
+  ], kwf: 'Die Buckshülle trägt das KWF-Gebrauchswertzeichen im Bereich Pflanzenschutz (verliehen im Juli 2025).',
+    aufbau: ['Hülle aufbiegen.', 'Über die Pflanze stülpen.', 'Haltelaschen öffnen.', 'Haltestab (Vierkantstab) durch die Laschen einführen und einschlagen – laut Hersteller etwa 30 Sekunden je Pflanze.', 'Die Hülle baut sich ab und muss nicht eingesammelt werden; den Stab später entfernen.'],
+    quellen: ['buck', 'wbs'] },
   stachel: { praxis: ['Stachelbäume halten den Rehbock vom Fegen ab, schützen aber nicht gegen Verbiss.'],
     aufbau: ['Im Frühjahr vor der Fegezeit (ab April) dicht neben die Pflanze stecken, Stacheln zum Bäumchen.', 'Bei Laubholz mit hohem Verbissdruck zusätzlich Verbissschutz einsetzen.'], quellen: ['wbs'] },
   klemmen: { praxis: ['Klemmen schützen nur die Knospe am Leittrieb – Seitentriebe bleiben ungeschützt. Vor allem für Nadelholz.'],
@@ -114,7 +121,7 @@ export function zeigeInfo(p) {
     inf.praxis.length ? h('div', {}, h('p', { class: 'sheet-label' }, 'Erfahrungen und Versuche'), h('ul', {}, inf.praxis.map((t) => h('li', {}, t)))) : null,
     h('div', {}, h('p', { class: 'sheet-label' }, 'Aufbau'), h('ol', {}, inf.aufbau.map((t) => h('li', {}, t))), h('small', { class: 'muted' }, 'Allgemeine Hinweise – die Montageanleitung des Herstellers geht vor.')),
     h('div', {}, h('p', { class: 'sheet-label' }, 'KWF-Prüfung'),
-      h('p', {}, 'Das KWF prüft Einzelschutz und vergibt das Gebrauchswertzeichen „KWF-Test Pflanzenschutz“. Ob dieses Produkt geprüft ist, steht auf der Verpackung bzw. in den Prüfberichten des KWF.')),
+      h('p', {}, inf.kwf || 'Das KWF prüft Einzelschutz und vergibt das Gebrauchswertzeichen „KWF-Test Pflanzenschutz“. Ob dieses Produkt geprüft ist, steht auf der Verpackung bzw. in den Prüfberichten des KWF.')),
     h('div', {}, h('p', { class: 'sheet-label' }, 'Quellen'), h('ul', { class: 'es-quellen' }, [...inf.quellen, 'kwf'].filter((k, i, a) => a.indexOf(k) === i).map((k) => h('li', {}, h('a', { href: Q[k].url, target: '_blank', rel: 'noopener' }, Q[k].titel)))))) });
 }
 
@@ -177,7 +184,7 @@ export function empfehle(a) {
     if (a.wichtig === 'preis') s -= kosten(p) * 2;
     else {
       // langlebig/bewährt: belüftete Markenhülle bzw. mechanischer Schutz statt jährlich zu erneuerndem Mittel
-      s += /^tubex/.test(p.id) ? 4 : p.id === 'buck' ? 3 : p.id === 'freiwuchs' ? 1 : 0;
+      s += /^tubex/.test(p.id) ? 4 : p.id === 'buck' ? 1 : p.id === 'freiwuchs' ? 1 : 0;
       if (p.typ === 'mittel') s -= 4;
       s -= kosten(p) * 0.3;
     }

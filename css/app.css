@@ -1054,3 +1054,14 @@ video.kfeld-bild { aspect-ratio: 4 / 3; }
 .fpoint-lrt span { background: #2F7D3A; }
 .feature-namen { margin: 2px 0 4px; padding-left: 18px; display: grid; gap: 2px; }
 pre.diagnose { white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.4; max-height: 55vh; overflow: auto; background: var(--surface-2); padding: 10px; border-radius: 10px; }
+/* Einzelschutz */
+.es-map { height: 300px; }
+.es-produkt { display: grid; grid-template-columns: 84px 1fr; gap: 12px; padding: 10px; border-radius: 16px; border: 2px solid var(--line, #cfd6cc); background: var(--surface); margin: 6px 0; }
+.es-produkt.on { border-color: var(--primary, #23573A); box-shadow: inset 0 0 0 1px var(--primary, #23573A); }
+.es-bild svg { width: 84px; height: 105px; display: block; }
+.es-text { display: grid; gap: 4px; align-content: start; }
+.es-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.es-tags span { font-size: .78rem; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); }
+.es-tags span.gruen { background: rgba(46,158,79,.14); color: #1E6B35; font-weight: 600; }
+.es-alle { display: grid; gap: 4px; max-height: 65vh; overflow-y: auto; }
+.es-text .btn { justify-self: start; }

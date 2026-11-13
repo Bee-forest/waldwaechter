@@ -1008,3 +1008,27 @@ table.vergleich th { font-weight: 700; }
 .bhdk-wert { margin: 0; font-size: 1.8rem; font-weight: 800; }
 .bhdk-ergebnis { display: grid; gap: 4px; }
 .bhdk-start { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; }
+/* Advanced: Kamerafeld direkt am Punkt */
+.thin.w-adv { grid-template-rows: auto 90px 1fr; }
+.kfeld { display: grid; gap: 8px; }
+.kfeld-buehne { position: relative; border-radius: 14px; overflow: hidden; background: #111; }
+.kfeld-bild { display: block; width: 100%; max-height: 38vh; object-fit: cover; touch-action: none; }
+video.kfeld-bild { aspect-ratio: 4 / 3; }
+.kfeld-hilfe { position: absolute; left: 8px; right: 8px; top: 8px; padding: 4px 8px; border-radius: 8px; background: rgba(0,0,0,.45); color: #fff; font-size: .8rem; text-align: center; }
+.kfeld-ausloeser { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: 66px; height: 66px; border-radius: 50%; border: 5px solid #fff; background: rgba(255,255,255,.35); cursor: pointer; }
+.kfeld-ausloeser:active { background: rgba(255,255,255,.8); }
+.kfeld-zoom { position: absolute; right: 8px; top: 8px; display: grid; gap: 6px; }
+.kfeld-zoom .icon-btn { background: rgba(255,255,255,.9); font-size: 22px; font-weight: 700; width: 42px; height: 42px; border-radius: 12px; }
+.kfeld-ergebnis { min-height: 28px; font-size: 1.05rem; }
+.kfeld-wert { font-size: 1.35rem; }
+.kfeld-knoepfe { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
+.kfeld-einst { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: .9rem; }
+.kfeld-einst select, .kfeld-einst input { font: inherit; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line, #cfd6cc); background: var(--surface); color: var(--ink); }
+.kfeld-status { margin: 0; font-size: .9rem; color: var(--ink-2, #556); }
+.soll-zeile { display: flex; flex-wrap: wrap; gap: 6px; }
+.soll-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 99px; background: var(--surface-2); font-weight: 700; border: 2px solid transparent; }
+.soll-chip.soll { border-color: var(--signal, #D7263D); }
+.soll-chip.fertig { border-color: var(--ok, #2E9E4F); background: rgba(46,158,79,.12); color: var(--ok, #2E9E4F); }
+.soll-chip svg { width: 16px; height: 16px; }
+.kfeld-einst label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+.kfeld-einst select { width: auto; max-width: 60vw; min-height: 36px; }

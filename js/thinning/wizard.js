@@ -18,6 +18,7 @@ import { buzz, unlockAudio, keepAwake } from './feedback.js';
 import { say, WANZE_SVG } from '../mascot.js';
 import * as F4 from './f4.js';
 import { bhdMitKamera } from './bhdkamera.js';
+import { kameraFeld, stopKamera } from './kamerafeld.js';
 import { computePlanF4 } from './plan.js';
 import { standSpeichern, standLaden } from './speicher.js';
 import { dateiSpeichern, dateiLaden } from '../dateien.js';
@@ -187,6 +188,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function close() {
     stopNav();
+    stopKamera();
     map.remove();
     page.classList.add('closing');
     setTimeout(() => page.remove(), 200);
@@ -970,7 +972,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   function renderHud(errorMsg) {
     if (working) return;
     if (!st.plan.points[targetIdx]) return;
-    if (page.classList.contains('w-mode')) { page.classList.remove('w-mode'); setTimeout(() => map.invalidateSize(), 50); }
+    stopKamera();
+    if (page.classList.contains('w-mode')) { page.classList.remove('w-mode', 'w-adv'); setTimeout(() => map.invalidateSize(), 50); }
     const pts = st.plan.points;
     const done = pts.filter((p) => p.status === 'done').length;
     const pt = pts[targetIdx];
@@ -1199,6 +1202,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   let fehlerMeldung = null, bhdEingabe = '', zuletzt = null;
   function renderWorkF4() {
     page.classList.add('w-mode'); // beim Auszeichnen: Karte klein, Zähltasten groß
+    page.classList.toggle('w-adv', advanced());
+    if (advanced()) document.querySelectorAll('.mascot-say').forEach((e) => e.remove()); // Sprechblase verdeckt sonst das Kamerafeld
     const pt = working;
     const z = st.zaehler, pl = st.plan.planung;
     const K = (k) => F4.KLASSE_NAME[k];
@@ -1265,6 +1270,25 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       });
       renderWorkF4();
     };
+    // Advanced: Soll/Ist je Klasse als eine kompakte Zeile
+    const sollZeile = () => h('div', { class: 'soll-zeile' }, klassen.filter((k) => modus !== 'punkt' || soll[k] || hierK(k)).map((k) => {
+      const n = hierK(k), sl = soll[k] || 0, fertig = sl > 0 && n >= sl;
+      return h('span', { class: `soll-chip ${fertig ? 'fertig' : ''} ${sl ? 'soll' : ''}` }, fertig ? h('span', { html: icon.check }) : null, `${K(k)} ${modus === 'punkt' && sl ? `${n} / ${sl}` : n}`);
+    }));
+    const kameraBewerten = (bhd) => {
+      const b = zuordnen(bhd);
+      if (!b) return { ok: false, text: `unter ${pl.stufen[0].von} cm – wird nicht gezählt` };
+      const g = z.sperre(b.v, pt.id);
+      return { ok: !g, text: `${K(b.klasse)}, ${fmt(b.v, 3)} m³${g === 'menge' ? ` – ${MELDUNG_PASST_NICHT}` : g === 'punkt' ? ` – ${MELDUNG_PUNKT_VOLL}` : ''}` };
+    };
+    const kameraZaehlen = (r) => {
+      const b = zuordnen(r.bhd);
+      if (!b) return;
+      zuletzt = b.klasse;
+      const ok = !z.sperre(b.v, pt.id);
+      auszeichnen({ ...b, kamera: { abstandCm: Math.round(r.abstandCm), quelle: r.abstandQuelle, referenz: r.referenz } });
+      if (ok) toast(`Gezählt: BHD ${r.bhd} cm, ${K(b.klasse)}, ${fmt(b.v, 3)} m³`);
+    };
     let ausweichK = null;
     const karte = (k) => {
       const n = hierK(k), s = soll[k] || 0, fertig = s > 0 && n >= s;
@@ -1296,20 +1320,23 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const mindestHierFertig = modus === 'mindest' && hier.length > (st.auffuellen.vorher?.[pt.id] ?? 0);
     fill(hud,
       h('div', { class: 'work-head' }, h('p', { class: 'hud-label' }, kopf[0]), h('p', {}, kopf[1])),
-      zaehlerLeiste(),
-      h('p', { class: `punkt-zahl ${punktVoll ? 'voll' : ''}` }, `${hier.length} von höchstens ${max} Bäumen an diesem Punkt`),
+      advanced() ? null : zaehlerLeiste(),
+      advanced() ? null : h('p', { class: `punkt-zahl ${punktVoll ? 'voll' : ''}` }, `${hier.length} von höchstens ${max} Bäumen an diesem Punkt`),
       fehlerMeldung ? h('p', { class: 'warn-line', role: 'alert' }, fehlerMeldung) : null,
       punktVoll ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), MELDUNG_PUNKT_VOLL) : null,
       passtNichts && modus !== 'mindest' ? h('p', { class: 'warn-line' }, 'Die Menge ist ausgeschöpft – es passt kein Baum mehr.') : null,
       alleFertig && !punktVoll ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Vorschlag erfüllt – du kannst den Punkt abschließen.') : null,
       mindestHierFertig ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), F4.mindestnutzungErfuellt(gIst, (st.plan.planung.flaecheHa ?? st.plan.areaHa)) ? 'Mindestnutzung erreicht.' : 'Baum gezählt – weiter zum nächsten Punkt.') : null,
       ausweichK ? h('p', { class: 'hint warn', role: 'note' }, `Kein Baum der Klasse ${K(ausweichK)} bis ${st.plan.ausweichen} m – bitte den ähnlichsten Baum auszeichnen (Durchmesser am nächsten an der Klasse ${K(ausweichK)}).`) : null,
-      punktVoll ? null : oben.map(karte),
+      punktVoll ? null : advanced() ? sollZeile() : oben.map(karte),
+      // Advanced: Kamerafeld direkt am Punkt, Ergebnis und „Baum zählen“ gleich darunter
+      advanced() && !punktVoll ? kameraFeld({ bewerte: kameraBewerten, zaehlen: kameraZaehlen }) : null,
+      advanced() ? zaehlerLeiste() : null,
+      advanced() ? h('p', { class: `punkt-zahl ${punktVoll ? 'voll' : ''}` }, `${hier.length} von höchstens ${max} Bäumen an diesem Punkt`) : null,
       !punktVoll && unten.length && !advanced() ? h('details', { class: 'andere-staerke', open: !!ausweichK }, h('summary', {}, `Anderen Baum auszeichnen (${unten.map(K).join(', ')})`),
         h('p', { class: 'muted' }, 'Nicht vorgeschlagen, aber erlaubt, wenn hier kein passender Baum der vorgeschlagenen Stärke steht – die Menge gleicht sich an den nächsten Punkten aus.'),
         unten.map(karte)) : null,
-      advanced() && !punktVoll ? h('p', { class: 'muted' }, 'Advanced-Zählweise: Jeder Baum wird mit der Kamera gemessen – sein Volumen wird aus dem exakten BHD berechnet.') : null,
-      punktVoll ? null : h('button', { type: 'button', class: `btn btn-block bhdk-start ${advanced() ? 'btn-primary btn-large' : ''}`, onclick: kameraMessen }, h('span', { html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>' }), advanced() ? 'Baum mit Kamera messen und zählen' : 'BHD mit Kamera messen'),
+      punktVoll || advanced() ? null : h('button', { type: 'button', class: 'btn btn-block bhdk-start', onclick: kameraMessen }, h('span', { html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>' }), advanced() ? 'Baum mit Kamera messen und zählen' : 'BHD mit Kamera messen'),
       letzter ? h('div', { class: 'letzter' },
         h('span', {}, `Zuletzt: ${letzter.klasse === 'dick' || letzter.stufe == null ? `${K(letzter.klasse)}, BHD ${fmt(letzter.bhd, 0)} cm` : `${pl.stufen[letzter.stufe]?.name}${letzter.bhd ? `, ${fmt(letzter.bhd, 0)} cm` : ''} (${K(letzter.klasse)})`}${letzter.kamera ? ' · Kamera' : ''} · ${fmt(letzter.v, 3)} m³`),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => { st.zaehler.rueckgaengig(letzter.id); zuletzt = null; fehlerMeldung = null; zaehlerSpeichern(); renderWorkF4(); } }, 'Rückgängig')) : null,
@@ -1343,7 +1370,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
   function punktFertigF4() {
     const pt = working;
-    page.classList.remove('w-mode');
+    stopKamera();
+    page.classList.remove('w-mode', 'w-adv');
     fehlerMeldung = null; ausweichHinweis = null;
     if (st.auffuellen) {
       const r = st.auffuellen;
@@ -1422,6 +1450,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   /** Schritt 7: Abschluss – Ergebnis speichern, Protokoll als Anhang */
   async function abschlussF4() {
     stopNav();
+    stopKamera();
     page.classList.remove('w-mode');
     working = null; st.auffuellen = st.auffuellen ? { ...st.auffuellen, fertig: true } : null; st.mindest = false;
     const z = st.zaehler, pl = st.plan.planung;

@@ -1032,3 +1032,16 @@ video.kfeld-bild { aspect-ratio: 4 / 3; }
 .soll-chip svg { width: 16px; height: 16px; }
 .kfeld-einst label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
 .kfeld-einst select { width: auto; max-width: 60vw; min-height: 36px; }
+/* Kamera-Popup (Advanced) */
+.kpop { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; padding: 8px; background: rgba(10, 20, 12, 0); transition: background .18s; }
+.kpop.offen { background: rgba(10, 20, 12, .6); }
+.kpop-karte { width: min(640px, 100%); max-height: calc(100dvh - 16px); overflow-y: auto; display: grid; gap: 10px; padding: 12px; border-radius: 20px; background: var(--bg, #F4F6F1); box-shadow: 0 10px 40px rgba(0,0,0,.35); transform: translateY(24px) scale(.97); opacity: 0; transition: transform .18s, opacity .18s; }
+.kpop.offen .kpop-karte { transform: none; opacity: 1; }
+.kpop-kopf { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.kpop-kopf strong { display: block; font-size: 1.1rem; margin-bottom: 6px; }
+.kpop-zu { flex: none; width: 44px; height: 44px; }
+.kpop-zu svg { width: 22px; height: 22px; }
+.kpop-stand { margin: 0; font-size: .9rem; color: var(--ink-2, #556); text-align: center; }
+.kpop .kfeld-bild { max-height: 56vh; }
+.bhdk-legende { flex-wrap: wrap; gap: 4px 16px; font-size: .85rem; }
+.kfeld-zoom { top: auto; bottom: 8px; }

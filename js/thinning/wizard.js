@@ -188,7 +188,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
   function close() {
     stopNav();
-    stopKamera();
+    schliesseKamera({ neuZeichnen: false });
     map.remove();
     page.classList.add('closing');
     setTimeout(() => page.remove(), 200);
@@ -972,7 +972,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   function renderHud(errorMsg) {
     if (working) return;
     if (!st.plan.points[targetIdx]) return;
-    stopKamera();
+    schliesseKamera({ neuZeichnen: false });
     if (page.classList.contains('w-mode')) { page.classList.remove('w-mode', 'w-adv'); setTimeout(() => map.invalidateSize(), 50); }
     const pts = st.plan.points;
     const done = pts.filter((p) => p.status === 'done').length;
@@ -1035,6 +1035,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       zuletzt = null;
       zaehlerSpeichern();
       renderWorkF4();
+      if (advanced()) oeffneKamera(); // Advanced: Kamera springt direkt groß auf
       return;
     }
     renderWork();
@@ -1330,7 +1331,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       ausweichK ? h('p', { class: 'hint warn', role: 'note' }, `Kein Baum der Klasse ${K(ausweichK)} bis ${st.plan.ausweichen} m – bitte den ähnlichsten Baum auszeichnen (Durchmesser am nächsten an der Klasse ${K(ausweichK)}).`) : null,
       punktVoll ? null : advanced() ? sollZeile() : oben.map(karte),
       // Advanced: Kamerafeld direkt am Punkt, Ergebnis und „Baum zählen“ gleich darunter
-      advanced() && !punktVoll ? kameraFeld({ bewerte: kameraBewerten, zaehlen: kameraZaehlen }) : null,
+      advanced() && !punktVoll ? h('button', { type: 'button', class: 'btn btn-primary btn-block btn-large bhdk-start', onclick: oeffneKamera },
+        h('span', { html: KAMERA_SVG }), 'Kamera öffnen und Bäume messen') : null,
       advanced() ? zaehlerLeiste() : null,
       advanced() ? h('p', { class: `punkt-zahl ${punktVoll ? 'voll' : ''}` }, `${hier.length} von höchstens ${max} Bäumen an diesem Punkt`) : null,
       !punktVoll && unten.length && !advanced() ? h('details', { class: 'andere-staerke', open: !!ausweichK }, h('summary', {}, `Anderen Baum auszeichnen (${unten.map(K).join(', ')})`),
@@ -1354,6 +1356,39 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     );
     if (zuletzt) setTimeout(() => hud.querySelectorAll('.getippt').forEach((e) => e.classList.remove('getippt')), 700);
     setTimeout(() => map.invalidateSize(), 50);
+    // Advanced: großes Kamerafenster als Popup
+    if (kameraPopup) {
+      if (!advanced()) { schliesseKamera(); return; }
+      fill(kameraPopup.querySelector('.kpop-karte'),
+        h('div', { class: 'kpop-kopf' },
+          h('div', {}, h('strong', {}, kopf[0]), punktVoll ? null : sollZeile()),
+          h('button', { type: 'button', class: 'icon-btn kpop-zu', 'aria-label': 'Kamera schließen', html: icon.close || '✕', onclick: () => schliesseKamera() })),
+        fehlerMeldung ? h('p', { class: 'warn-line', role: 'alert' }, fehlerMeldung) : null,
+        alleFertig && !punktVoll ? h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Vorschlag erfüllt – du kannst den Punkt abschließen.') : null,
+        punktVoll
+          ? h('div', { class: 'kpop-voll' }, h('p', { class: 'ok-line' }, h('span', { html: icon.check }), MELDUNG_PUNKT_VOLL),
+            h('button', { type: 'button', class: 'btn btn-primary btn-large btn-block', onclick: () => { schliesseKamera(); completePoint(); } }, 'Punkt abschließen'))
+          : kameraFeld({ bewerte: kameraBewerten, zaehlen: kameraZaehlen, hoehe: 0.56 }),
+        h('p', { class: 'kpop-stand' }, `${fmt(z.gezaehlt, 2)} von ${fmt(z.grenze, 2)} m³ gezählt · hier ${hier.length} von ${max} Bäumen`),
+        punktVoll ? null : h('button', { type: 'button', class: 'btn btn-block', onclick: () => schliesseKamera() }, 'Fertig – zurück zum Punkt'));
+    }
+  }
+  const KAMERA_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+  let kameraPopup = null;
+  function oeffneKamera() {
+    if (kameraPopup) return;
+    document.querySelectorAll('.mascot-say').forEach((e) => e.remove());
+    kameraPopup = h('div', { class: 'kpop', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Baum mit Kamera messen' }, h('div', { class: 'kpop-karte' }));
+    document.body.append(kameraPopup);
+    requestAnimationFrame(() => kameraPopup?.classList.add('offen'));
+    renderWorkF4();
+  }
+  function schliesseKamera({ neuZeichnen = true } = {}) {
+    stopKamera();
+    if (!kameraPopup) return;
+    const el = kameraPopup; kameraPopup = null;
+    el.classList.remove('offen'); setTimeout(() => el.remove(), 180);
+    if (neuZeichnen && working) renderWorkF4();
   }
   let ausweichHinweis = null;
   /** Nächster Punkt eines Rundgangs (Auffüllen bzw. Mindestnutzung) */
@@ -1370,7 +1405,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
   function punktFertigF4() {
     const pt = working;
-    stopKamera();
+    schliesseKamera({ neuZeichnen: false });
     page.classList.remove('w-mode', 'w-adv');
     fehlerMeldung = null; ausweichHinweis = null;
     if (st.auffuellen) {
@@ -1450,7 +1485,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   /** Schritt 7: Abschluss – Ergebnis speichern, Protokoll als Anhang */
   async function abschlussF4() {
     stopNav();
-    stopKamera();
+    schliesseKamera({ neuZeichnen: false });
     page.classList.remove('w-mode');
     working = null; st.auffuellen = st.auffuellen ? { ...st.auffuellen, fertig: true } : null; st.mindest = false;
     const z = st.zaehler, pl = st.plan.planung;

@@ -3,7 +3,7 @@
 // Rechnung wie bei der Fotomessung (bhdkamera.js): Referenzverfahren mit Zylinderkorrektur, Aufrunden auf ganze cm.
 
 import { h, fill, toast } from '../ui.js';
-import { REFERENZEN, bhdAusMessung, abstandAusBrennweite, exifBrennweite35 } from './bhdkamera.js';
+import { REFERENZEN, bhdAusMessung, abstandAusBrennweite, exifBrennweite35, linienSchild } from './bhdkamera.js';
 
 const SPEICHER = 'waldwaechter.bhdk';
 const einst = (() => { try { return { ref: 'karte', eigenCm: '', abstand: 200, ...JSON.parse(localStorage.getItem(SPEICHER) || '{}') }; } catch { return { ref: 'karte', eigenCm: '', abstand: 200 }; } })();
@@ -27,7 +27,7 @@ const startLinien = (w) => [{ x: w * 0.45, art: 'ref' }, { x: w * 0.55, art: 're
  * bewerte(bhd) → { text, ok }   Zuordnung (Klasse, Volumen) und ob der Baum passt
  * zaehlen(messung)               zählt den Baum (danach rendert der Aufrufer neu)
  */
-export function kameraFeld({ bewerte, zaehlen }) {
+export function kameraFeld({ bewerte, zaehlen, hoehe = 0.38 }) {
   const el = h('div', { class: 'kfeld' });
   const datei = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: (e) => vonDatei(e.target.files?.[0]) });
 
@@ -39,7 +39,7 @@ export function kameraFeld({ bewerte, zaehlen }) {
     const status = h('p', { class: 'kfeld-status' }, 'Kamera wird gestartet …');
     fill(el,
       h('div', { class: 'kfeld-buehne' }, video,
-        h('div', { class: 'kfeld-hilfe' }, 'Referenz in 1,30 m vorn an den Stamm, ganzer Stamm im Bild'),
+        h('div', { class: 'kfeld-hilfe' }, 'Referenz in 1,30 m vorn an den Stamm, ganzer Stamm im Bild. Danach: orange Linien an die Referenz, grüne an den Stamm.'),
         h('button', { type: 'button', class: 'kfeld-ausloeser', 'aria-label': 'Foto aufnehmen', onclick: () => einfrieren(video) })),
       status, einstellungen(), datei);
     try {
@@ -89,6 +89,7 @@ export function kameraFeld({ bewerte, zaehlen }) {
         h('div', { class: 'kfeld-zoom' },
           h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Vergrößern', onclick: () => zoomen(2) }, '+'),
           h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Verkleinern', onclick: () => zoomen(0.5) }, '−'))),
+      h('div', { class: 'bhdk-legende' }, h('span', { class: 'ref' }, 'Orange: Kanten der Referenz (Karte, Zollstock …)'), h('span', { class: 'stamm' }, 'Grün: Kanten des Stamms')),
       zeile,
       h('div', { class: 'kfeld-knoepfe' },
         h('button', { type: 'button', class: 'btn', onclick: () => { aufnahme = null; live(); } }, 'Neu aufnehmen'),
@@ -107,7 +108,7 @@ export function kameraFeld({ bewerte, zaehlen }) {
 
     const W = aufnahme.w, H = aufnahme.hh;
     function groesse() {
-      const b = Math.max(200, el.clientWidth || 340), hh = Math.min(Math.round(window.innerHeight * 0.38), Math.round((b * H) / W));
+      const b = Math.max(200, el.clientWidth || 340), hh = Math.min(Math.round(window.innerHeight * hoehe), Math.round((b * H) / W));
       const dpr = window.devicePixelRatio || 1;
       leinwand.width = b * dpr; leinwand.height = hh * dpr; leinwand.style.width = `${b}px`; leinwand.style.height = `${hh}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -127,6 +128,8 @@ export function kameraFeld({ bewerte, zaehlen }) {
         ctx.lineWidth = i === aktiv ? 3 : 2;
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, hh); ctx.stroke();
         ctx.beginPath(); ctx.arc(x, l.art === 'ref' ? hh * 0.3 : hh * 0.72, 10, 0, Math.PI * 2); ctx.fill();
+        const paar = aufnahme.linien.filter((m) => m.art === l.art), links = l.x <= Math.min(...paar.map((m) => m.x));
+        linienSchild(ctx, x, l.art === 'ref' ? hh * 0.3 : hh * 0.72, l.art, links ? 'links' : 'rechts', b);
       });
       if (aktiv != null && lupe) {
         const r = 40, lx = Math.min(b - r - 4, Math.max(r + 4, lupe.x)), ly = Math.max(r + 4, lupe.y - 80);

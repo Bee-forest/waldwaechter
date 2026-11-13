@@ -23,6 +23,20 @@ export const REFERENZEN = [
   { id: 'eigen', name: 'Eigene Länge', mm: null, tipp: 'Länge in cm eingeben' },
 ];
 
+/** Linienbeschriftung im Messbild: „Referenz links/rechts“ (orange) bzw. „Stamm links/rechts“ (grün) */
+export function linienSchild(ctx, x, y, art, seite, breite) {
+  const text = `${art === 'ref' ? 'Referenz' : 'Stamm'} ${seite}`;
+  ctx.save();
+  ctx.font = '600 12px system-ui, sans-serif';
+  const w = ctx.measureText(text).width + 12, hh = 20;
+  let lx = seite === 'links' ? x - w - 14 : x + 14;
+  lx = Math.min(breite - w - 2, Math.max(2, lx));
+  ctx.fillStyle = art === 'ref' ? '#F26B1D' : '#2E9E4F';
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(lx, y - hh / 2, w, hh, 6) : ctx.rect(lx, y - hh / 2, w, hh); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(text, lx + 6, y + 1);
+  ctx.restore();
+}
+
 /** Durchmesser (cm) aus scheinbarem Durchmesser und Abstand zur Stammvorderseite (beide in cm) */
 export function zylinderKorrektur(dsCm, abstandCm) {
   if (!(dsCm > 0)) return 0;
@@ -209,6 +223,8 @@ export function bhdMitKamera({ pruefe, zaehlen } = {}) {
           ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, hh); ctx.stroke();
           ctx.fillStyle = ctx.strokeStyle;
           ctx.beginPath(); ctx.arc(x, l.art === 'ref' ? hh * 0.35 : hh * 0.65, 11, 0, Math.PI * 2); ctx.fill();
+          const paar = s.linien.filter((m) => m.art === l.art), links = l.x <= Math.min(...paar.map((m) => m.x));
+          linienSchild(ctx, x, l.art === 'ref' ? hh * 0.35 : hh * 0.65, l.art, links ? 'links' : 'rechts', b);
         });
         // Lupe beim Ziehen
         if (aktiv != null && lupe) {

@@ -81,8 +81,10 @@ export function exifBrennweite35(buf) {
 /**
  * Messdialog öffnen. Liefert { bhd, roh, abstandCm, abstandQuelle, referenz } oder null (abgebrochen).
  * pruefe(bhd) darf einen Text zurückgeben, der im Ergebnis angezeigt wird (z. B. Klasse und Volumen).
+ * zaehlen(messung) – wenn angegeben, zählt „Baum zählen“ den Baum direkt in den Zähler und die Seite
+ * bleibt offen für den nächsten Baum. Rückgabe { ok, text, stand }; ok = false → Meldung, nichts gezählt.
  */
-export function bhdMitKamera({ pruefe } = {}) {
+export function bhdMitKamera({ pruefe, zaehlen } = {}) {
   return new Promise((resolve) => {
     let fertig = false;
     const ende = (wert) => { if (fertig) return; fertig = true; seite.close(); resolve(wert); };
@@ -147,7 +149,13 @@ export function bhdMitKamera({ pruefe } = {}) {
         abstandBox, ergebnis,
         h('div', { class: 'btn-row' },
           h('button', { type: 'button', class: 'btn', onclick: schritt1 }, 'Neues Foto'),
-          h('button', { type: 'button', class: 'btn btn-primary btn-large', onclick: () => { const r = rechnen(); if (r) ende(r); } }, 'Übernehmen')));
+          h('button', { type: 'button', class: 'btn btn-primary btn-large', onclick: async () => {
+            const r = rechnen(); if (!r) return;
+            if (!zaehlen) { ende(r); return; }
+            const e = await zaehlen(r);
+            if (!e?.ok) { fill(ergebnis, h('p', { class: 'bhdk-wert' }, `BHD ≈ ${r.bhd} cm`), h('p', { class: 'warn-line', role: 'alert' }, e?.text || 'Dieser Baum wurde nicht gezählt.')); return; }
+            gezaehlt(r, e);
+          } }, zaehlen ? 'Baum zählen' : 'Übernehmen')));
 
       const zeichneAbstand = () => fill(abstandBox, s.f35
         ? h('p', { class: 'muted' }, `Abstand aus den Fotodaten berechnet (${s.f35} mm Brennweite, KB).`)
@@ -237,6 +245,18 @@ export function bhdMitKamera({ pruefe } = {}) {
       leinwand.addEventListener('pointercancel', los);
       leinwand.style.touchAction = 'none';
       requestAnimationFrame(() => { groesse(); zeichnen(); zeigen(); });
+    }
+
+    /** Nach dem Zählen: Bestätigung, dann nächster Baum oder zurück zum Punkt */
+    function gezaehlt(r, e) {
+      fill(body,
+        h('div', { class: 'bhdk-gezaehlt', role: 'status' },
+          h('p', { class: 'bhdk-wert' }, `✓ Gezählt: BHD ${r.bhd} cm`),
+          h('p', {}, e.text),
+          e.stand ? h('p', { class: 'muted' }, e.stand) : null),
+        h('div', { class: 'btn-row' },
+          h('button', { type: 'button', class: 'btn', onclick: () => ende(null) }, 'Zurück zum Punkt'),
+          e.weiter === false ? null : h('button', { type: 'button', class: 'btn btn-primary btn-large', onclick: () => { s.bild = null; s.linien = null; schritt1(); } }, 'Nächsten Baum messen')));
     }
 
     schritt1();

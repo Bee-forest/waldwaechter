@@ -1223,20 +1223,30 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       return x ? { v: x.v, klasse: x.klasse, stufe: x.id, bhd } : null;
     };
     const kameraMessen = async () => {
-      const r = await bhdMitKamera({ pruefe: (bhd) => {
-        const b = zuordnen(bhd);
-        if (!b) return `Unter ${pl.stufen[0].von} cm BHD – wird nicht gezählt.`;
-        const was = b.klasse === 'dick' ? `dick, ${fmt(b.v, 3)} m³` : `Stufe ${pl.stufen[b.stufe].name} (${K(b.klasse)}), ${fmt(b.v, 3)} m³`;
-        const g = z.sperre(b.v, pt.id);
-        return `Wird gezählt als ${was}.${g === 'menge' ? ` ${MELDUNG_PASST_NICHT}` : g === 'punkt' ? ` ${MELDUNG_PUNKT_VOLL}` : ''}`;
-      } });
-      if (!r) { renderWorkF4(); return; }
-      const b = zuordnen(r.bhd);
-      if (!b) { toast(`Unter ${pl.stufen[0].von} cm BHD – dieser Baum wird nicht gezählt.`); renderWorkF4(); return; }
-      const gesperrt = z.sperre(b.v, pt.id);
-      zuletzt = gesperrt ? null : b.klasse === 'dick' ? 'dick' : `s${b.stufe}`;
-      auszeichnen({ ...b, kamera: { abstandCm: Math.round(r.abstandCm), quelle: r.abstandQuelle, referenz: r.referenz } });
-      if (!gesperrt) toast(`BHD ${r.bhd} cm gezählt (Kamera)`);
+      await bhdMitKamera({
+        pruefe: (bhd) => {
+          const b = zuordnen(bhd);
+          if (!b) return `Unter ${pl.stufen[0].von} cm BHD – wird nicht gezählt.`;
+          const was = b.klasse === 'dick' ? `dick, ${fmt(b.v, 3)} m³` : `Stufe ${pl.stufen[b.stufe].name} (${K(b.klasse)}), ${fmt(b.v, 3)} m³`;
+          const g = z.sperre(b.v, pt.id);
+          return `Wird gezählt als ${was}.${g === 'menge' ? ` ${MELDUNG_PASST_NICHT}` : g === 'punkt' ? ` ${MELDUNG_PUNKT_VOLL}` : ''}`;
+        },
+        // „Baum zählen“: direkt in den Zähler – dieselbe harte Sperre wie beim Tippen
+        zaehlen: (r) => {
+          const b = zuordnen(r.bhd);
+          if (!b) return { ok: false, text: `Unter ${pl.stufen[0].von} cm BHD – dieser Baum wird nicht gezählt.` };
+          const g = z.sperre(b.v, pt.id);
+          if (g) return { ok: false, text: g === 'punkt' ? MELDUNG_PUNKT_VOLL : MELDUNG_PASST_NICHT };
+          zuletzt = b.klasse === 'dick' ? 'dick' : `s${b.stufe}`;
+          auszeichnen({ ...b, kamera: { abstandCm: Math.round(r.abstandCm), quelle: r.abstandQuelle, referenz: r.referenz } });
+          const was = b.klasse === 'dick' ? `dick, ${fmt(b.v, 3)} m³` : `Stufe ${pl.stufen[b.stufe].name} (${K(b.klasse)}), ${fmt(b.v, 3)} m³`;
+          const hierJetzt = z.amPunkt(pt.id);
+          return { ok: true, text: `Als ${was} zu den gezählten Bäumen hinzugefügt.`,
+            stand: `Gezählt ${fmt(z.gezaehlt, 2)} von ${fmt(z.grenze, 2)} m³ · an diesem Punkt ${hierJetzt} von ${MAX_JE_PUNKT()} Bäumen`,
+            weiter: hierJetzt < MAX_JE_PUNKT() && z.darfAuszeichnen(pl.kleinstesStufenVolumen, pt.id) };
+        },
+      });
+      renderWorkF4();
     };
     let ausweichK = null;
     const karte = (k) => {

@@ -17,6 +17,7 @@ import { createPositionSource } from './gps.js';
 import { buzz, unlockAudio, keepAwake } from './feedback.js';
 import { say, WANZE_SVG } from '../mascot.js';
 import * as F4 from './f4.js';
+import { bhdMitKamera } from './bhdkamera.js';
 import { computePlanF4 } from './plan.js';
 import { standSpeichern, standLaden } from './speicher.js';
 import { dateiSpeichern, dateiLaden } from '../dateien.js';
@@ -1214,6 +1215,29 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       bhdEingabe = ''; zuletzt = 'dick';
       auszeichnen({ v: F4.zaehlvolumenDick(pl.gruppe, bhd, st.params.ho), klasse: 'dick', bhd });
     };
+    /** BHD per Foto messen; bis 50 cm zählt die passende Stufe, darüber das Volumen aus dem BHD */
+    const zuordnen = (bhd) => {
+      if (bhd < pl.stufen[0].von) return null;
+      if (bhd > 50) return { v: F4.zaehlvolumenDick(pl.gruppe, bhd, st.params.ho), klasse: 'dick', bhd };
+      const x = pl.stufen.find((y) => y.id === F4.stufeZuBhd(bhd));
+      return x ? { v: x.v, klasse: x.klasse, stufe: x.id, bhd } : null;
+    };
+    const kameraMessen = async () => {
+      const r = await bhdMitKamera({ pruefe: (bhd) => {
+        const b = zuordnen(bhd);
+        if (!b) return `Unter ${pl.stufen[0].von} cm BHD – wird nicht gezählt.`;
+        const was = b.klasse === 'dick' ? `dick, ${fmt(b.v, 3)} m³` : `Stufe ${pl.stufen[b.stufe].name} (${K(b.klasse)}), ${fmt(b.v, 3)} m³`;
+        const g = z.sperre(b.v, pt.id);
+        return `Wird gezählt als ${was}.${g === 'menge' ? ` ${MELDUNG_PASST_NICHT}` : g === 'punkt' ? ` ${MELDUNG_PUNKT_VOLL}` : ''}`;
+      } });
+      if (!r) { renderWorkF4(); return; }
+      const b = zuordnen(r.bhd);
+      if (!b) { toast(`Unter ${pl.stufen[0].von} cm BHD – dieser Baum wird nicht gezählt.`); renderWorkF4(); return; }
+      const gesperrt = z.sperre(b.v, pt.id);
+      zuletzt = gesperrt ? null : b.klasse === 'dick' ? 'dick' : `s${b.stufe}`;
+      auszeichnen({ ...b, kamera: { abstandCm: Math.round(r.abstandCm), quelle: r.abstandQuelle, referenz: r.referenz } });
+      if (!gesperrt) toast(`BHD ${r.bhd} cm gezählt (Kamera)`);
+    };
     let ausweichK = null;
     const karte = (k) => {
       const n = hierK(k), s = soll[k] || 0, fertig = s > 0 && n >= s;
@@ -1257,8 +1281,9 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       !punktVoll && unten.length ? h('details', { class: 'andere-staerke', open: !!ausweichK }, h('summary', {}, `Anderen Baum auszeichnen (${unten.map(K).join(', ')})`),
         h('p', { class: 'muted' }, 'Nicht vorgeschlagen, aber erlaubt, wenn hier kein passender Baum der vorgeschlagenen Stärke steht – die Menge gleicht sich an den nächsten Punkten aus.'),
         unten.map(karte)) : null,
+      punktVoll ? null : h('button', { type: 'button', class: 'btn btn-block bhdk-start', onclick: kameraMessen }, h('span', { html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>' }), 'BHD mit Kamera messen'),
       letzter ? h('div', { class: 'letzter' },
-        h('span', {}, `Zuletzt: ${letzter.klasse === 'dick' ? `dick, BHD ${fmt(letzter.bhd, 0)} cm` : `${pl.stufen[letzter.stufe]?.name} (${K(letzter.klasse)})`} · ${fmt(letzter.v, 3)} m³`),
+        h('span', {}, `Zuletzt: ${letzter.klasse === 'dick' ? `dick, BHD ${fmt(letzter.bhd, 0)} cm` : `${pl.stufen[letzter.stufe]?.name}${letzter.bhd ? `, ${fmt(letzter.bhd, 0)} cm` : ''} (${K(letzter.klasse)})`}${letzter.kamera ? ' · Kamera' : ''} · ${fmt(letzter.v, 3)} m³`),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => { st.zaehler.rueckgaengig(letzter.id); zuletzt = null; fehlerMeldung = null; zaehlerSpeichern(); renderWorkF4(); } }, 'Rückgängig')) : null,
       hier.length > 1 ? h('details', { class: 'calc' }, h('summary', {}, `Alle ${hier.length} Bäume an diesem Punkt`),
         h('ul', { class: 'baum-liste' }, hier.slice().reverse().map((b) => h('li', {},
@@ -1429,7 +1454,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       ['Hinweis', 'Gezählt ist eine vorsichtige Schätzung. Das tatsächlich geerntete Volumen liegt meist etwas darunter.'],
       [],
       ['Nr', 'Rasterpunkt', 'Stufe bzw. BHD (cm)', 'Klasse', 'Zählvolumen (m³)', 'Zeit'],
-      ...z.baeume.map((b, i) => [i + 1, b.punkt ?? 'Mindestnutzung', b.klasse === 'dick' ? zahl(b.bhd, 0) : `${pl.stufen[b.stufe]?.name}${b.bhd ? ` (gemessen ${zahl(b.bhd, 0)})` : ''}`, F4.KLASSE_NAME[b.klasse], zahl(b.v), new Date(b.t).toLocaleString('de-DE')]),
+      ...z.baeume.map((b, i) => [i + 1, b.punkt ?? 'Mindestnutzung', `${b.klasse === 'dick' ? zahl(b.bhd, 0) : `${pl.stufen[b.stufe]?.name}${b.bhd ? ` (gemessen ${zahl(b.bhd, 0)})` : ''}`}${b.kamera ? ' Kamera' : ''}`, F4.KLASSE_NAME[b.klasse], zahl(b.v), new Date(b.t).toLocaleString('de-DE')]),
       [],
       ['Rasterpunkt', 'Breite', 'Länge', 'Status', 'Bäume', 'm³'],
       ...st.plan.points.map((p) => { const bs = z.baeume.filter((b) => b.punkt === p.id); return [p.id, p.at[0].toFixed(6), p.at[1].toFixed(6), { done: 'erledigt', skipped: 'übersprungen', open: 'offen', leer: 'ohne Baum, nicht angelaufen' }[p.status], bs.length, zahl(bs.reduce((a, b) => a + b.v, 0))]; }),

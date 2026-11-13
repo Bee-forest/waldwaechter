@@ -8,7 +8,7 @@ import { areaHa, formatHa, formatDist, centroid, compassLabel, polysOf } from '.
 import { WANZE_SVG, say } from './mascot.js';
 import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa, localIndexInfo } from './map/thueringen.js';
 import { openProfile } from './profile.js';
-import { besonderheiten, vspDiagnose } from './map/besonderheiten.js';
+import { besonderheiten } from './map/besonderheiten.js';
 import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
 import { zeigeVerordnung } from './schutzgebiete.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
@@ -260,16 +260,6 @@ function ladeBesonderheiten(parcel) {
   besonderheiten(parcel, zeigen).then(zeigen);
 }
 
-/** Knopf „Verkehrssicherung prüfen (Diagnose)“: zeigt Schritt für Schritt, was die Prüfung findet */
-function diagnoseKnopf(p) {
-  return h('button', { class: 'btn btn-small', onclick: async () => {
-    const pre = h('pre', { class: 'diagnose' }, 'Prüfe … (bis zu 40 Sekunden)');
-    const kopieren = h('button', { class: 'btn btn-small', onclick: () => (navigator.clipboard?.writeText(pre.textContent) || Promise.reject()).then(() => toast('Kopiert – du kannst es mir schicken.'), () => toast('Kopieren ging nicht – mach bitte einen Screenshot.')) }, 'Text kopieren');
-    dialog({ title: 'Diagnose Verkehrssicherung', body: h('div', {}, pre, kopieren), actions: [{ label: 'Schließen', value: true, primary: true }] });
-    try { pre.textContent = (await vspDiagnose(p)).join('\n'); } catch (e) { pre.textContent = `Diagnose fehlgeschlagen: ${e.message}`; }
-  } }, 'Verkehrssicherung prüfen (Diagnose)');
-}
-
 function besonderheitenListe(p) {
   const f = featuresOf(p);
   const vspFehler = (f.fehler || []).includes('vsp')
@@ -278,8 +268,8 @@ function besonderheitenListe(p) {
     : null;
   const NAMEN = { vsp: 'Verkehrssicherung', biotop: 'Biotope', lrt: 'Lebensraumtypen' };
   const laedt = f.offen?.length ? h('p', { class: 'muted' }, `Suche noch: ${f.offen.map((k) => NAMEN[k]).join(', ')} …`) : null;
-  if (!f.length && laedt) return [vspFehler, laedt, diagnoseKnopf(p)];
-  if (!f.length) return vspFehler ? [vspFehler, diagnoseKnopf(p)] : [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.'), diagnoseKnopf(p)];
+  if (!f.length && laedt) return [vspFehler, laedt];
+  if (!f.length) return vspFehler ? [vspFehler] : [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.')];
   const gruppen = {};
   for (const x of f) (gruppen[x.type] ||= []).push(x);
   return [vspFehler, laedt, h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
@@ -290,7 +280,7 @@ function besonderheitenListe(p) {
     h('p', {}, list[0].text),
     t === 'vsp' ? h('button', { class: 'btn btn-small', disabled: hatVerkehrssicherung(p.id), onclick: (e) => { erinnereVerkehrssicherung(p); e.currentTarget.disabled = true; e.currentTarget.textContent = 'Im Maßnahmenplan'; toast('Verkehrssicherung im Maßnahmenplan'); } },
       hatVerkehrssicherung(p.id) ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern') : null,
-  ))), diagnoseKnopf(p), h('p', { class: 'hint' }, 'Tippe auf ein „i“ in der Karte, dann erklärt dir der WaldWächter die Besonderheit. Biotope: © GDI-Th / TLUBN / ThüringenForst, live abgefragt.')];
+  ))), h('p', { class: 'hint' }, 'Tippe auf ein „i“ in der Karte, dann erklärt dir der WaldWächter die Besonderheit. Biotope: © GDI-Th / TLUBN / ThüringenForst, live abgefragt.')];
 }
 
 function clearSelection() {

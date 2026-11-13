@@ -225,10 +225,25 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   }
 
   // ---------- Schritt 1: Fläche ----------
+  /**
+   * Auswahlliste als Aufklappliste im gleichen Kartenformat: zu sieht man nur die gewählte Fläche,
+   * aufgeklappt alle – so bleibt „Weiter zu den Angaben“ ohne Scrollen sichtbar.
+   */
+  let listeOffen = false;
+  function aufklappListe(eintraege, platzhalter) {
+    const gewaehlt = eintraege.find((e) => e.an);
+    const kopf = h('button', { type: 'button', class: 'pick pick-drop', 'aria-expanded': String(listeOffen), onclick: () => { listeOffen = !listeOffen; renderSelect(); } },
+      gewaehlt ? gewaehlt.inhalt() : [h('strong', {}, platzhalter), h('span', {}, `${eintraege.length} zur Auswahl`)],
+      h('span', { class: 'pick-pfeil', 'aria-hidden': 'true' }, listeOffen ? '▴' : '▾'));
+    return h('div', { class: 'pick-drop-wrap' }, kopf,
+      listeOffen ? h('ul', { class: 'pick-list pick-drop-liste' }, eintraege.map((e) => h('li', {}, h('button', {
+        class: 'pick', 'aria-pressed': String(e.an), onclick: () => { listeOffen = false; e.waehlen(); },
+      }, e.inhalt())))) : null);
+  }
   function renderSelect() {
     const tabs = h('div', { class: 'segmented', role: 'tablist', 'aria-label': 'Art der Flächenauswahl' },
       [['parcel', 'Flurstück'], ['stand', 'Bestand'], ['draw', 'Einzeichnen']].map(([k, l]) => h('button', {
-        role: 'tab', 'aria-selected': String(st.mode === k), onclick: () => { if (k === st.mode) return; st.mode = k; st.draft = []; if (k === 'draw') st.sel = null; renderSelect(); },
+        role: 'tab', 'aria-selected': String(st.mode === k), onclick: () => { if (k === st.mode) return; st.mode = k; listeOffen = false; st.draft = []; if (k === 'draw') st.sel = null; renderSelect(); },
       }, l)));
     const content = h('div', { class: 'select-content' });
     const next = h('button', { class: 'btn btn-primary btn-block btn-large', disabled: !st.sel, onclick: async () => { if (await pruefeKonflikt()) go(1); } }, 'Weiter zu den Angaben');
@@ -241,9 +256,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       const fremd = st.sel?.parcelId && !st.sel?.stand && !istMeins(st.sel.parcelId);
       if (fremd) content.append(h('button', { class: 'btn btn-small', onclick: addToMine }, h('span', { html: icon.plus || '' }), 'Zu meinen Flächen hinzufügen'));
       content.append(list.length
-        ? h('ul', { class: 'pick-list' }, list.map((p) => h('li', {}, h('button', {
-            class: 'pick', 'aria-pressed': String(st.sel?.parcelId === p.id && !st.sel?.stand), onclick: () => pickParcel(p),
-          }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(amtlicheFlaecheHa(p))}${p.flaecheAmtlich ? ' (amtlich)' : ''}`)))))
+        ? aufklappListe(list.map((p) => ({ an: st.sel?.parcelId === p.id && !st.sel?.stand, waehlen: () => pickParcel(p),
+            inhalt: () => [h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(amtlicheFlaecheHa(p))}${p.flaecheAmtlich ? ' (amtlich)' : ''}`)] })), 'Flurstück auswählen')
         : h('p', { class: 'muted' }, 'Du hast noch keine eigenen Flächen gespeichert.'));
     } else if (st.mode === 'stand') {
       const stands = myStands.length ? myStands : [];
@@ -251,9 +265,8 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         .bindTooltip(`${s.name}: ${s.species}`, { direction: 'center', className: 'stand-tip' })
         .on('click', (e) => { L.DomEvent.stop(e); pickStand(s); })));
       content.append(stands.length
-        ? h('ul', { class: 'pick-list' }, stands.map((s) => h('li', {}, h('button', {
-            class: 'pick', 'aria-pressed': String(st.sel?.stand?.id === s.id), onclick: () => pickStand(s),
-          }, h('strong', {}, `${s.name}: ${s.label}`), h('span', {}, `${s.species}${s.mix ? ` mit ${s.mix}` : ''}${s.age != null ? `, heute ca. ${s.age} Jahre` : ''}, ${s.anteilHa != null ? `ca. ${formatHa(s.anteilHa)} im Flurstück` : formatHa(areaHa(s.ring))}`)))))
+        ? aufklappListe(stands.map((s) => ({ an: st.sel?.stand?.id === s.id, waehlen: () => pickStand(s),
+            inhalt: () => [h('strong', {}, `${s.name}: ${s.label}`), h('span', {}, `${s.species}${s.mix ? ` mit ${s.mix}` : ''}${s.age != null ? `, heute ca. ${s.age} Jahre` : ''}, ${s.anteilHa != null ? `ca. ${formatHa(s.anteilHa)} im Flurstück` : formatHa(areaHa(s.ring))}`)] })), 'Bestand auswählen')
         : h('p', { class: 'muted' }, 'Für deine Flächen ist im Waldverzeichnis kein Bestand hinterlegt. Wähle das ganze Flurstück oder zeichne den Bestand ein.'));
     } else {
       content.append(

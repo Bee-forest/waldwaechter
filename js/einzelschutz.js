@@ -42,6 +42,7 @@ const BILD = {
 /**
  * Sortiment (WBS-Nr. = Nummer im Materialsortiment). hoehe in cm, material: kunststoff | holz | bio | natur.
  * FESTLEGUNG: Höhe von Dendron und Buck Bio-Wuchshülle laut Sortiment nicht angegeben → 120 cm angenommen (im Angebot prüfen).
+ * Dendron und Buck stehen nicht auf der WBS-Website, sind aber im WBS-Sortiment erhältlich (Angabe der Nutzerin).
  */
 export const PRODUKTE = [
   { id: 'plantagard', name: 'PlantaGard Wuchshülle 1200×100×100 mm', netto: 1.48, typ: 'huelle', kat: 'Wuchshülle', hoehe: 120, material: 'kunststoff', schutz: ['verbiss', 'fegen'], stab: 'akazie1500', bild: 'huelle',
@@ -57,7 +58,7 @@ export const PRODUKTE = [
   { id: 'dendron', nr: 117, name: 'Wuchshülle aus Holz – Dendron', netto: 3.73, typ: 'huelle', kat: 'Wuchshülle', hoehe: 120, material: 'holz', schutz: ['verbiss', 'fegen'], stab: 'akazie1500', bild: 'holz',
     text: 'Aus Holz, kunststofffrei und verrottbar – muss nicht wieder eingesammelt werden. Förderfähig.', nadel: true },
   { id: 'buck', nr: 132, name: 'Buck Bio-Wuchshülle', netto: 5.75, typ: 'huelle', kat: 'Wuchshülle', hoehe: 120, material: 'bio', schutz: ['verbiss', 'fegen'], stab: 'akazie1500', bild: 'bio',
-    text: 'Biobasierte, abbaubare Hülle (nicht erdölbasiert). Förderfähig nur, wenn sie laut Hersteller kunststofffrei ist.', nadel: false },
+    text: 'Biobasierte, kunststofffreie Hülle – baut sich ab und muss nicht eingesammelt werden. Förderfähig.', nadel: false },
   { id: 'stachel', nr: 92, name: 'PlantaGard Stachelbäume', netto: 0.92, typ: 'fegeschutz', kat: 'Fegeschutz (Spirale, Fegestab)', hoehe: 120, material: 'kunststoff', schutz: ['fegen'], stab: null, bild: 'stachel',
     text: 'Stachelstab neben die Pflanze – hält den Rehbock vom Fegen ab. Kein Verbissschutz.', nadel: true },
   { id: 'klemmen', nr: 99, name: 'Verbissschutzklemmen', netto: 15.46 / 100, einheitText: '15,46 € je 100 Stück', typ: 'terminal', kat: 'Terminaltriebschutz', hoehe: 0, material: 'kunststoff', schutz: ['leittrieb'], stab: null, bild: 'klemme',
@@ -94,7 +95,7 @@ const INFO = {
     aufbau: AUFBAU_HUELLE, quellen: ['lwf', 'praxis', 'merkblatt', 'wbs'] },
   dendron: { praxis: ['Dendron (Firma Walthmeyer) besteht aus 2 mm starkem Nadelholzfurnier; es gibt Laub-, Universal- und Nadelholz-Varianten.', 'Im Versuch der TU Dresden/LWF ließ die Holzhülle im Tagesmaximum am meisten Licht durch (77 % der Freifläche). Bei Elsbeere lag der Höhenzuwachs etwa 16 % über der Pflanze ohne Hülle – weniger Treibhauseffekt als in Kunststoff, dafür stabiler.'],
     aufbau: ['Stab dicht neben der Pflanze einschlagen.', 'Furnierhülle aufstellen bzw. aufspreizen und um die Pflanze legen, am Stab befestigen (Montage laut Hersteller, z. B. mit Tacker oder Draht).', 'Die Hülle verrottet mit der Zeit und muss nicht eingesammelt werden – den Stab später entfernen oder ebenfalls verrotten lassen.'], quellen: ['afz', 'lwf', 'lwfPdf', 'wbs'] },
-  buck: { praxis: ['Biobasierte Hüllen sollen sich nach einigen Jahren abbauen. Bei abbaubaren Tubex-Hüllen etwa ist die volle Funktion auf 5 Jahre ausgelegt, danach folgen weitere 5 Jahre Abbau – für die Buck-Hülle bitte die Herstellerangaben prüfen.', 'Achtung Licht: Im LWF-Versuch kam in einer Biokunststoff-Hülle (PLA) nur gut ein Fünftel, in einer Papierhülle sogar nur rund ein Zehntel des Lichts an – undurchsichtige Biohüllen nur an sehr hellen Plätzen.'],
+  buck: { praxis: ['Die Buck Bio-Wuchshülle ist kunststofffrei und damit förderfähig. Biobasierte Hüllen bauen sich nach einigen Jahren ab – bei abbaubaren Tubex-Hüllen etwa ist die volle Funktion auf 5 Jahre ausgelegt, danach folgen weitere 5 Jahre Abbau; die genaue Standzeit der Buck-Hülle steht in den Herstellerangaben.', 'Achtung Licht: Im LWF-Versuch kam in einer Biokunststoff-Hülle (PLA) nur gut ein Fünftel, in einer Papierhülle sogar nur rund ein Zehntel des Lichts an – undurchsichtige Biohüllen nur an sehr hellen Plätzen.'],
     aufbau: AUFBAU_HUELLE.slice(0, 4).concat(['Abbaubare Hüllen müssen nicht eingesammelt werden; prüfe trotzdem, ob Reste stören.']), quellen: ['abbau', 'lwf', 'wbs'] },
   stachel: { praxis: ['Stachelbäume halten den Rehbock vom Fegen ab, schützen aber nicht gegen Verbiss.'],
     aufbau: ['Im Frühjahr vor der Fegezeit (ab April) dicht neben die Pflanze stecken, Stacheln zum Bäumchen.', 'Bei Laubholz mit hohem Verbissdruck zusätzlich Verbissschutz einsetzen.'], quellen: ['wbs'] },
@@ -121,7 +122,7 @@ const STAEBE = {
   akazie1500: { id: 'akazie1500', nr: 1, name: 'Akazienstab 1500×22×22 mm', netto: 0.80, bild: 'stab' },
   akazie2000: { id: 'akazie2000', nr: 2, name: 'Akazienstab 2000×22×22 mm', netto: 1.95, bild: 'stab' },
 };
-const kunststofffrei = (p) => p.material === 'holz' || (p.material === 'bio' && false);
+const kunststofffrei = (p) => p.material === 'holz' || p.material === 'bio'; // Dendron (Holz) und Buck (biobasiert) sind kunststofffrei
 const erdoelfrei = (p) => p.material !== 'kunststoff';
 
 /** Förderung je Stück nach Höhe (Richtlinie Teil A und Landesprogramm) */
@@ -130,6 +131,8 @@ export function esFoerderung(cm) {
   const g = cm >= 180 ? 'gross' : 'klein';
   return { stufe: g === 'gross' ? 'ab 180 cm' : '120–150 cm', GANW: SAETZE.GANW.es[g], LABE: SAETZE.LABE.es[g] };
 }
+// Hinweis auf den Karten für Produkte, die nicht auf der WBS-Website stehen
+const NICHT_ONLINE = new Set(['dendron', 'buck']);
 const foerderfaehig = (p) => (p.typ === 'huelle' || p.typ === 'gitter') && kunststofffrei(p) && p.hoehe >= 120;
 
 const NADEL = /fichte|kiefer|tanne|lärche|douglasie|eibe|nadel/i;
@@ -365,7 +368,7 @@ export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foe
       h('div', { class: 'es-bild', html: BILD[p.bild] }),
       h('div', { class: 'es-text' },
         h('strong', {}, p.name),
-        h('small', {}, `${p.einheitText || `${euro(brutto(p.netto))} je ${p.je || 'Stück'}`}${p.stab ? ` + Stab ${euro(brutto(STAEBE[p.stab].netto))}` : ''} · brutto${p.nr ? ` · WBS-Nr. ${p.nr}` : ''}`),
+        h('small', {}, `${p.einheitText || `${euro(brutto(p.netto))} je ${p.je || 'Stück'}`}${p.stab ? ` + Stab ${euro(brutto(STAEBE[p.stab].netto))}` : ''} · brutto${p.nr ? ` · WBS-Nr. ${p.nr}` : ''}${NICHT_ONLINE.has(p.id) ? ' · bei der WBS erhältlich, nicht auf der Website' : ''}`),
         h('small', { class: 'muted' }, p.text),
         h('div', { class: 'es-tags' },
           p.hoehe ? h('span', {}, `${(p.hoehe / 100).toLocaleString('de-DE', { minimumFractionDigits: 2 })} m`) : null,
@@ -388,7 +391,7 @@ export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foe
     const sl = stueckliste(p, z.n, s.eigen);
     const f = foerderfaehig(p) ? esFoerderung(p.hoehe) : null;
     const foerderGrund = !(p.typ === 'huelle' || p.typ === 'gitter') ? `${p.kat} wird nicht als Einzelschutz gefördert – gefördert werden Wuchshüllen und Drahthosen.`
-      : !kunststofffrei(p) ? (p.material === 'bio' ? 'Biobasierte Hüllen sind nur förderfähig, wenn sie laut Hersteller kunststofffrei sind – bitte im Datenblatt prüfen.' : 'Kunststoff wird nicht gefördert – nur kunststofffreier Einzelschutz (z. B. Holz).')
+      : !kunststofffrei(p) ? 'Kunststoff wird nicht gefördert – nur kunststofffreier Einzelschutz (z. B. Holz, biobasiert).'
         : p.hoehe < 120 ? 'Gefördert wird Einzelschutz erst ab 1,20 m Höhe.' : null;
     fill(unten,
       h('h2', { class: 'step-title' }, 'Was soll der Schutz können?'),

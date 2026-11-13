@@ -1,5 +1,5 @@
 // Besonderheiten eines Flurstücks als „i“-Punkte auf der Karte:
-//  • Verkehrssicherungspflicht: Wald liegt bis 60 m an öffentlichen Straßen/Wegen/Plätzen, Bahnstrecken
+//  • Verkehrssicherungspflicht: Wald liegt bis 50 m an öffentlichen Straßen/Wegen/Plätzen, Bahnstrecken
 //    oder Gebäuden (OpenStreetMap über Overpass, live abgefragt) – ein Punkt je Straße bzw. Gebäudegruppe
 //  • Biotope: Punkt-, Linien- und Flächenbiotope aus Waldbiotop- und Offenlandbiotopkartierung
 //    (Kartendienste des Geoportals, live abgefragt, nichts gespeichert)
@@ -11,7 +11,7 @@ import { biotopWichtig, lrtCode, lrtWichtig, LRT } from './lrt.js';
 export const BESONDERHEIT = {
   vsp: {
     title: 'Verkehrssicherungspflicht',
-    text: 'Dein Wald liegt hier bis 60 m an einer öffentlichen Straße, einem öffentlichen Weg oder Platz, einer Bahnstrecke oder an Gebäuden. Bäume, die beim Umfallen dorthin reichen können, musst du kontrollieren: Von ihnen darf keine erkennbare Gefahr ausgehen, etwa durch tote Äste oder kranke Bäume. Kontrolliere diesen Streifen zweimal im Jahr – belaubt und unbelaubt – und schreib die Kontrolle auf. Waldwege und private Wege lösen diese Pflicht nicht aus.',
+    text: 'Dein Wald liegt hier bis 50 m an einer öffentlichen Straße, einem öffentlichen Weg oder Platz, einer Bahnstrecke oder an Gebäuden. Bäume, die beim Umfallen dorthin reichen können, musst du kontrollieren: Von ihnen darf keine erkennbare Gefahr ausgehen, etwa durch tote Äste oder kranke Bäume. Kontrolliere diesen Streifen zweimal im Jahr – belaubt und unbelaubt – und schreib die Kontrolle auf. Waldwege und private Wege lösen diese Pflicht nicht aus.',
   },
   punktbiotop: {
     title: 'Punktbiotop',
@@ -27,12 +27,12 @@ export const BESONDERHEIT = {
   },
 };
 
-// ---------- Verkehrssicherung: öffentliche Verkehrswege, Bahn und Gebäude bis 60 m ----------
+// ---------- Verkehrssicherung: öffentliche Verkehrswege, Bahn und Gebäude bis 50 m ----------
 // Rechtsgrundlage ist die allgemeine Verkehrssicherungspflicht (§ 823 BGB, Rechtsprechung): Der Waldbesitzer
 // muss Bäume kontrollieren, die beim Umfallen öffentliche Straßen, Wege, Plätze, Bahnanlagen oder Gebäude
-// treffen können – üblich ist ein Streifen von mindestens einer Baumlänge. Hier: 60 m (Vorgabe).
+// treffen können – üblich ist ein Streifen von mindestens einer Baumlänge. Hier: 50 m (Vorgabe).
 // Waldwege und private Wege lösen keine Pflicht aus (Betreten des Waldes auf eigene Gefahr, § 14 BWaldG / § 6 ThürWaldG).
-export const VSP_ABSTAND_M = 60;
+export const VSP_ABSTAND_M = 50;
 const OEFFENTLICH = /^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|road|pedestrian|cycleway|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$/;
 const PRIVAT = /^(private|no|agricultural|forestry|delivery|customers|permit)$/;
 const GEBAEUDE_ART = { house: 'Wohnhaus', residential: 'Wohngebäude', detached: 'Wohnhaus', semidetached_house: 'Wohnhaus', apartments: 'Wohngebäude', terrace: 'Reihenhaus', farm: 'Bauernhaus', garage: 'Garage', garages: 'Garagen', barn: 'Scheune', shed: 'Schuppen', hut: 'Hütte', cabin: 'Hütte', farm_auxiliary: 'Nebengebäude', industrial: 'Gewerbegebäude', commercial: 'Gewerbegebäude', church: 'Kirche', school: 'Schule' };
@@ -90,12 +90,36 @@ export function vspAuswerten(polys, elemente, maxM = VSP_ABSTAND_M) {
     const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
     return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
   };
+  // Flächenränder als Strecken (exakte Abstandsrechnung, nicht nur Stichproben)
+  const kanten = [];
+  for (const poly of polys) for (const ring of poly) for (let i = 0; i < ring.length - 1; i++) kanten.push([xy(ring[i]), xy(ring[i + 1])]);
+  const naechsterAufStrecke = (p, a, b) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
+    return [a[0] + t * dx, a[1] + t * dy];
+  };
+  const schnitt = (a, b, c, d) => {
+    const r = [b[0] - a[0], b[1] - a[1]], q = [d[0] - c[0], d[1] - c[1]], den = r[0] * q[1] - r[1] * q[0];
+    if (!den) return null;
+    const t = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den, u = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [a[0] + t * r[0], a[1] + t * r[1]] : null;
+  };
+  /** kürzester Abstand zweier Strecken und der zugehörige Punkt auf dem Flächenrand */
+  const streckenAbstand = ([a, b], [c, d]) => {
+    const x = schnitt(a, b, c, d);
+    if (x) return { d: 0, p: x };
+    let best = null;
+    for (const [p, k] of [[c, [a, b]], [d, [a, b]]]) { const n = naechsterAufStrecke(p, k[0], k[1]), dd = Math.hypot(p[0] - n[0], p[1] - n[1]); if (!best || dd < best.d) best = { d: dd, p: n }; }
+    for (const p of [a, b]) { const n = naechsterAufStrecke(p, c, d), dd = Math.hypot(p[0] - n[0], p[1] - n[1]); if (!best || dd < best.d) best = { d: dd, p }; }
+    return best;
+  };
   const minAbstand = (linien) => {
     let best = { d: Infinity, at: null };
     for (const L of linien) {
-      // Objekt liegt in der Fläche → Abstand 0 an diesem Objektpunkt
+      // Objekt liegt ganz in der Fläche → Abstand 0 an diesem Objektpunkt
       for (const q of L) if (inPolys(ll(q), polys)) return { d: 0, at: ll(q) };
-      for (const r of rand) for (let i = 0; i < L.length - 1; i++) { const d = segDist(r, L[i], L[i + 1]); if (d < best.d) best = { d, at: ll(r) }; }
+      const strecken = L.length === 1 ? [[L[0], L[0]]] : L.slice(1).map((q, i) => [L[i], q]);
+      for (const k of kanten) for (const st of strecken) { const r = streckenAbstand(k, st); if (r.d < best.d) best = { d: r.d, at: ll(r.p) }; }
     }
     // verläuft das Objekt parallel zum Rand, sind viele Randpunkte gleich nah → die Mitte dieses Abschnitts nehmen
     if (best.at) {

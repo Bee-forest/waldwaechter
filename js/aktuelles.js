@@ -86,6 +86,7 @@ function openHolzpreise() {
 // Stationswerte des DWD-Waldbrandgefahrenindex, täglich vom DWD übernommen (ArcGIS-Dienst „DWD“).
 const WBI_URL = 'https://services2.arcgis.com/7wuv6DH7DYhDuwvU/ArcGIS/rest/services/DWD/FeatureServer/3/query?where=1%3D1&outFields=Stationsname,Bundesland,geoBreite,geoLaenge,wbi_tag,tag,aktualisierung_DWD&returnGeometry=false&f=json';
 const WBI_CACHE = 'waldwaechter.wbi';
+const TF_KARTE = 'https://www.thueringenforst.de/aktuelles-service/info-karten/waldbrandgefahrenstufenkarte';
 const STUFEN = {
   1: { l: 'sehr geringe Gefahr', farbe: '#F7F3B5', ink: '#5B5300' },
   2: { l: 'geringe Gefahr', farbe: '#F5D76E', ink: '#5B4300' },
@@ -152,14 +153,23 @@ function waldbrandKachel() {
   const reg = region();
   const links = h('p', { class: 'akt-links' },
     h('a', { href: 'https://www.dwd.de/DE/leistungen/waldbrandgef/waldbrandgef.html', target: '_blank', rel: 'noopener' }, 'Karte beim DWD'), ' · ',
-    h('a', { href: 'https://www.thueringenforst.de/', target: '_blank', rel: 'noopener' }, 'ThüringenForst'));
+    h('a', { href: TF_KARTE, target: '_blank', rel: 'noopener' }, 'Waldbrandgefahrenstufenkarte von ThüringenForst'));
   const kopf = h('div', { class: 'akt-titelzeile' }, h('h2', { class: 'kachel-titel' }, 'Waldbrandgefahr'), h('span', { class: 'akt-stand' }, reg.name));
+  // ThüringenForst gibt Stufen nur in der Waldbrandsaison (März bis Oktober) heraus
+  const monat = new Date().getMonth() + 1;
+  if (monat < 3 || monat > 10) return h('section', { class: 'kachel' }, kopf,
+    h('div', { class: 'akt-wbi-stufe akt-wbi-aus' }, h('span', { class: 'akt-wbi-zahl' }, '–'),
+      h('div', {}, h('strong', {}, 'Keine Waldbrandsaison'), h('small', {}, 'ThüringenForst gibt von März bis Oktober täglich Waldbrandgefahrenstufen heraus.'))),
+    h('p', {}, 'Rauchen und offenes Feuer sind im Wald trotzdem ganzjährig verboten. Ab März steht hier wieder die Stufe für deinen Standort.'),
+    links);
   if (!wbi) return h('section', { class: 'kachel' }, kopf,
     h('p', { class: 'muted' }, wbiFehler ? 'Die Waldbrandgefahr konnte gerade nicht abgerufen werden. Schau beim DWD oder bei ThüringenForst nach.' : 'Wird geladen …'),
     wbiFehler ? h('button', { class: 'btn btn-small', onclick: ladeWbi }, 'Erneut versuchen') : null, links);
   const naechste = wbi.features.map((a) => ({ a, d: distance(reg.pt, [a.geoBreite, a.geoLaenge]) })).sort((x, y) => x.d - y.d)[0];
   if (!naechste) return h('section', { class: 'kachel' }, kopf, h('p', { class: 'muted' }, 'Keine Station in der Nähe gefunden.'), links);
   const { a, d } = naechste;
+  if (a.tag && Date.now() - a.tag > 2 * 86400000) return h('section', { class: 'kachel' }, kopf,
+    h('p', {}, `Für deinen Standort liegt keine aktuelle Stufe vor (letzter Wert vom ${fmtDate(new Date(a.tag))}). Bitte die Karte von ThüringenForst prüfen.`), links);
   const stufe = Math.max(1, Math.min(5, Math.round(Number(a.wbi_tag))));
   const st = STUFEN[stufe];
   const tag = a.tag ? new Date(a.tag) : null;
@@ -177,7 +187,7 @@ function waldbrandKachel() {
       ortSucht ? h('span', { class: 'muted' }, 'Standort wird bestimmt …')
         : h('button', { class: 'link-btn', onclick: ortBestimmen }, reg.gps ? 'Standort aktualisieren' : 'Station an meinem Standort zeigen'),
       ortFehler ? h('small', { class: 'muted' }, ` ${ortFehler}`) : null),
-    h('p', { class: 'muted' }, reg.gps ? 'Nächste DWD-Station zu deinem aktuellen Standort. Verbindlich ist die vom zuständigen Forstamt ausgerufene Waldbrandgefahrenstufe.' : reg.eigene ? 'Berechnet für die Mitte deiner Waldflächen. Verbindlich ist die vom zuständigen Forstamt ausgerufene Waldbrandgefahrenstufe.' : 'Leg Flurstücke an, dann zeigt die App die Gefahr für deine Region. Verbindlich ist die Stufe des zuständigen Forstamts.'),
+    h('p', { class: 'muted' }, `${reg.gps ? 'Wert der nächsten DWD-Station zu deinem Standort.' : reg.eigene ? 'Wert der nächsten DWD-Station zur Mitte deiner Waldflächen.' : 'Leg Flurstücke an oder gib den Standort frei, dann zeigt die App die Gefahr für deine Region.'} ThüringenForst legt auf Grundlage dieser DWD-Werte die Stufen für 32 Regionen fest – maßgeblich ist die Karte von ThüringenForst.`),
     links);
 }
 

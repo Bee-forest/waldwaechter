@@ -1171,3 +1171,4 @@ li.fin-zeile { cursor: default; }
 .besonder-wege { margin-top: 12px; display: grid; gap: 6px; }
 .gpunkt span { display: block; width: 100%; height: 100%; border-radius: 50%; background: #F26B1D; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); box-sizing: border-box; }
 .gpunkt-mitte span { background: #fff; border: 2px solid #F26B1D; opacity: .9; }
+.akt-wbi-aus { --wbi: var(--surface-2); --wbi-ink: var(--ink); }

@@ -39,3 +39,17 @@ GetMap Gotha flach: text/xml 348 Byte
 == GFI Suhl Domberg [text/html] CORS=*
 <ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd"><ServiceException>Missing WMS:GetFeatureInfo right for object(s) exposition,hangneigung.</ServiceException></ServiceExceptionReport>
 GetMap Suhl Domberg: text/xml 348 Byte
+
+== Alternativen
+Terrarium Kickelhahn Steilhang z14: CORS=* Pixel 6.1 m, Höhe 558–810 m, Neigung Median 23 %, 90% 42 %, max 107 %
+Terrarium Kickelhahn Steilhang z15: CORS=* Pixel 3.0 m, Höhe 558–756 m, Neigung Median 29 %, 90% 45 %, max 65 %
+Terrarium Schwarzatal Steilhang z14: CORS=* Pixel 6.1 m, Höhe 282–533 m, Neigung Median 14 %, 90% 41 %, max 78 %
+Terrarium Schwarzatal Steilhang z15: CORS=* Pixel 3.0 m, Höhe 415–522 m, Neigung Median 11 %, 90% 25 %, max 36 %
+Terrarium Greiz Wald z14: CORS=* Pixel 6.1 m, Höhe 233–421 m, Neigung Median 16 %, 90% 34 %, max 73 %
+Terrarium Greiz Wald z15: CORS=* Pixel 3.0 m, Höhe 247–357 m, Neigung Median 17 %, 90% 36 %, max 67 %
+Terrarium Gotha flach z14: CORS=* Pixel 6.0 m, Höhe 281–335 m, Neigung Median 3 %, 90% 8 %, max 20 %
+Terrarium Gotha flach z15: CORS=* Pixel 3.0 m, Höhe 288–335 m, Neigung Median 6 %, 90% 11 %, max 20 %
+Terrarium Suhl Domberg z14: CORS=* Pixel 6.1 m, Höhe 418–522 m, Neigung Median 8 %, 90% 20 %, max 53 %
+Terrarium Suhl Domberg z15: CORS=* Pixel 3.0 m, Höhe 418–456 m, Neigung Median 5 %, 90% 12 %, max 19 %
+INSPIREel Ebenen: []
+DGM Ebenen: []

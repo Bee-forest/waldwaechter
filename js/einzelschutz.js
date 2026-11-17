@@ -10,6 +10,7 @@ import { SAETZE } from './foerder-formular.js';
 import { miniKarte } from './flaeche.js';
 import { gespeichertesLayout, flaechenRinge } from './pflanzlayout.js';
 import { WBS as PFLANZ_WBS } from './pflanzpreise.js';
+import { passtFlurstueck } from './profi.js';
 
 // Kategorien wie in der Maßnahmenliste (für Förderung und Historie)
 export const SCHUTZ_ARTEN = [
@@ -326,7 +327,7 @@ export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foe
       !pflanzungen.length ? h('small', { class: 'muted' }, 'Noch keine Pflanzung angelegt – du kannst die Stückzahl selbst eingeben.') : null,
       ohne ? h('div', {},
         h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; } },
-          h('option', { value: '' }, 'ohne Flächenzuordnung'), store.get().parcels.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
+          h('option', { value: '' }, 'ohne Flächenzuordnung'), store.get().parcels.filter(passtFlurstueck).map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
         h('datalist', { id: 'es-arten' }, artenNamen.map((n) => h('option', { value: n }))),
         h('p', { class: 'sheet-label' }, 'Baumarten und Anzahl der zu schützenden Pflanzen'),
         h('ul', { class: 'pflanz-liste' }, eigeneArten.map((a, i) => h('li', { class: 'es-eigen' },

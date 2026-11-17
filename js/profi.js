@@ -187,7 +187,8 @@ export function revierleiterVon(daten, z) {
 // (ohne Flurstück: zum Ordner, der beim Anlegen gewählt war). „Eigene Flächen“ = ohne Ordner.
 export const ordnerListe = () => store.get().ordner || [];
 export const ordnerName = (id) => (id ? ordnerListe().find((o) => o.id === id)?.name || 'Ordner' : 'Eigene Flächen');
-export const aktiverOrdner = () => (istProfi() ? store.get().settings.ordnerAktiv || 'eigen' : 'alle');
+// Ohne Profimodus sind nur die eigenen Flächen zu sehen; Ordner bleiben gespeichert
+export const aktiverOrdner = () => (istProfi() ? store.get().settings.ordnerAktiv || 'eigen' : 'eigen');
 const parcelOrdner = (pid) => (pid ? store.get().parcels.find((p) => p.id === pid)?.ordnerId || null : undefined);
 export function ordnerVon(x) {
   if (!x) return null;

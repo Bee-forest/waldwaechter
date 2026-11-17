@@ -3,6 +3,7 @@ import { h, fill, icon, openPage, dialog, confirmDialog, toast, fmtDate } from '
 import { store, uid } from './store.js';
 import { kopfInhalt } from './home.js';
 import { centroid, polysOf, distance } from './geo.js';
+import { passtFlurstueck } from './profi.js';
 
 const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const monatText = (ym) => { const [y, m] = String(ym || '').split('-').map(Number); return y && m ? `${MONATE[m - 1]} ${y}` : ''; };
@@ -122,7 +123,7 @@ function ortBestimmen() {
 
 function region() {
   if (standort?.pt) return { pt: standort.pt, name: 'dein Standort', eigene: true, gps: true };
-  const ps = (store.get().parcels || []).filter((p) => polysOf(p).length);
+  const ps = (store.get().parcels || []).filter((p) => polysOf(p).length && passtFlurstueck(p));
   const wald = ps.filter((p) => (p.category || 'Wald') === 'Wald');
   const wahl = wald.length ? wald : ps;
   if (!wahl.length) return { pt: [50.9, 11.03], name: 'Thüringen (Mitte)', eigene: false };

@@ -7,6 +7,7 @@ import { distance, formatDist, polysOf } from '../geo.js';
 import { umlaufSteuerung, vereinfachen } from '../umlauf.js';
 import { erkenneGassen } from './gassenerkennung.js';
 import { source } from '../data/source.js';
+import { passtFlurstueck } from '../profi.js';
 
 export const GASSE_FARBE = '#8D5A2B';
 export const LAGER_FARBE = '#B5651D';
@@ -348,7 +349,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
       umlaufHost.hidden = true;
     }
     if (modus === 'erkennen') {
-      const flaechen = (store.get().parcels || []).filter((p) => polysOf(p).length).sort((a, b) => (a.category === 'Wald' ? -1 : 0) - (b.category === 'Wald' ? -1 : 0));
+      const flaechen = (store.get().parcels || []).filter((p) => polysOf(p).length && passtFlurstueck(p)).sort((a, b) => (a.category === 'Wald' ? -1 : 0) - (b.category === 'Wald' ? -1 : 0));
       if (wahlP && !flaechen.some((p) => p.id === wahlP.id)) flaechen.unshift(wahlP);
       const an = vorschlaege.filter((v) => v.an).length;
       fill(leiste, kopf,

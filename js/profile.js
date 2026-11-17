@@ -10,7 +10,7 @@ import { startTour, say } from './mascot.js';
 import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.js';
 import { buzz } from './thinning/feedback.js';
 import * as erinnerung from './erinnerung.js';
-import { ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen } from './profi.js';
+import { passtFlurstueck, ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen } from './profi.js';
 
 export async function openProfile() {
   const all = await source.allParcels();
@@ -31,7 +31,7 @@ export async function openProfile() {
 
   function render() {
     const s = store.get();
-    const list = s.parcels.filter((p) => byId[p.id]);
+    const list = s.parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
     // Flächenbilanz: amtliche Fläche je Flurstück, aufgeteilt nach tatsächlicher Nutzung (ALKIS).
     // Ohne Nutzungsangabe zählt das ganze Flurstück zur gewählten Kategorie.
     const KAT = { ...CATEGORIES, Sonstiges: { color: '#B9B2A3', label: 'Wege, Sonstiges' } };
@@ -194,7 +194,7 @@ export async function openProfile() {
     const inhalt = h('div', { class: 'meine-flaechen' });
     const seite = openPage('Meine Flächen', inhalt);
     const zeichne = () => {
-      const list = store.get().parcels.filter((p) => byId[p.id])
+      const list = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p))
         .sort((a, b) => String(a.gemarkung).localeCompare(String(b.gemarkung), 'de') || String(a.flur).localeCompare(String(b.flur), 'de', { numeric: true }) || String(a.nr).localeCompare(String(b.nr), 'de', { numeric: true }));
       fill(inhalt,
         h('p', { class: 'muted' }, list.length ? `${list.length} ${list.length === 1 ? 'Fläche' : 'Flächen'}, zusammen ${formatHa(list.reduce((t, p) => t + amtlicheFlaecheHa(byId[p.id]), 0))}` : ''),

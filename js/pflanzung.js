@@ -13,6 +13,7 @@ import { kartenBild, KARTEN_QUELLE } from './kartenbild.js';
 import { dateiSpeichern } from './dateien.js';
 import { pflanzLayout, gassenLinien, rahmen, FORMEN, punkteNahe, streifen, gruppenGroessen } from './pflanzlayout.js';
 import { angebote, angebot, sortimentText, angebotText, eigenerPreis, eigenenPreisMerken, vorgabe as preisVorgabe, eigeneBaumarten, eigeneBaumartMerken, WBS_QUELLE } from './pflanzpreise.js';
+import { passtFlurstueck } from './profi.js';
 
 // ---------- Rahmenpflanzverbände (Richtlinie forstwirtschaftliche Maßnahmen 2025, Anlage 3; Reihenabstand 2,5 m) ----------
 export const VERBAND = {
@@ -120,7 +121,7 @@ const nadelArt = (name) => !!artInfo(name)?.nadel;
 export async function openPflanzPlanung({ parcelId = null, foerdern = false, onSaved, vorgabe = null } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
-  const mine = store.get().parcels.filter((p) => byId[p.id]);
+  const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
   const s = vorgabe || {
     parcelId: parcelId || mine[0]?.id || null, ring: [], art: 'wiederaufforstung', arten: [], grund: null,
     gassen: { abstand: 20, breite: 4, winkel: null, versatz: 0 }, vert: { form: 'einzeln', seed: 1, mal: {} }, date: '', note: '', bzt: null, standort: null,

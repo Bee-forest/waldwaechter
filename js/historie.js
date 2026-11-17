@@ -8,6 +8,7 @@ import { miniKarte, flaecheVon, betrifftFlurstueck } from './flaeche.js';
 import { openVerlauf, anhangOeffnen } from './vertraeglichkeit.js';
 import { openThinningWizard } from './thinning/wizard.js';
 import { fmt, bLabel, HOEHENKLASSEN } from './thinning/methode.js';
+import { passtFlurstueck } from './profi.js';
 
 const STATUS = { geplant: 'Geplant', arbeit: 'In Arbeit', fertig: 'Abgeschlossen' };
 const euro = (v) => `${Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -19,7 +20,7 @@ async function measureTypes() { typen ??= (await import('./measures.js')).MEASUR
 export async function openFlurstueckHistorie() {
   const [all, T] = await Promise.all([source.allParcels(), measureTypes()]);
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
-  const mine = store.get().parcels.map((p) => byId[p.id] || p).filter((p) => p?.ring);
+  const mine = store.get().parcels.filter(passtFlurstueck).map((p) => byId[p.id] || p).filter((p) => p?.ring);
   const body = h('div', { class: 'historie' });
   openPage('Flurstückhistorie', body);
   const ms = store.get().measures;

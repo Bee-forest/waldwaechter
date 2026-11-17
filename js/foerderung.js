@@ -11,6 +11,7 @@ import { Pdf, herunterladen } from './pdf.js';
 import { angebot } from './pflanzpreise.js';
 import { BAUMARTEN, alleBaumarten, baumart, normBaumart, num, euro, kategorie, KAT_TEXT, KAT_TEXT_LABE, LABE_KATS, berechne, bagatelle, pruefeMischung,
   pflanzen, hoeheCm, zaunArt, zaunLaenge, haVon, werteGANW, werteLABE, seitenHinweis, SAETZE, datum } from './foerder-formular.js';
+import { passtFlurstueck } from './profi.js';
 
 export const LINKS = {
   foerderung: 'https://www.thueringenforst.de/angebote-produkte/forstamtsservice/forstfoerderung',
@@ -174,7 +175,7 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
   }
   // Besitzgröße: Summe der eigenen Waldflurstücke
   if (d.besitzHa == null || d.besitzHa === '') {
-    const wald = store.get().parcels.filter((p) => (p.category || 'Wald') === 'Wald').map((p) => byId[p.id] || p);
+    const wald = store.get().parcels.filter((p) => passtFlurstueck(p) && (p.category || 'Wald') === 'Wald').map((p) => byId[p.id] || p);
     const ha = wald.reduce((a, p) => a + (amtlicheFlaecheHa(p) || 0), 0);
     if (ha) d.besitzHa = String(Math.round(ha * 100) / 100).replace('.', ',');
   }

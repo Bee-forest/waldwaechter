@@ -4,6 +4,7 @@ import { h, fill, openPage, toast } from './ui.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { SPECIES } from './thinning/plan.js';
+import { passtFlurstueck } from './profi.js';
 
 // ---------- Regeln der RVR ----------
 export const SORTIMENTE = [
@@ -154,7 +155,7 @@ const hoeheText = (cm, e) => (e === 'm' ? `${zahlText(cm / 100)} m` : `${zahlTex
 export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
-  const mine = store.get().parcels.filter((p) => byId[p.id]);
+  const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
   const s = { i: 0, parcelId, polterNr: '', species: 'Fichte', sortiment: null, verfahren: null, pos: null,
     lab: null, t: null, uebermass: null, hv: [], hr: [], rueck: true, c: 0, cLos: false, red: null, u: null, entrindet: false,
     l: null, hs: [], staemme: [], einheit: leseEinheit(), neu: { l: null, d1: null, d2: null, rinde: 'oR', rabzug: null } };

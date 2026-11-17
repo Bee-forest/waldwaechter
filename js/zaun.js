@@ -7,6 +7,7 @@ import { source } from './data/source.js';
 import { distance, bearing, formatDist, formatHa, areaHa } from './geo.js';
 import { miniKarte } from './flaeche.js';
 import { umlaufSteuerung, vereinfachen } from './umlauf.js';
+import { passtFlurstueck } from './profi.js';
 
 const STAND = 'Stand 11/2026, brutto inkl. 19 % MwSt., ohne Versand; ab-Preise je nach Menge';
 const MWST = 1.19;
@@ -107,7 +108,7 @@ export async function openZaunPlanung({ parcelId = null, onSaved, onAbbruch = nu
   let gespeichert = false;
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
-  const mine = store.get().parcels.filter((p) => byId[p.id]);
+  const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
   const s = { parcelId: parcelId || mine[0]?.id || null, pts: pts ? [...pts] : [], geschlossen: true, hoehe: 160, einschlaghilfe: false, abstand: 3.5, spanndraht: false, erdanker: false, ankerAbstand: 3, tore: 1, eigen: {}, quelle: {}, date: '', note: '' };
   const body = h('div', { class: 'zaun' });
   const page = openPage('Zaunbau', body, { onClose: () => { umlauf?.stop(); karte?.remove(); if (!gespeichert) onAbbruch?.(); } });

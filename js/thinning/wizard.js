@@ -23,6 +23,7 @@ import { computePlanF4 } from './plan.js';
 import { standSpeichern, standLaden } from './speicher.js';
 import { dateiSpeichern, dateiLaden } from '../dateien.js';
 import { Pdf, herunterladen } from '../pdf.js';
+import { passtFlurstueck } from '../profi.js';
 
 const STEPS = ['Fläche', 'Angaben', 'Raster', 'Im Bestand'];
 const COLORS = { open: '#D7263D', done: '#2E9E4F', skipped: '#8A948C', target: '#D7263D', leer: '#8A948C' };
@@ -31,7 +32,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
   await F4.ladeParameter(); // Durchforstungshilfe Fassung 4: alle Werte aus data/durchforstung_parameter_f4.json
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
-  const myIds = store.get().parcels.map((p) => p.id).filter((id) => byId[id]);
+  const myIds = store.get().parcels.filter(passtFlurstueck).map((p) => p.id).filter((id) => byId[id]);
   const myStands = await source.standsForParcels(myIds);
 
   const st = {

@@ -104,7 +104,7 @@ function punktPopup(art, x, { schliessen, nurAnsehen }) {
     h('strong', {}, punktTitel(art, x)),
     zeilen.filter(Boolean).map((z) => h('p', {}, z)),
     x.text ? h('p', { class: 'muted' }, x.text) : null,
-    nurAnsehen ? h('p', { class: 'muted' }, 'Bearbeiten unter „Weitere Layer“ → „Habitatbäume und Jagdeinrichtungen bearbeiten“.') : null,
+    nurAnsehen ? h('p', { class: 'muted' }, art === 'habitat' ? 'Bearbeiten unter „Weitere Layer“ → Naturschutz → „Habitatbäume bearbeiten“.' : 'Bearbeiten unter „Weitere Layer“ → Jagd → „Jagdliche Einrichtungen bearbeiten“.') : null,
     h('div', { class: 'btn-row' },
       nurAnsehen ? null : h('button', { class: 'btn btn-small', onclick: () => { schliessen(); punktDialog(art, x); } }, 'Bearbeiten'),
       nurAnsehen ? null : h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => { schliessen(); if (await confirmDialog(`${ARTEN[art].titel} löschen?`, { ok: 'Löschen', danger: true })) speichere((p) => { p[art] = p[art].filter((y) => y.id !== x.id); }); } }, 'Löschen'),

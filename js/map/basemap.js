@@ -1,3 +1,4 @@
+import { createOrtsnamenLayer } from './ortsnamen.js';
 // Kartengrundlagen: Basiskarten, Kategoriefarben, OSM-Objektlayer (Overpass).
 /* global L */
 import { dopLayer, alkisLayer, TH } from './thueringen.js';
@@ -60,10 +61,10 @@ export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = 
   map.createPane('beschriftung');
   map.getPane('beschriftung').style.zIndex = 450;
   map.getPane('beschriftung').style.pointerEvents = 'none';
-  let labels = null;
+  let labels = null, orte = null;
   const refreshLabels = () => {
-    if (current === 'dop' && !labels) labels = beschriftungLayer().addTo(map);
-    if (current !== 'dop' && labels) { map.removeLayer(labels); labels = null; }
+    if (current === 'dop' && !labels) { labels = beschriftungLayer().addTo(map); orte = createOrtsnamenLayer(map).addTo(map); }
+    if (current !== 'dop' && labels) { map.removeLayer(labels); map.removeLayer(orte); labels = null; orte = null; }
   };
   let base = BASEMAPS[basemap]().addTo(map);
   let current = basemap;

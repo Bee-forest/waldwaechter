@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - run: pip install -q pyproj && python3 tools/check_hangneigung.py
+      - run: pip install -q pyproj pillow && python3 tools/check_hangneigung.py
       - run: |
           git config user.name "Waldwächter-Daten"
           git config user.email "github-actions[bot]@users.noreply.github.com"

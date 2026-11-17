@@ -6,6 +6,7 @@ import { createBaseMap } from './basemap.js';
 import { distance, formatDist, polysOf } from '../geo.js';
 import { umlaufSteuerung, vereinfachen } from '../umlauf.js';
 import { erkenneGassen } from './gassenerkennung.js';
+import { source } from '../data/source.js';
 
 export const GASSE_FARBE = '#8D5A2B';
 export const LAGER_FARBE = '#B5651D';
@@ -195,7 +196,25 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
     const ll = [e.latlng.lat, e.latlng.lng];
     if (modus === 'gasse') { draft.push(ll); zeichneDraft(); render(); }
     else if (modus === 'lager') { const l = await lagerDialog({ at: ll }); if (l) toast('Lagerplatz gespeichert'); }
+    else if (modus === 'erkennen' && !erkennt) {
+      const p = await source.parcelAt(ll).catch(() => null);
+      if (!p) { toast(map.getZoom() < 16 ? 'Zoom näher heran und tippe ein Flurstück an.' : 'An dieser Stelle wurde kein Flurstück gefunden.'); return; }
+      waehle(p, false);
+    }
   });
+
+  // Gewähltes Flurstück für die Luftbild-Suche: gelb umrandet; aus der Liste gewählt → Karte springt hin
+  let wahlP = flaeche;
+  const wahlLyr = L.layerGroup().addTo(map);
+  function waehle(p, zoomen = true) {
+    wahlP = p; vorschlaege = []; zeichneVorschlaege();
+    wahlLyr.clearLayers();
+    if (p) {
+      const pl = L.polygon(polysOf(p), { color: '#FFD400', weight: 4, fillOpacity: 0.08, interactive: false }).addTo(wahlLyr);
+      if (zoomen) map.fitBounds(pl.getBounds(), { padding: [20, 20], maxZoom: 18 });
+    }
+    render();
+  }
 
   function zeichneDraft() {
     draftLyr.clearLayers();
@@ -258,14 +277,15 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
     }
     if (modus === 'erkennen') {
       const flaechen = (store.get().parcels || []).filter((p) => polysOf(p).length).sort((a, b) => (a.category === 'Wald' ? -1 : 0) - (b.category === 'Wald' ? -1 : 0));
-      if (flaeche && !flaechen.some((p) => p.id === flaeche.id)) flaechen.unshift(flaeche);
-      let wahl = flaeche?.id || flaechen[0]?.id || '';
+      if (wahlP && !flaechen.some((p) => p.id === wahlP.id)) flaechen.unshift(wahlP);
       const an = vorschlaege.filter((v) => v.an).length;
       fill(leiste, kopf,
-        flaechen.length ? h('div', { class: 'form' },
-          h('label', {}, 'Flurstück', h('select', { onchange: (e) => { wahl = e.target.value; } }, flaechen.map((p) => h('option', { value: p.id, selected: p.id === wahl }, `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}`)))),
-          h('button', { class: 'btn btn-primary', disabled: erkennt, onclick: () => { const p = flaechen.find((x) => x.id === wahl); if (p) erkennen(p); } }, erkennt ? 'Luftbild wird ausgewertet …' : 'Rückegassen im Luftbild suchen'))
-          : h('p', { class: 'muted' }, 'Leg zuerst Flurstücke als deine Flächen an – die Suche läuft je Flurstück.'),
+        h('p', { class: 'draw-status' }, 'Tippe ein Flurstück in der Karte an oder wähle eine deiner Flächen aus der Liste.'),
+        h('div', { class: 'form' },
+          flaechen.length ? h('label', {}, 'Flurstück', h('select', { onchange: (e) => { waehle(flaechen.find((x) => x.id === e.target.value) || null); } },
+            wahlP ? null : h('option', { value: '', selected: true }, '– bitte wählen –'),
+            flaechen.map((p) => h('option', { value: p.id, selected: p.id === wahlP?.id }, `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}${store.get().parcels.some((x) => x.id === p.id) ? '' : ' (angetippt)'}`)))) : null,
+          h('button', { class: 'btn btn-primary', disabled: erkennt || !wahlP, onclick: () => { if (wahlP) erkennen(wahlP); } }, erkennt ? 'Luftbild wird ausgewertet …' : wahlP ? `Rückegassen in Flurstück ${wahlP.nr} suchen` : 'Erst ein Flurstück wählen')),
         vorschlaege.length ? h('div', {},
           h('p', {}, `${vorschlaege.length} Vorschläge – grün wird übernommen. Tippe eine Linie an, um sie ab- oder anzuwählen.`),
           h('div', { class: 'btn-row' },
@@ -277,7 +297,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
     if (modus === 'ansehen') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe eine Gasse oder einen Lagerplatz an, um ihn zu bearbeiten oder zu löschen.'));
   }
   render();
-  if (modus === 'erkennen') { if (base.basemap !== 'dop') base.setBasemap('dop'); if (flaeche) erkennen(flaeche); }
+  if (modus === 'erkennen') { if (base.basemap !== 'dop') base.setBasemap('dop'); if (flaeche) { waehle(flaeche); erkennen(flaeche); } }
   const abo = store.subscribe(() => { if (modus !== 'gasse' || !draft.length) render(); });
   return page;
 }

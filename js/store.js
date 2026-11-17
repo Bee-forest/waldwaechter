@@ -15,7 +15,8 @@ const defaults = () => ({
   profile: { name: '', email: '', fbg: '', fbgAnsprech: '', fbgTel: '', fbgMail: '', accountHolder: '', iban: '', strasse: '', ort: '', telefon: '', pi: '' },
   settings: {
     theme: 'auto',          // auto | light | dark
-    arrivalRadius: 8,       // m – ab dieser Entfernung gilt ein Rasterpunkt als erreicht
+    arrivalRadius: 4,       // m – ab dieser Entfernung gilt ein Rasterpunkt als erreicht
+    arrivalRadiusV: 2,      // Version der Vorgabe (2 = 4 m)
     simulateGps: false,     // Entwicklermodus: Standort per Tippen auf die Karte
     basemap: 'osm',         // osm | dop (Luftbild TH)
     demo: false,            // Demo-Flurstücke (Raum Ilmenau) zusätzlich zeigen
@@ -34,7 +35,10 @@ function load() {
     if (!raw) return defaults();
     const d = defaults();
     const s = JSON.parse(raw);
-    return { ...d, ...s, profile: { ...d.profile, ...s.profile }, settings: { ...d.settings, ...s.settings, simulateGps: false /* Testschalter im Profil entfernt */, layers: { ...d.settings.layers, ...(s.settings?.layers || {}) } } };
+    const settings = { ...d.settings, ...s.settings, simulateGps: false /* Testschalter im Profil entfernt */, layers: { ...d.settings.layers, ...(s.settings?.layers || {}) } };
+    // Vorgabe für den Ankunftsradius von 8 auf 4 m umgestellt (selbst gewählte Werte bleiben)
+    if ((s.settings?.arrivalRadiusV || 1) < 2) { if (!s.settings?.arrivalRadius || s.settings.arrivalRadius === 8) settings.arrivalRadius = 4; settings.arrivalRadiusV = 2; }
+    return { ...d, ...s, profile: { ...d.profile, ...s.profile }, settings };
   } catch {
     return defaults();
   }

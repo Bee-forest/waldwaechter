@@ -1007,7 +1007,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
 
     const pt = st.plan.points[targetIdx];
     const d = distance(pos.latlng, pt.at);
-    const r = Math.min(store.get().settings.arrivalRadius, Math.max(4, (st.plan?.raster || 25) * 0.4)); // im engen Raster kleiner
+    const r = Math.min(store.get().settings.arrivalRadius || 4, Math.max(3, (st.plan?.raster || 25) * 0.4)); // Vorgabe 4 m, im sehr engen Raster kleiner
     if (d <= r && !prompted.has(pt.id)) { prompted.add(pt.id); arrive(targetIdx); }
     else if (d > r * 2) prompted.delete(pt.id);
     renderHud();

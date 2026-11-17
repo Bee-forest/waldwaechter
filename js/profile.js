@@ -102,7 +102,7 @@ export async function openProfile() {
             }, l))),
           h('label', {}, 'Ankunftsradius an Rasterpunkten (Meter)',
             h('input', { type: 'number', min: 3, max: 30, step: 1, value: s.settings.arrivalRadius, inputmode: 'numeric',
-              onchange: (e) => store.update((st) => { st.settings.arrivalRadius = Math.min(30, Math.max(3, Number(e.target.value) || 8)); }) })),
+              onchange: (e) => store.update((st) => { st.settings.arrivalRadius = Math.min(30, Math.max(3, Number(e.target.value) || 4)); }) })),
           h('button', { class: 'btn', onclick: () => { const ok = buzz('arrive'); toast(ok ? 'Vibration ausgelöst' : 'Keine Vibration verfügbar, stattdessen Signalton'); } }, 'Vibration testen'),
           h('button', { class: 'btn', onclick: () => { page.close(); startTour(); } }, 'Einführung noch einmal zeigen'),
           canInstall() ? h('button', { class: 'btn btn-primary', onclick: installApp }, h('span', { html: icon.download }), 'App installieren') : null,

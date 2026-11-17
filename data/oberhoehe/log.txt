@@ -52,3 +52,4 @@
 2026-11-16 09:11 Höhendaten-Download nicht verfügbar (Wartung oder Fehler) – nächster Versuch beim nächsten Lauf. 
 2026-11-16 15:31 Höhendaten-Download nicht verfügbar (Wartung oder Fehler) – nächster Versuch beim nächsten Lauf. 
 2026-11-16 19:24 Höhendaten-Download nicht verfügbar (Wartung oder Fehler) – nächster Versuch beim nächsten Lauf. 
+2026-11-17 01:40 Höhendaten-Download nicht verfügbar (Wartung oder Fehler) – nächster Versuch beim nächsten Lauf. 

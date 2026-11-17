@@ -1,41 +1,46 @@
-2026-11-05 16:26 UTC
+2026-11-17 20:10 UTC
 Region Landkreis Greiz: bereits vorhanden, übersprungen
 Region Saale-Orla-Kreis: bereits vorhanden, übersprungen
-Region Ilmenau und Umgebung: bereits vorhanden, übersprungen
-Region Landkreis Gotha: 840 Kacheln
-  Felder: identifier=DETHL54P0000idgUFL, oid=DETHL54P0000idgUFL, aktualit=2018-11-30, idflurst=DETHL54P0000idgU, flaeche=2641, flstkennz=163203017001880002__, land=Thüringen, gemarkung=Bad Langensalza, flur=Flur 17, flurstnr=188/2, gmdschl=16064003, regbezirk=unbesetzt, kreis=Unstrut-Hainich-Kreis, gemeinde=Bad Langensalza, lagebeztxt=In den oberen Artäckern, tntxt=Landwirtschaft; 726|Weg; 1915
-  Verwende adv_alkis_wfs mit Variante utm (994 Flurstücke in der Probe)
-  25/840 Kacheln, 15231 Flurstücke
-  50/840 Kacheln, 30871 Flurstücke
-  75/840 Kacheln, 45666 Flurstücke
-  100/840 Kacheln, 57180 Flurstücke
-  125/840 Kacheln, 67599 Flurstücke
-  150/840 Kacheln, 78300 Flurstücke
-  175/840 Kacheln, 89384 Flurstücke
-  200/840 Kacheln, 102642 Flurstücke
-  225/840 Kacheln, 118458 Flurstücke
-  250/840 Kacheln, 131962 Flurstücke
-  275/840 Kacheln, 142397 Flurstücke
-  300/840 Kacheln, 152852 Flurstücke
-  325/840 Kacheln, 168167 Flurstücke
-  350/840 Kacheln, 179530 Flurstücke
-  375/840 Kacheln, 192778 Flurstücke
-  400/840 Kacheln, 208039 Flurstücke
-  425/840 Kacheln, 218990 Flurstücke
-  450/840 Kacheln, 228720 Flurstücke
-  475/840 Kacheln, 245910 Flurstücke
-  500/840 Kacheln, 258400 Flurstücke
-  525/840 Kacheln, 270061 Flurstücke
-  550/840 Kacheln, 281564 Flurstücke
-  575/840 Kacheln, 291764 Flurstücke
-  600/840 Kacheln, 305371 Flurstücke
-  625/840 Kacheln, 319094 Flurstücke
-  650/840 Kacheln, 334588 Flurstücke
-  675/840 Kacheln, 350604 Flurstücke
-  700/840 Kacheln, 367941 Flurstücke
-  725/840 Kacheln, 380850 Flurstücke
-  750/840 Kacheln, 397587 Flurstücke
-  775/840 Kacheln, 411259 Flurstücke
-  800/840 Kacheln, 427005 Flurstücke
-  825/840 Kacheln, 444313 Flurstücke
-Fertig: 840 Kacheln, 453073 Flurstücke, 0 Fehler
+Region Ilm-Kreis: 756 Kacheln
+  Felder: identifier=DETHL56P00007JT2FL, oid=DETHL56P00007JT2FL, aktualit=2020-12-08, idflurst=DETHL56P00007JT2, flaeche=2515, flstkennz=16145100500675______, land=Thüringen, gemarkung=Neuroda, flur=Flur 5, flurstnr=675, gmdschl=16070004, regbezirk=unbesetzt, kreis=Ilm-Kreis, gemeinde=Arnstadt, lagebeztxt=Über dem kleinen Eichelsee, tntxt=Landwirtschaft; 2515
+  Verwende adv_alkis_wfs mit Variante utm (358 Flurstücke in der Probe)
+  25/756 Kacheln, 15243 Flurstücke
+  50/756 Kacheln, 25476 Flurstücke
+  75/756 Kacheln, 38692 Flurstücke
+  100/756 Kacheln, 50135 Flurstücke
+  125/756 Kacheln, 62363 Flurstücke
+  150/756 Kacheln, 70743 Flurstücke
+  175/756 Kacheln, 84487 Flurstücke
+  200/756 Kacheln, 99273 Flurstücke
+  225/756 Kacheln, 114685 Flurstücke
+  250/756 Kacheln, 130993 Flurstücke
+  275/756 Kacheln, 144887 Flurstücke
+  300/756 Kacheln, 158127 Flurstücke
+  325/756 Kacheln, 169929 Flurstücke
+  350/756 Kacheln, 184335 Flurstücke
+  375/756 Kacheln, 198436 Flurstücke
+  400/756 Kacheln, 211397 Flurstücke
+  425/756 Kacheln, 229171 Flurstücke
+  450/756 Kacheln, 247041 Flurstücke
+  475/756 Kacheln, 262446 Flurstücke
+  500/756 Kacheln, 277939 Flurstücke
+  525/756 Kacheln, 290580 Flurstücke
+  550/756 Kacheln, 302370 Flurstücke
+  575/756 Kacheln, 315928 Flurstücke
+  600/756 Kacheln, 332398 Flurstücke
+  625/756 Kacheln, 349667 Flurstücke
+  650/756 Kacheln, 361128 Flurstücke
+  675/756 Kacheln, 371232 Flurstücke
+  700/756 Kacheln, 383695 Flurstücke
+  725/756 Kacheln, 396185 Flurstücke
+  750/756 Kacheln, 409324 Flurstücke
+Region Landkreis Gotha: bereits vorhanden, übersprungen
+Region Stadt Suhl: 182 Kacheln
+  25/182 Kacheln, 437370 Flurstücke
+  50/182 Kacheln, 450686 Flurstücke
+  75/182 Kacheln, 462108 Flurstücke
+  100/182 Kacheln, 475873 Flurstücke
+  125/182 Kacheln, 486407 Flurstücke
+  150/182 Kacheln, 496145 Flurstücke
+  175/182 Kacheln, 511710 Flurstücke
+Fertig: 938 Kacheln, 513473 Flurstücke, 0 Fehler

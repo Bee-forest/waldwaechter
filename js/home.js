@@ -18,7 +18,7 @@ import { empfehlung, empfehlungMitErsatz, bztName, GRUPPEN, BAUMARTEN_KURZ, eich
 import { wanderwege } from './map/wanderwege.js';
 import { createFlurnummernLayer } from './map/flurnummern.js';
 import { createErschliessungLayers, openErschliessungEditor } from './map/erschliessung.js';
-import { ordnerLeiste, passtFlurstueck, ordnerAuswahl, ordnerFuerNeu, ordnerListe, ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
+import { ordnerEigentuemerAnwenden, ordnerLeiste, passtFlurstueck, ordnerAuswahl, ordnerFuerNeu, ordnerListe, ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
 import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
@@ -759,6 +759,7 @@ async function renderInfo() {
           const passend = e && etName(e) ? ordnerListe().find((o) => o.name.toLowerCase() === etName(e).toLowerCase()) : null;
           const ordnerId = istProfi() ? (passend?.id || ordnerFuerNeu()) : null;
           store.update((s) => { s.parcels.push({ ...p, category: pick, addedAt: Date.now(), ordnerId }); });
+          if (ordnerId) ordnerEigentuemerAnwenden(ordnerId, [p.id]);
           say(`Flurstück ${p.nr} ist jetzt eine deiner Flächen. Du findest sie in deinem Profil.`);
           renderInfo();
         } }, h('span', { html: icon.plus }), 'Fläche hinzufügen'),

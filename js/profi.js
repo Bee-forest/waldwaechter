@@ -254,7 +254,7 @@ export async function ordnerAnlegen(vorgabe = '') {
   if (!ok || !name.trim()) return null;
   const o = { id: uid(), name: name.trim(), erstellt: Date.now() };
   store.update((s) => { s.ordner = s.ordner || []; s.ordner.push(o); s.settings.ordnerAktiv = o.id; });
-  toast(`Ordner „${o.name}“ angelegt`);
+  toast(`Ordner „${o.name}“ angelegt – Eigentümerdaten trägst du unter „Ordner verwalten“ ein`);
   return o;
 }
 
@@ -270,7 +270,7 @@ export function ordnerAusEigentuemern() {
     const name = etName(e);
     if (!name) continue;
     let o = nachName.get(name.toLowerCase());
-    if (!o) { o = { id: uid(), name, erstellt: Date.now() }; ordner.push(o); nachName.set(name.toLowerCase(), o); neu++; }
+    if (!o) { const { gemarkung, flur, nr, geaendert, ...nurPerson } = e; o = { id: uid(), name, erstellt: Date.now(), eigentuemer: nurPerson }; ordner.push(o); nachName.set(name.toLowerCase(), o); neu++; }
     if (p.ordnerId !== o.id) { zuordnung[p.id] = o.id; zugeordnet++; }
   }
   store.update((st) => { st.ordner = ordner; for (const p of st.parcels) if (zuordnung[p.id]) p.ordnerId = zuordnung[p.id]; });
@@ -280,6 +280,49 @@ export function ordnerAusEigentuemern() {
 /** Flurstück einem Ordner zuordnen (null = eigene Flächen) */
 export function flurstueckZuordnen(pid, ordnerId) {
   store.update((s) => { const p = s.parcels.find((x) => x.id === pid); if (p) p.ordnerId = ordnerId || null; });
+  if (ordnerId) ordnerEigentuemerAnwenden(ordnerId, [pid]);
+}
+
+/** Eigentümer des Ordners bei seinen Flurstücken hinterlegen (alle oder nur die genannten) */
+export function ordnerEigentuemerAnwenden(ordnerId, nurIds = null) {
+  const o = ordnerListe().find((x) => x.id === ordnerId);
+  if (!o?.eigentuemer || !Object.values(o.eigentuemer).some(Boolean)) return 0;
+  let n = 0;
+  for (const p of store.get().parcels) {
+    if (p.ordnerId !== ordnerId || (nurIds && !nurIds.includes(p.id))) continue;
+    eigentuemerSpeichern(p, o.eigentuemer); n++;
+  }
+  return n;
+}
+
+/** Eigentümerdaten am Ordner eintragen – gelten für alle Flurstücke im Ordner */
+export async function ordnerEigentuemerBearbeiten(ordnerId) {
+  const o = ordnerListe().find((x) => x.id === ordnerId);
+  if (!o) return;
+  // Vorbelegung: am Ordner gespeichert, sonst vom ersten Flurstück mit Eigentümer, sonst Name des Ordners
+  const vomFlst = store.get().parcels.filter((p) => p.ordnerId === ordnerId).map(eigentuemerVon).find(Boolean);
+  const werte = { ...(o.eigentuemer || vomFlst || {}) };
+  if (!o.eigentuemer && !vomFlst) { const t = o.name.trim().split(/\s+/); if (t.length >= 2) { werte.vorname = t.slice(0, -1).join(' '); werte.nachname = t[t.length - 1]; } else werte.nachname = o.name; }
+  const feld = ([k, l]) => h('label', {}, l, h('input', { value: werte[k] || '', type: k === 'email' ? 'email' : k === 'telefon' ? 'tel' : 'text', inputmode: k === 'plz' ? 'numeric' : undefined, oninput: (e) => { werte[k] = e.target.value.trim(); } }));
+  const anzahl = store.get().parcels.filter((p) => p.ordnerId === ordnerId).length;
+  let umbenennen = true;
+  const ok = await dialog({
+    title: `Eigentümer – ${o.name}`,
+    body: h('div', { class: 'form' },
+      h('div', { class: 'form-row' }, feld(ET_FELDER[0]), feld(ET_FELDER[1])),
+      h('div', { class: 'form-row' }, feld(ET_FELDER[2]), feld(ET_FELDER[3])),
+      h('div', { class: 'form-row' }, feld(ET_FELDER[4]), feld(ET_FELDER[5])),
+      feld(ET_FELDER[6]), feld(ET_FELDER[7]),
+      h('label', { class: 'check-row' }, h('input', { type: 'checkbox', checked: true, onchange: (e) => { umbenennen = e.target.checked; } }), 'Ordner nach dem Eigentümer benennen'),
+      h('p', { class: 'hint' }, `Wird bei allen ${anzahl} Flurstücken des Ordners hinterlegt – und bei jedem Flurstück, das du später in den Ordner legst. Nur auf diesem Gerät gespeichert.`)),
+    actions: [{ label: 'Abbrechen', value: false }, { label: 'Übernehmen', value: true, primary: true }],
+  });
+  if (!ok) return;
+  const daten = {}; for (const [k] of ET_FELDER) if (werte[k]) daten[k] = werte[k];
+  const neuerName = umbenennen ? etName(daten) : '';
+  store.update((s) => { const x = s.ordner.find((y) => y.id === ordnerId); x.eigentuemer = daten; if (neuerName) x.name = neuerName; });
+  const n = ordnerEigentuemerAnwenden(ordnerId);
+  toast(`Eigentümer bei ${n} ${n === 1 ? 'Flurstück' : 'Flurstücken'} hinterlegt`);
 }
 
 /** Auswahl in der Flurstücks-Info */
@@ -310,8 +353,9 @@ export function openOrdnerVerwaltung() {
       b: (s.finanzen?.buchungen || []).filter((b) => ordnerVon(b) === id).length,
     });
     const zeile = (id, name) => { const z = zahl(id); return h('li', { class: 'fin-zeile' },
-      h('div', { class: 'fin-zeile-text' }, h('strong', {}, name), h('small', { class: 'muted' }, `${z.fl} Flurstücke · ${z.m} Maßnahmen · ${z.b} Buchungen`)),
+      h('div', { class: 'fin-zeile-text' }, h('strong', {}, name), h('small', { class: 'muted' }, `${z.fl} Flurstücke · ${z.m} Maßnahmen · ${z.b} Buchungen`), (() => { const e = id && ordnerListe().find((o) => o.id === id)?.eigentuemer; return e && etAdresse(e) ? h('small', { class: 'muted' }, `Eigentümer: ${[etName(e), etAdresse(e)].filter(Boolean).join(', ')}`) : null; })()),
       h('button', { class: 'btn btn-small', onclick: () => { ordnerWaehlen(id || 'eigen'); seite.close(); } }, 'Öffnen'),
+      id ? h('button', { class: 'btn btn-small', onclick: () => ordnerEigentuemerBearbeiten(id) }, 'Eigentümer') : null,
       id ? h('button', { class: 'btn btn-small', onclick: async () => { let n = name; const ok = await dialog({ title: 'Ordner umbenennen', body: h('div', { class: 'form' }, h('label', {}, 'Name', h('input', { value: n, oninput: (e) => { n = e.target.value; } }))), actions: [{ label: 'Abbrechen', value: false }, { label: 'Speichern', value: true, primary: true }] }); if (ok && n.trim()) store.update((st) => { st.ordner.find((o) => o.id === id).name = n.trim(); }); } }, 'Umbenennen') : null,
       id ? h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => {
         if (!(await confirmDialog(`Ordner „${name}“ auflösen?`, { ok: 'Auflösen', danger: true, body: 'Flurstücke, Maßnahmen und Buchungen bleiben erhalten und kommen zu „Eigene Flächen“.' }))) return;

@@ -44,17 +44,92 @@ export async function lagerDialog(alt = {}) {
   return eintrag;
 }
 
-async function gasseDialog(g) {
-  let notiz = g.notiz || '';
-  const w = await dialog({
-    title: 'Rückegasse',
+export const GASSE_BEFAHRBAR = [
+  ['', 'nicht angegeben'],
+  ['gut', 'jederzeit befahrbar'],
+  ['trocken', 'nur bei Trockenheit'],
+  ['frost', 'nur bei Frost'],
+  ['schonend', 'nur mit Bändern / leichter Technik'],
+  ['nicht', 'derzeit nicht befahrbar (nass, Hindernis)'],
+];
+const gasseBefahrbarText = (k) => GASSE_BEFAHRBAR.find(([x]) => x === k)?.[1] || '';
+const HIMMEL = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+export const himmelsrichtung = (g) => HIMMEL[Math.round((((g % 360) + 360) % 360) / 22.5) % 16];
+
+/** Richtung der Gasse vom ersten zum letzten Punkt (Grad, 0 = Nord, im Uhrzeigersinn) */
+export function richtungAusLinie(line) {
+  if (!line || line.length < 2) return null;
+  const [a, b] = [line[0], line[line.length - 1]];
+  const f1 = (a[0] * Math.PI) / 180, f2 = (b[0] * Math.PI) / 180, dl = ((b[1] - a[1]) * Math.PI) / 180;
+  const y = Math.sin(dl) * Math.cos(f2), x = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
+  return Math.round(((Math.atan2(y, x) * 180) / Math.PI + 360) % 360);
+}
+
+/** Kompass des Handys ca. 2 Sekunden lesen und mitteln */
+async function kompassMessen() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    const r = await DeviceOrientationEvent.requestPermission().catch(() => 'denied');
+    if (r !== 'granted') throw new Error('Kompass nicht freigegeben.');
+  }
+  return new Promise((res, rej) => {
+    let sx = 0, sy = 0, n = 0;
+    const lesen = (e) => {
+      let hd = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null);
+      if (hd == null) return;
+      hd = (hd + (screen.orientation?.angle ?? 0) + 360) % 360;
+      sx += Math.cos((hd * Math.PI) / 180); sy += Math.sin((hd * Math.PI) / 180); n++;
+    };
+    window.addEventListener('deviceorientationabsolute', lesen); window.addEventListener('deviceorientation', lesen);
+    setTimeout(() => {
+      window.removeEventListener('deviceorientationabsolute', lesen); window.removeEventListener('deviceorientation', lesen);
+      if (!n) rej(new Error('Dieses Gerät liefert keine Kompassrichtung.'));
+      else res(Math.round(((Math.atan2(sy, sx) * 180) / Math.PI + 360) % 360));
+    }, 2000);
+  });
+}
+
+export async function gasseDialog(g, { neu = false } = {}) {
+  const w = { name: g.name || '', grad: g.grad ?? '', befahrbar: g.befahrbar || '', breite: g.breite ?? '', abstand: g.abstand ?? '', notiz: g.notiz || '' };
+  const ausLinie = richtungAusLinie(g.line);
+  const gradFeld = h('input', { type: 'number', min: 0, max: 359, step: 1, inputmode: 'numeric', value: w.grad, placeholder: ausLinie != null ? `laut Karte ${ausLinie}°` : '', oninput: (e) => { w.grad = e.target.value; zeigeRichtung(); } });
+  const richtungText = h('small', { class: 'muted' });
+  const zeigeRichtung = () => { const v = Number(w.grad); richtungText.textContent = w.grad !== '' && Number.isFinite(v) ? `= ${himmelsrichtung(v)} (Gegenrichtung ${(v + 180) % 360}°)` : ''; };
+  zeigeRichtung();
+  const setze = (v) => { w.grad = String(v); gradFeld.value = w.grad; zeigeRichtung(); };
+  const knopf = h('button', { type: 'button', class: 'btn btn-small', onclick: async (e) => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = 'Handy in Gassenrichtung halten …';
+    try { setze(await kompassMessen()); toast('Richtung übernommen'); } catch (err) { toast(err.message); }
+    b.disabled = false; b.textContent = 'Mit Kompass messen';
+  } }, 'Mit Kompass messen');
+  const r = await dialog({
+    title: neu ? 'Angaben zur neuen Rückegasse' : 'Rückegasse',
     body: h('div', { class: 'form' },
       h('p', {}, `Länge ca. ${formatDist(Math.round(laenge(g.line)))}${g.quelle === 'luftbild' ? ' · aus dem Luftbild erkannt' : g.quelle === 'gps' ? ' · per GPS abgelaufen' : ''}`),
-      h('label', {}, 'Notiz', h('input', { value: notiz, placeholder: 'z. B. Gasse 3, Gassenabstand 20 m', oninput: (e) => { notiz = e.target.value; } }))),
-    actions: [{ label: 'Löschen', value: 'weg' }, { label: 'Abbrechen', value: null }, { label: 'Speichern', value: 'ok', primary: true }],
+      h('label', {}, 'Name oder Nummer', h('input', { value: w.name, placeholder: 'z. B. Gasse 3', oninput: (e) => { w.name = e.target.value; } })),
+      h('label', {}, 'Richtung (Grad, Kompass)', gradFeld, richtungText),
+      h('div', { class: 'btn-row' }, knopf,
+        ausLinie != null ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => setze(ausLinie) }, `Aus Karte: ${ausLinie}°`) : null),
+      h('label', {}, 'Befahrbarkeit', h('select', { onchange: (e) => { w.befahrbar = e.target.value; } }, GASSE_BEFAHRBAR.map(([k, l]) => h('option', { value: k, selected: k === w.befahrbar }, l)))),
+      h('div', { class: 'form-row' },
+        h('label', {}, 'Breite (m)', h('input', { type: 'number', min: 1, max: 10, step: 0.5, inputmode: 'decimal', value: w.breite, placeholder: '4', oninput: (e) => { w.breite = e.target.value; } })),
+        h('label', {}, 'Gassenabstand (m)', h('input', { type: 'number', min: 10, max: 80, step: 1, inputmode: 'numeric', value: w.abstand, placeholder: '20', oninput: (e) => { w.abstand = e.target.value; } }))),
+      h('label', {}, 'Notiz', h('textarea', { rows: 2, placeholder: 'z. B. Graben am Anfang, Bäume markiert, Steigung', oninput: (e) => { w.notiz = e.target.value; } }, w.notiz))),
+    actions: [{ label: 'Löschen', value: 'weg' }, { label: neu ? 'Später' : 'Abbrechen', value: null }, { label: 'Speichern', value: 'ok', primary: true }],
   });
-  if (w === 'weg') { if (await confirmDialog('Rückegasse löschen?', { ok: 'Löschen', danger: true })) { speichere((e) => { e.gassen = e.gassen.filter((x) => x.id !== g.id); }); toast('Rückegasse gelöscht'); } return; }
-  if (w === 'ok') speichere((e) => { const x = e.gassen.find((y) => y.id === g.id); if (x) x.notiz = notiz.trim(); });
+  if (r === 'weg') { if (await confirmDialog('Rückegasse löschen?', { ok: 'Löschen', danger: true })) { speichere((e) => { e.gassen = e.gassen.filter((x) => x.id !== g.id); }); toast('Rückegasse gelöscht'); } return; }
+  if (r !== 'ok') return;
+  const zahl = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+  speichere((e) => {
+    const x = e.gassen.find((y) => y.id === g.id); if (!x) return;
+    Object.assign(x, { name: w.name.trim(), grad: zahl(w.grad) == null ? null : ((Math.round(zahl(w.grad)) % 360) + 360) % 360, befahrbar: w.befahrbar, breite: zahl(w.breite), abstand: zahl(w.abstand), notiz: w.notiz.trim() });
+  });
+  toast('Angaben zur Gasse gespeichert');
+}
+
+/** Kurzbeschreibung für Tooltip und Listen */
+export function gasseText(g) {
+  return [g.name || 'Rückegasse', g.grad != null ? `${g.grad}° (${himmelsrichtung(g.grad)})` : null, formatDist(Math.round(laenge(g.line))),
+    gasseBefahrbarText(g.befahrbar) || null, g.breite ? `${String(g.breite).replace('.', ',')} m breit` : null, g.notiz || null].filter(Boolean).join(' · ');
 }
 
 function lagerPopup(l, { aufBearbeiten } = {}) {
@@ -79,7 +154,7 @@ export function createErschliessungLayers(map, { klickbar = () => true } = {}) {
     for (const g of d.gassen || []) {
       if (!g.line || g.line.length < 2) continue;
       const pl = L.polyline(g.line, { color: GASSE_FARBE, weight: 5, opacity: 0.9, dashArray: '10 6', lineCap: 'butt' });
-      pl.bindTooltip(`Rückegasse${g.notiz ? `: ${g.notiz}` : ''} · ${formatDist(Math.round(laenge(g.line)))}`, { sticky: true });
+      pl.bindTooltip(gasseText(g), { sticky: true });
       pl.on('click', (e) => { if (!klickbar()) return; L.DomEvent.stop(e); gasseDialog(g); });
       gassen.addLayer(pl);
     }
@@ -137,9 +212,11 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   }
   function gasseSpeichern() {
     if (draft.length < 2) return;
-    speichere((e) => { e.gassen.push({ id: uid(), line: draft.map(([a, b]) => [Number(a.toFixed(7)), Number(b.toFixed(7))]), quelle, erfasst: Date.now() }); });
-    toast(`Rückegasse gespeichert (${formatDist(Math.round(laenge(draft)))})`);
+    const g = { id: uid(), line: draft.map(([a, b]) => [Number(a.toFixed(7)), Number(b.toFixed(7))]), quelle, erfasst: Date.now() };
+    g.grad = richtungAusLinie(g.line);
+    speichere((e) => { e.gassen.push(g); });
     draft = []; quelle = 'hand'; zeichneDraft(); render();
+    gasseDialog(g, { neu: true });
   }
   async function erkennen(p) {
     erkennt = true; render();

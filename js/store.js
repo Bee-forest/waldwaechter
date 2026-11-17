@@ -9,6 +9,7 @@ const defaults = () => ({
   foerderantraege: [],
   finanzen: { buchungen: [], quote: 25 }, // siehe finanzen.js – Rechnungen, Einnahmen, Rücklagenquote für den Wald
   termine: [],      // eigene Termine (Aktuelles → FBG-Termine)
+  punkte: { habitat: [], jagd: [] }, // Habitatbäume { id, at, typ: stehend|liegend, … } und jagdliche Einrichtungen { id, at, typ: kanzel|bock|erdsitz, … }
   erschliessung: { gassen: [], lager: [] }, // Profimodus: Rückegassen { id, line, notiz } und Lagerplätze { id, at, name, befahrbar, lkw, menge, text }
   ordner: [],       // Profimodus: Ordner je Eigentümer { id, name, notiz }; Flurstück.ordnerId, Maßnahme.ordnerId, Buchung.ordnerId
   kontakte: { reviere: {} }, // Revierförster je Forstamt/Revier: { name, tel, mail }
@@ -23,7 +24,7 @@ const defaults = () => ({
     demo: false,            // Demo-Flurstücke (Raum Ilmenau) zusätzlich zeigen
     profi: false,           // Profimodus: Eigentümer, Erschließung, Lagerplätze, Wanderwege
     ordnerAktiv: 'eigen',   // Profimodus: angezeigter Ordner – 'eigen', 'alle' oder Ordner-id
-    layers: { alkis: true, demo: false, rettung: true, schutz: false, natura: false, biotope: false, schaden: false, standort: false, Wald: true, Landwirtschaft: true, Gewässer: true, Gebäude: true, info: true, rescue: false, flurnummern: false, grenzpunkte: false, gassen: true, lager: true },
+    layers: { alkis: true, demo: false, rettung: true, schutz: false, natura: false, biotope: false, schaden: false, standort: false, Wald: true, Landwirtschaft: true, Gewässer: true, Gebäude: true, info: true, rescue: false, flurnummern: false, grenzpunkte: false, gassen: true, lager: true, habitat: true, jagd: true },
   },
   onboardingDone: false,
 });

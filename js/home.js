@@ -18,6 +18,7 @@ import { empfehlung, empfehlungMitErsatz, bztName, GRUPPEN, BAUMARTEN_KURZ, eich
 import { wanderwege } from './map/wanderwege.js';
 import { createFlurnummernLayer } from './map/flurnummern.js';
 import { createErschliessungLayers, openErschliessungEditor } from './map/erschliessung.js';
+import { createPunktLayers, openPunktEditor, HABITAT_FARBE, JAGD_FARBE } from './map/punkte.js';
 import { ordnerEigentuemerAnwenden, ordnerLeiste, passtFlurstueck, ordnerAuswahl, ordnerFuerNeu, ordnerListe, ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
 import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
@@ -132,6 +133,8 @@ export async function initHome(root) {
   overlays.flurnummern = createFlurnummernLayer(map, () => ALL);
   const ersch = createErschliessungLayers(map, { nurAnsehen: true });
   overlays.gassen = ersch.gassen; overlays.lager = ersch.lager;
+  const punkte = createPunktLayers(map, { nurAnsehen: true });
+  overlays.habitat = punkte.habitat; overlays.jagd = punkte.jagd;
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
   // Verschiebt man die Karte von Hand, läuft sie nicht mehr mit (Verfolgung bleibt an)
   map.on('dragstart', () => { if (ortung === 'folgen') { ortung = 'an'; ortBtn(); } });
@@ -957,6 +960,10 @@ function openLayerSheet() {
         sw('gassen', 'Rückegassen', { color: '#8D5A2B' }),
         sw('lager', 'Lagerplätze (Polterplätze)', { color: '#B5651D' }),
         h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten'),
+        h('p', { class: 'sheet-label' }, 'Naturschutz und Jagd'),
+        sw('habitat', 'Habitatbäume (stehend / liegend)', { color: HABITAT_FARBE }),
+        sw('jagd', 'Jagdliche Einrichtungen', { color: JAGD_FARBE, note: 'Kanzel, Drückjagdbock, Erdsitz' }),
+        h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openPunktEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Habitatbäume und Jagdeinrichtungen bearbeiten'),
       ],
       groups.filter((g) => g !== 'Flurstücke').map((g) => [
         h('p', { class: 'sheet-label' }, g),

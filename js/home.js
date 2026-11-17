@@ -18,6 +18,7 @@ import { empfehlung, empfehlungMitErsatz, bztName, GRUPPEN, BAUMARTEN_KURZ, eich
 import { wanderwege } from './map/wanderwege.js';
 import { createFlurnummernLayer } from './map/flurnummern.js';
 import { createErschliessungLayers, openErschliessungEditor } from './map/erschliessung.js';
+import { createHangneigungLayer, analysiereFlaeche, befahrbarkeit, KLASSEN as NEIGUNG, grad as neigGrad } from './map/hangneigung.js';
 import { createPunktLayers, openPunktEditor, HABITAT_FARBE, JAGD_FARBE } from './map/punkte.js';
 import { ordnerEigentuemerAnwenden, ordnerLeiste, passtFlurstueck, ordnerAuswahl, ordnerFuerNeu, ordnerListe, ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
 import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
@@ -135,6 +136,7 @@ export async function initHome(root) {
   overlays.gassen = ersch.gassen; overlays.lager = ersch.lager;
   const punkte = createPunktLayers(map, { nurAnsehen: true });
   overlays.habitat = punkte.habitat; overlays.jagd = punkte.jagd;
+  overlays.hangneigung = createHangneigungLayer();
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
   // Verschiebt man die Karte von Hand, läuft sie nicht mehr mit (Verfolgung bleibt an)
   map.on('dragstart', () => { if (ortung === 'folgen') { ortung = 'an'; ortBtn(); } });
@@ -638,7 +640,40 @@ function bztKarte(r) {
     h('p', { class: 'info-quellen' }, 'Quelle: ThüringenForst, Standortgerechte Baumarten- und Bestandeszieltypenwahl, Tabellenwerk (Anlage 6 DO Waldbau, Juni 2015). Klimabereiche aus der Karte im Anhang A, auf ca. 150 m genau verortet; Wuchseinheiten: Open Data ThüringenForst.'));
 }
 
-function geoInfoBlock(latlng, parcelId = null) {
+/** Hangneigung der Fläche (oder ca. 80 × 80 m um den Punkt) mit Einschätzung der Befahrbarkeit */
+function gelaendeBlock(latlng, polys) {
+  const lat = latlng.lat ?? latlng[0], lng = latlng.lng ?? latlng[1];
+  const flaeche = polys?.length ? polys : (() => { const dl = 40 / 111320, dg = dl / Math.cos(lat * Math.PI / 180); return [[[[lat - dl, lng - dg], [lat - dl, lng + dg], [lat + dl, lng + dg], [lat + dl, lng - dg], [lat - dl, lng - dg]]]]; })();
+  const inhalt = h('div', { 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Berechne die Hangneigung …'));
+  const block = klapp('gelaende', 'Hangneigung und Befahrbarkeit', inhalt, 'Lädt …');
+  analysiereFlaeche(flaeche).then((a) => {
+    if (!a) { fill(inhalt, h('p', { class: 'muted' }, 'Die Fläche ist zu klein für eine Auswertung der Hangneigung.')); block.setKurz('Fläche zu klein'); return; }
+    const b = befahrbarkeit(a);
+    const pct = (x) => `${Math.round(x)} %`;
+    fill(inhalt, h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, polys?.length ? 'Neigung im Flurstück' : 'Neigung um den angetippten Punkt'),
+      h('h4', {}, h('span', { class: `neig-ampel neig-${b.stufe}` }), b.titel),
+      h('p', {}, b.text),
+      h('div', { class: 'neig-balken', role: 'img', 'aria-label': NEIGUNG.map((k, i) => `${k.name}: ${Math.round(a.anteile[i] * 100)} %`).join(', ') },
+        NEIGUNG.map((k, i) => (a.anteile[i] > 0.005 ? h('span', { style: `width:${a.anteile[i] * 100}%;background:${k.hex}`, title: `${k.name}: ${Math.round(a.anteile[i] * 100)} %` }) : null))),
+      h('ul', { class: 'neig-liste' }, NEIGUNG.map((k, i) => {
+        if (a.anteile[i] < 0.01) return null;
+        const gradText = k.bis === Infinity ? `über ${neigGrad(70)}°` : `bis ${neigGrad(k.bis)}°`;
+        return h('li', {},
+          h('span', { class: 'swatch', style: `background:${k.hex}` }),
+          h('span', {}, h('strong', {}, `${k.name} (${gradText})`), ` – ${k.kurz}`),
+          h('strong', { class: 'neig-anteil' }, `${Math.round(a.anteile[i] * 100)} %`));
+      })),
+      h('p', { class: 'geo-facts' }, [`Mittel ${pct(a.mittel)} (${neigGrad(a.mittel)}°)`, `90 % der Fläche flacher als ${pct(a.p90)}`, `steilste Stelle ca. ${pct(a.max)}`, a.exposition ? `Hang nach ${a.exposition}` : 'keine deutliche Hangrichtung'].join(' · ')),
+      h('details', { class: 'bzt-nachbar' }, h('summary', {}, 'Was bedeuten die Klassen?'),
+        h('ul', { class: 'neig-erkl' }, NEIGUNG.map((k) => h('li', {}, h('strong', {}, `${k.name}: `), k.text)))),
+      h('p', { class: 'hint' }, 'Berechnet aus einem Geländemodell mit ca. 30 m Auflösung (Terrain Tiles, SRTM/EU-DEM). Kleine Böschungen, Gräben und Felsen erfasst es nicht. Die Klassen sind Faustwerte: Ob und womit befahren werden kann, hängt auch von Boden, Nässe, Hindernissen und der Maschine ab – vor Ort prüfen.')));
+    block.setKurz(`${b.titel} · Mittel ${pct(a.mittel)}${a.exposition ? ` · ${a.exposition}hang` : ''}`);
+  }).catch(() => { fill(inhalt, h('p', { class: 'muted' }, 'Die Höhendaten sind gerade nicht erreichbar.')); block.setKurz('nicht erreichbar'); });
+  return block;
+}
+
+function geoInfoBlock(latlng, parcelId = null, polys = null) {
   const lade = (t) => h('p', { class: 'muted' }, t);
   const B = { standort: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Standort und Bestand …')),
     bzt: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Baumartenempfehlung …')),
@@ -650,6 +685,7 @@ function geoInfoBlock(latlng, parcelId = null) {
     bzt: klapp('bzt', 'Baumartenempfehlung', B.bzt, 'Lädt …'),
     schutz: klapp('schutz', 'Schutzstatus und Waldfunktionen', [B.schutz, quelle.cloneNode(true)], 'Lädt …'),
     zust: klapp('zust', 'Ansprechpartner', B.zust, 'Lädt …'),
+    gelaende: gelaendeBlock(latlng, polys),
   };
   const bestandP = bestandAt([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]]).catch(() => null);
   queryPoint(latlng).then(async (info) => {
@@ -685,9 +721,9 @@ function geoInfoBlock(latlng, parcelId = null) {
     fill(B.schutz, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160));
     fill(B.zust, h('p', { class: 'muted' }, 'Das Geoportal ist gerade nicht erreichbar.'));
     fill(B.bzt, h('p', { class: 'muted' }, 'Ohne Standortskarte (Geoportal nicht erreichbar) ist keine Baumartenempfehlung möglich.'));
-    Object.values(K).forEach((k) => k.setKurz('nicht erreichbar'));
+    [K.standort, K.bzt, K.schutz, K.zust].forEach((k) => k.setKurz('nicht erreichbar'));
   });
-  return [K.standort, K.bzt, K.schutz, K.zust];
+  return [K.standort, K.gelaende, K.bzt, K.schutz, K.zust];
 }
 
 /** Das braune „i“: markiert die angetippte Stelle; Antippen springt zur Infobox */
@@ -788,7 +824,7 @@ async function renderInfo() {
     istProfi() && m ? ordnerAuswahl(m, { beiAenderung: () => renderInfo() }) : null,
     istProfi() ? eigentuemerBlock(p) : null,
     isAlkis ? rescueBlock(latlng) : null,
-    isAlkis ? geoInfoBlock(latlng, p.id) : null,
+    isAlkis ? geoInfoBlock(latlng, p.id, polysOf(p)) : null,
     isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Nächste Rettungspunkte'),
       h('ul', { class: 'rescue-list' }, rescue.map((rp) => h('li', { class: 'rescue' },
@@ -923,6 +959,7 @@ function openLegend(key) {
     body: h('div', { class: 'legend-box' },
       h('p', {}, info.text),
       legends.length ? h('p', { class: 'sheet-label' }, 'Legende') : null,
+      info.neigung ? h('ul', { class: 'legend-swatches neig-legende' }, NEIGUNG.map((k) => h('li', {}, h('span', { class: 'swatch', style: `background:${k.hex}` }), h('span', {}, h('strong', {}, `${k.name} (${k.bis === Infinity ? `über ${neigGrad(70)}°` : `bis ${neigGrad(k.bis)}°`}) – ${k.kurz}`), h('br'), h('small', {}, k.text))))) : null,
       info.farben ? h('ul', { class: 'legend-swatches' }, Object.entries(BAUMARTEN_FARBEN).map(([t, c]) => h('li', {}, h('span', { class: 'swatch', style: `background:${c}` }), t))) : null,
       info.farben ? h('p', { class: 'hint' }, 'Farben nach dem QGIS-Stil von ThüringenForst. Quelle: Thüringer Waldverzeichnis, © GDI-Th, dl-de/by-2-0.') : null,
       legends.map((l) => h('img', { class: 'legend-img', src: l.src, alt: `Legende ${l.layer}`, loading: 'lazy',
@@ -962,6 +999,8 @@ function openLayerSheet() {
         sw('lager', 'Lagerplätze (Polterplätze)', { color: '#B5651D' }),
         h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten'),
       ],
+      h('p', { class: 'sheet-label' }, 'Gelände'),
+      sw('hangneigung', 'Hangneigung und Befahrbarkeit', { note: 'ab Zoomstufe 12' }),
       groups.filter((g) => g !== 'Flurstücke').map((g) => [
         h('p', { class: 'sheet-label' }, g),
         OVERLAYS.filter((o) => o.group === g).map((o) => sw(o.key, o.label, { disabled: o.pending, note: o.pending ? 'wird gerade angebunden' : null })),

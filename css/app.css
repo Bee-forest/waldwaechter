@@ -1197,3 +1197,14 @@ li.fin-zeile { cursor: default; }
 .punkt-typwahl button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; font-size: .85rem; }
 .punkt-typwahl .punkt-mini { margin: 0; width: 30px; height: 30px; }
 .punkt-typwahl .punkt-mini svg { width: 20px; height: 20px; }
+/* Hangneigung */
+.neig-balken { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 8px 0; background: var(--line); }
+.neig-balken span { display: block; height: 100%; }
+.neig-liste { list-style: none; padding: 0; margin: 4px 0; display: grid; gap: 4px; }
+.neig-liste li { display: flex; align-items: center; gap: 8px; }
+.neig-liste li > span:nth-child(2) { flex: 1; }
+.neig-anteil { font-variant-numeric: tabular-nums; }
+.neig-erkl { padding-left: 18px; margin: 6px 0; display: grid; gap: 4px; }
+.neig-ampel { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+.neig-0 { background: #4CAF50; } .neig-1 { background: #CDDC39; } .neig-2 { background: #FF9800; } .neig-3 { background: #E53935; }
+.neig-legende li { align-items: flex-start; }

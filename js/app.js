@@ -6,6 +6,7 @@ import { initMeasures } from './measures.js';
 import { initErinnerungen } from './erinnerung.js';
 import { renderPlaceholder } from './placeholders.js';
 import { initFinanzen } from './finanzen.js';
+import { ordnerBeobachten } from './profi.js';
 import { initAktuelles } from './aktuelles.js';
 
 // Unerwartete Fehler sichtbar machen (statt dass einfach nichts passiert) – je Meldung höchstens alle 20 s
@@ -74,6 +75,7 @@ async function main() {
   views.home.hidden = false;
   await initHome(views.home);
   initMeasures(views.massnahmen);
+  ordnerBeobachten();
   initFinanzen(views.finanzen);
   initAktuelles(views.aktuelles);
   renderPlaceholder(views.ki, 'ki');

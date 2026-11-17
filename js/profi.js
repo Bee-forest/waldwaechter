@@ -1,7 +1,7 @@
 // Profimodus: Eigentümer je Flurstück (Excel-Import), Kontakte der Revierförster.
 // Eigentümerdaten bleiben nur auf diesem Gerät (eigener Speicherplatz, nicht in der Datensicherung).
-import { h, dialog, toast } from './ui.js';
-import { store } from './store.js';
+import { h, fill, dialog, confirmDialog, toast, openPage } from './ui.js';
+import { store, uid } from './store.js';
 import { leseTabelle } from './xlsx.js';
 
 export const istProfi = () => !!store.get().settings?.profi;
@@ -180,4 +180,153 @@ export function revierleiterVon(daten, z) {
     if (r || amt) return { forstamt: name, amt: a, revier: r || null, stand: daten.stand };
   }
   return null;
+}
+
+// ---------- Ordner je Eigentümer (Profimodus) ----------
+// Flurstücke lassen sich Ordnern zuordnen; Maßnahmen und Buchungen gehören zum Ordner ihres Flurstücks
+// (ohne Flurstück: zum Ordner, der beim Anlegen gewählt war). „Eigene Flächen“ = ohne Ordner.
+export const ordnerListe = () => store.get().ordner || [];
+export const ordnerName = (id) => (id ? ordnerListe().find((o) => o.id === id)?.name || 'Ordner' : 'Eigene Flächen');
+export const aktiverOrdner = () => (istProfi() ? store.get().settings.ordnerAktiv || 'eigen' : 'alle');
+const parcelOrdner = (pid) => (pid ? store.get().parcels.find((p) => p.id === pid)?.ordnerId || null : undefined);
+export function ordnerVon(x) {
+  if (!x) return null;
+  const vomFlurstueck = parcelOrdner(x.parcelId);
+  return vomFlurstueck !== undefined ? vomFlurstueck : x.ordnerId || null;
+}
+/** passt ein Ordner (null = eigene Flächen) zur aktuellen Auswahl? */
+export function passtOrdner(ordnerId) {
+  const a = aktiverOrdner();
+  if (a === 'alle') return true;
+  if (a === 'eigen') return !ordnerId;
+  return ordnerId === a;
+}
+export const passtFlurstueck = (p) => passtOrdner(p?.ordnerId || null);
+export const passtEintrag = (x) => passtOrdner(ordnerVon(x));
+/** Ordner für einen neuen Eintrag ohne Flurstück */
+export const ordnerFuerNeu = () => { const a = aktiverOrdner(); return a === 'eigen' || a === 'alle' ? null : a; };
+
+// Neue Maßnahmen und Buchungen ohne Flurstück bekommen den gerade gewählten Ordner
+let ordnerAbo = false;
+export function ordnerBeobachten() {
+  if (ordnerAbo) return; ordnerAbo = true;
+  const pruefe = () => {
+    const s = store.get();
+    const fehlt = (x) => !x.parcelId && !('ordnerId' in x);
+    if (!(s.measures || []).some(fehlt) && !(s.finanzen?.buchungen || []).some(fehlt)) return;
+    const o = ordnerFuerNeu();
+    store.update((st) => {
+      for (const m of st.measures || []) if (fehlt(m)) m.ordnerId = o;
+      for (const b of st.finanzen?.buchungen || []) if (fehlt(b)) b.ordnerId = o;
+    });
+  };
+  store.subscribe(pruefe);
+  pruefe();
+}
+
+export function ordnerWaehlen(id) {
+  store.update((s) => { s.settings.ordnerAktiv = id; });
+}
+
+/** Leiste im Kopf: welcher Ordner ist zu sehen? */
+export function ordnerLeiste() {
+  if (!istProfi()) return null;
+  const a = aktiverOrdner();
+  const liste = ordnerListe();
+  return h('div', { class: 'ordner-leiste' },
+    h('span', { class: 'ordner-symbol', 'aria-hidden': 'true' }, '📁'),
+    h('select', { 'aria-label': 'Ordner', onchange: (e) => { if (e.target.value === '__neu') { e.target.value = a; ordnerAnlegen(); return; } if (e.target.value === '__verwalten') { e.target.value = a; openOrdnerVerwaltung(); return; } ordnerWaehlen(e.target.value); } },
+      h('option', { value: 'eigen', selected: a === 'eigen' }, 'Eigene Flächen'),
+      liste.slice().sort((x, y) => x.name.localeCompare(y.name, 'de')).map((o) => h('option', { value: o.id, selected: a === o.id }, o.name)),
+      h('option', { value: 'alle', selected: a === 'alle' }, 'Alle Ordner'),
+      h('option', { value: '__neu' }, '+ Neuer Ordner …'),
+      h('option', { value: '__verwalten' }, 'Ordner verwalten …')));
+}
+
+export async function ordnerAnlegen(vorgabe = '') {
+  let name = vorgabe;
+  const ok = await dialog({
+    title: 'Neuer Ordner',
+    body: h('div', { class: 'form' }, h('label', {}, 'Name (z. B. Eigentümer)', h('input', { value: name, oninput: (e) => { name = e.target.value; } })),
+      h('p', { class: 'hint' }, 'Flurstücke ordnest du in der Flurstücks-Info dem Ordner zu. Maßnahmen und Finanzen werden dann je Ordner getrennt angezeigt.')),
+    actions: [{ label: 'Abbrechen', value: false }, { label: 'Anlegen', value: true, primary: true }],
+  });
+  if (!ok || !name.trim()) return null;
+  const o = { id: uid(), name: name.trim(), erstellt: Date.now() };
+  store.update((s) => { s.ordner = s.ordner || []; s.ordner.push(o); s.settings.ordnerAktiv = o.id; });
+  toast(`Ordner „${o.name}“ angelegt`);
+  return o;
+}
+
+/** Ordner aus der Eigentümerliste: je Eigentümer (Name + Anschrift) ein Ordner; eigene Flurstücke mit passendem Eigentümer werden zugeordnet */
+export function ordnerAusEigentuemern() {
+  const s = store.get();
+  const ordner = [...(s.ordner || [])];
+  const nachName = new Map(ordner.map((o) => [o.name.toLowerCase(), o]));
+  let neu = 0, zugeordnet = 0;
+  const zuordnung = {};
+  for (const p of s.parcels) {
+    const e = eigentuemerVon(p);
+    const name = etName(e);
+    if (!name) continue;
+    let o = nachName.get(name.toLowerCase());
+    if (!o) { o = { id: uid(), name, erstellt: Date.now() }; ordner.push(o); nachName.set(name.toLowerCase(), o); neu++; }
+    if (p.ordnerId !== o.id) { zuordnung[p.id] = o.id; zugeordnet++; }
+  }
+  store.update((st) => { st.ordner = ordner; for (const p of st.parcels) if (zuordnung[p.id]) p.ordnerId = zuordnung[p.id]; });
+  return { neu, zugeordnet };
+}
+
+/** Flurstück einem Ordner zuordnen (null = eigene Flächen) */
+export function flurstueckZuordnen(pid, ordnerId) {
+  store.update((s) => { const p = s.parcels.find((x) => x.id === pid); if (p) p.ordnerId = ordnerId || null; });
+}
+
+/** Auswahl in der Flurstücks-Info */
+export function ordnerAuswahl(p, { beiAenderung } = {}) {
+  const liste = ordnerListe();
+  const e = eigentuemerVon(p);
+  const vorschlag = e && etName(e) && !liste.some((o) => o.name.toLowerCase() === etName(e).toLowerCase()) ? etName(e) : null;
+  return h('div', { class: 'info-block' }, h('h3', {}, 'Ordner'),
+    h('select', { 'aria-label': 'Ordner des Flurstücks', onchange: async (ev) => {
+      let v = ev.target.value;
+      if (v === '__neu') { const o = await ordnerAnlegen(vorschlag || ''); if (!o) { ev.target.value = p.ordnerId || ''; return; } v = o.id; }
+      flurstueckZuordnen(p.id, v || null); toast(`Flurstück ${p.nr}: ${ordnerName(v || null)}`); beiAenderung?.();
+    } },
+      h('option', { value: '', selected: !p.ordnerId }, 'Eigene Flächen'),
+      liste.map((o) => h('option', { value: o.id, selected: p.ordnerId === o.id }, o.name)),
+      h('option', { value: '__neu' }, vorschlag ? `+ Neuer Ordner „${vorschlag}“` : '+ Neuer Ordner …')),
+    h('p', { class: 'hint' }, 'Maßnahmen und Finanzen dieses Flurstücks erscheinen im gewählten Ordner.'));
+}
+
+export function openOrdnerVerwaltung() {
+  const inhalt = h('div', { class: 'ordner-seite' });
+  const zeichne = () => {
+    const s = store.get();
+    const liste = (s.ordner || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    const zahl = (id) => ({
+      fl: s.parcels.filter((p) => (p.ordnerId || null) === id).length,
+      m: (s.measures || []).filter((m) => ordnerVon(m) === id).length,
+      b: (s.finanzen?.buchungen || []).filter((b) => ordnerVon(b) === id).length,
+    });
+    const zeile = (id, name) => { const z = zahl(id); return h('li', { class: 'fin-zeile' },
+      h('div', { class: 'fin-zeile-text' }, h('strong', {}, name), h('small', { class: 'muted' }, `${z.fl} Flurstücke · ${z.m} Maßnahmen · ${z.b} Buchungen`)),
+      h('button', { class: 'btn btn-small', onclick: () => { ordnerWaehlen(id || 'eigen'); seite.close(); } }, 'Öffnen'),
+      id ? h('button', { class: 'btn btn-small', onclick: async () => { let n = name; const ok = await dialog({ title: 'Ordner umbenennen', body: h('div', { class: 'form' }, h('label', {}, 'Name', h('input', { value: n, oninput: (e) => { n = e.target.value; } }))), actions: [{ label: 'Abbrechen', value: false }, { label: 'Speichern', value: true, primary: true }] }); if (ok && n.trim()) store.update((st) => { st.ordner.find((o) => o.id === id).name = n.trim(); }); } }, 'Umbenennen') : null,
+      id ? h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => {
+        if (!(await confirmDialog(`Ordner „${name}“ auflösen?`, { ok: 'Auflösen', danger: true, body: 'Flurstücke, Maßnahmen und Buchungen bleiben erhalten und kommen zu „Eigene Flächen“.' }))) return;
+        store.update((st) => { st.ordner = st.ordner.filter((o) => o.id !== id); for (const p of st.parcels) if (p.ordnerId === id) p.ordnerId = null; for (const m of st.measures || []) if (m.ordnerId === id) m.ordnerId = null; for (const b of st.finanzen?.buchungen || []) if (b.ordnerId === id) b.ordnerId = null; if (st.settings.ordnerAktiv === id) st.settings.ordnerAktiv = 'eigen'; });
+      } }, 'Auflösen') : null); };
+    fill(inhalt,
+      h('p', { class: 'muted' }, 'Je Eigentümer ein Ordner: Flurstücke, Maßnahmen und Finanzen werden getrennt geführt. Oben in jeder Ansicht wählst du, welcher Ordner zu sehen ist.'),
+      h('ul', { class: 'fin-liste' }, zeile(null, 'Eigene Flächen'), liste.map((o) => zeile(o.id, o.name))),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn btn-primary', onclick: () => ordnerAnlegen() }, '+ Neuer Ordner'),
+        eigentuemerAnzahl() ? h('button', { class: 'btn', onclick: () => { const r = ordnerAusEigentuemern(); toast(`${r.neu} Ordner angelegt, ${r.zugeordnet} Flurstücke zugeordnet`); } }, 'Ordner aus Eigentümerliste') : null),
+      eigentuemerAnzahl() ? h('p', { class: 'hint' }, '„Ordner aus Eigentümerliste“ legt für jeden importierten Eigentümer deiner Flurstücke einen Ordner an und ordnet die Flurstücke zu.') : null);
+  };
+  zeichne();
+  const ab = store.subscribe(zeichne);
+  const seite = openPage('Ordner verwalten', inhalt, { onClose: ab });
+  return seite;
 }

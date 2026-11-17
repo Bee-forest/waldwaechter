@@ -8,6 +8,7 @@ import { kopfInhalt, parcelTitle } from './home.js';
 import { dateiSpeichern, dateiLaden, dateiLoeschen } from './dateien.js';
 import { MEASURE_TYPES } from './measures.js';
 import { WANZE_SVG } from './mascot.js';
+import { passtEintrag, passtFlurstueck, ordnerFuerNeu, istProfi, aktiverOrdner, ordnerName } from './profi.js';
 
 export const euro = (v) => `${Number(v || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 const euroKurz = (v) => `${Math.round(Number(v || 0)).toLocaleString('de-DE')} €`;
@@ -65,7 +66,7 @@ const MASSNAHME_KAT = { pflanzung: 'pflanzung', zaunbau: 'wildschutz', einzelsch
 
 // ---------- Daten ----------
 const fin = () => store.get().finanzen || { buchungen: [], quote: 25 };
-const buchungen = () => fin().buchungen || [];
+const buchungen = () => (fin().buchungen || []).filter(passtEintrag);
 const heute = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const jahrVon = (b) => Number(String(b.datum || '').slice(0, 4)) || new Date(b.createdAt || Date.now()).getFullYear();
 const datumText = (iso) => (iso ? fmtDate(new Date(`${iso}T12:00:00`)) : '');
@@ -85,7 +86,7 @@ function summen(liste) {
 function speichereFin(fn) {
   store.update((s) => { s.finanzen = s.finanzen || { buchungen: [], quote: 25 }; s.finanzen.buchungen = s.finanzen.buchungen || []; fn(s.finanzen); });
 }
-const meineFlaechen = () => store.get().parcels || [];
+const meineFlaechen = () => (store.get().parcels || []).filter(passtFlurstueck);
 const flaecheVon = (id) => meineFlaechen().find((p) => p.id === id);
 const bereichVonFlaeche = (p) => (p && BEREICHE[p.category] ? p.category : 'Wald');
 
@@ -102,10 +103,10 @@ export function waldPlanung() {
   const soll = erloes * q;
   return { q, erloes, soll, invest, offen: Math.max(0, soll - invest), ab };
 }
-const geplanteWaldkosten = () => (store.get().measures || []).filter((m) => m.status !== 'fertig' && Number(m.kosten) > 0 && ['pflanzung', 'pflege', 'zaunbau', 'einzelschutz'].includes(m.type));
-const holzernteOhneErloes = () => (store.get().measures || []).filter((m) => ['durchforstung', 'holzernte_df', 'polter'].includes(m.type) && m.status === 'fertig'
+const geplanteWaldkosten = () => (store.get().measures || []).filter(passtEintrag).filter((m) => m.status !== 'fertig' && Number(m.kosten) > 0 && ['pflanzung', 'pflege', 'zaunbau', 'einzelschutz'].includes(m.type));
+const holzernteOhneErloes = () => (store.get().measures || []).filter(passtEintrag).filter((m) => ['durchforstung', 'holzernte_df', 'polter'].includes(m.type) && m.status === 'fertig'
   && !buchungen().some((b) => b.measureId === m.id && b.art === 'einnahme'));
-const massnahmenMitKosten = () => (store.get().measures || []).filter((m) => m.status === 'fertig' && Number(m.kosten) > 0 && !buchungen().some((b) => b.measureId === m.id && b.art === 'ausgabe'));
+const massnahmenMitKosten = () => (store.get().measures || []).filter(passtEintrag).filter((m) => m.status === 'fertig' && Number(m.kosten) > 0 && !buchungen().some((b) => b.measureId === m.id && b.art === 'ausgabe'));
 
 function neueMassnahme(typ) {
   window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { typ } }));
@@ -173,7 +174,7 @@ function render() {
     h('header', { class: 'card app-head' }, kopfInhalt()),
     h('section', { class: 'kachel fin-stand' },
       h('div', { class: 'fin-stand-kopf' }, h('h1', {}, 'Finanzen'), jahrWahl),
-      h('p', { class: 'muted fin-stand-label' }, jahr === 'alle' ? 'Aktueller Stand über alle Flächen' : `Stand ${jahr} über alle Flächen`),
+      h('p', { class: 'muted fin-stand-label' }, `${jahr === 'alle' ? 'Aktueller Stand' : `Stand ${jahr}`} – ${istProfi() ? (aktiverOrdner() === 'alle' ? 'alle Ordner' : ordnerName(aktiverOrdner() === 'eigen' ? null : aktiverOrdner())) : 'alle Flächen'}`),
       h('div', { class: `fin-saldo ${g.saldo < 0 ? 'neg' : 'pos'}` }, mitVz(g.saldo)),
       h('div', { class: 'fin-ein-aus' },
         h('div', {}, h('span', { class: 'muted' }, 'Einnahmen'), h('strong', { class: 'pos' }, euro(g.ein))),
@@ -403,7 +404,7 @@ export function openBuchung(vorgabe = {}) {
       id, art: b.art, bereich: b.bereich, kat: b.kat, betrag, datum: b.datum, parcelId: b.parcelId || null,
       text: String(b.text || '').trim(), partner: String(b.partner || '').trim(), nr: String(b.nr || '').trim(),
       menge: b.kat === 'holzerloes' && zahl(b.menge) > 0 ? zahl(b.menge) : null,
-      measureId: b.measureId || null, belegId, belegName, createdAt: alt?.createdAt || Date.now(), geaendert: alt ? Date.now() : undefined,
+      measureId: b.measureId || null, ordnerId: alt ? (alt.ordnerId ?? null) : ordnerFuerNeu(), belegId, belegName, createdAt: alt?.createdAt || Date.now(), geaendert: alt ? Date.now() : undefined,
     };
     const warNeuerErloes = !alt && eintrag.bereich === 'Wald' && eintrag.art === 'einnahme' && eintrag.kat === 'holzerloes';
     speichereFin((f) => { const i = f.buchungen.findIndex((x) => x.id === id); if (i >= 0) f.buchungen[i] = eintrag; else f.buchungen.push(eintrag); });

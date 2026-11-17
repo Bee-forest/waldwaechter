@@ -18,7 +18,7 @@ import { empfehlung, empfehlungMitErsatz, bztName, GRUPPEN, BAUMARTEN_KURZ, eich
 import { wanderwege } from './map/wanderwege.js';
 import { createFlurnummernLayer } from './map/flurnummern.js';
 import { createErschliessungLayers, openErschliessungEditor } from './map/erschliessung.js';
-import { ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
+import { ordnerLeiste, passtFlurstueck, ordnerAuswahl, ordnerFuerNeu, ordnerListe, ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
 import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
@@ -64,6 +64,7 @@ export function kopfInhalt() {
       ),
       h('span', { class: 'chev', html: icon.chevron }),
     ),
+    ordnerLeiste(),
   ];
 }
 
@@ -196,7 +197,9 @@ function drawParcels() {
   const myList = store.get().parcels;
   for (const p of ALL) {
     const m = myList.find((x) => x.id === p.id);
-    if (m) {
+    if (m && !passtFlurstueck(m)) { // Fläche aus einem anderen Ordner: nur dünn umrandet
+      allParcelsLayer.addLayer(L.polygon(polysOf(p), { color: '#6B7A70', weight: 1.5, dashArray: '2 5', fillOpacity: 0, interactive: false }));
+    } else if (m) {
       const c = CATEGORIES[m.category] || CATEGORIES.Wald;
       catGroups[m.category]?.addLayer(L.polygon(polysOf(p), { color: c.color, weight: 2, fillColor: c.color, fillOpacity: 0.38, interactive: false }));
     } else if (p.source !== 'alkis') { // ALKIS-Grenzen zeigt bereits der WMS
@@ -752,7 +755,10 @@ async function renderInfo() {
         })(),
         h('button', { class: 'btn btn-primary btn-block', onclick: () => {
           // Geometrie und Sachdaten mitspeichern, damit die Fläche auch offline verfügbar ist
-          store.update((s) => { s.parcels.push({ ...p, category: pick, addedAt: Date.now() }); });
+          const e = istProfi() ? eigentuemerVon(p) : null;
+          const passend = e && etName(e) ? ordnerListe().find((o) => o.name.toLowerCase() === etName(e).toLowerCase()) : null;
+          const ordnerId = istProfi() ? (passend?.id || ordnerFuerNeu()) : null;
+          store.update((s) => { s.parcels.push({ ...p, category: pick, addedAt: Date.now(), ordnerId }); });
           say(`Flurstück ${p.nr} ist jetzt eine deiner Flächen. Du findest sie in deinem Profil.`);
           renderInfo();
         } }, h('span', { html: icon.plus }), 'Fläche hinzufügen'),
@@ -775,6 +781,7 @@ async function renderInfo() {
       h('div', { class: 'wide' }, h('dt', {}, 'Angetippter Punkt'), h('dd', { class: 'mono' }, `${latlng[0].toFixed(5)} N, ${latlng[1].toFixed(5)} O`)),
     ),
     catSection,
+    istProfi() && m ? ordnerAuswahl(m, { beiAenderung: () => renderInfo() }) : null,
     istProfi() ? eigentuemerBlock(p) : null,
     isAlkis ? rescueBlock(latlng) : null,
     isAlkis ? geoInfoBlock(latlng, p.id) : null,

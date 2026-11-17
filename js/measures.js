@@ -17,6 +17,7 @@ import { openZaunPlanung } from './zaun.js';
 import { openPflanzPlanung } from './pflanzung.js';
 import { FOERDER, fragFoerderung, weiterZumAntrag, openFoerderantrag, antragFuer } from './foerderung.js';
 import { kopfInhalt } from './home.js';
+import { passtEintrag, passtFlurstueck } from './profi.js';
 
 export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', info: 'Pflanzfläche planen, Baumarten verteilen, Pflanzenzahl und Kosten', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
@@ -97,7 +98,7 @@ export function initMeasures(el) {
 async function render() {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
-  const list = [...store.get().measures].sort((a, b) => (a.status === 'fertig') - (b.status === 'fertig') || ((naechsterTermin(a)?.date ?? Infinity) - (naechsterTermin(b)?.date ?? Infinity)) || b.createdAt - a.createdAt);
+  const list = [...store.get().measures].filter(passtEintrag).sort((a, b) => (a.status === 'fertig') - (b.status === 'fertig') || ((naechsterTermin(a)?.date ?? Infinity) - (naechsterTermin(b)?.date ?? Infinity)) || b.createdAt - a.createdAt);
   // Unter „Offene Maßnahmen“ nur, was noch nicht abgeschlossen ist; Erledigtes bleibt im Kalender und in der Flurstückhistorie
   const offen = list.filter((m) => m.status !== 'fertig');
 
@@ -299,7 +300,7 @@ function measureCard(m, byId) {
 async function openNewMeasure({ parcelId, antragId = null, typ = null } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
-  const mine = store.get().parcels.filter((p) => byId[p.id]);
+  const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
   const seiten = []; // geöffnete Seiten – nach dem Speichern alle schließen
   const neueSeite = (titel, inhalt) => { const pg = openPage(titel, inhalt, { onClose: () => { const k = seiten.indexOf(pg); if (k >= 0) seiten.splice(k, 1); } }); seiten.push(pg); return pg; };
   const alleSchliessen = () => [...seiten].reverse().forEach((pg) => pg.close());

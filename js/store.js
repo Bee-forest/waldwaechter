@@ -10,6 +10,7 @@ const defaults = () => ({
   finanzen: { buchungen: [], quote: 25 }, // siehe finanzen.js – Rechnungen, Einnahmen, Rücklagenquote für den Wald
   termine: [],      // eigene Termine (Aktuelles → FBG-Termine)
   erschliessung: { gassen: [], lager: [] }, // Profimodus: Rückegassen { id, line, notiz } und Lagerplätze { id, at, name, befahrbar, lkw, menge, text }
+  ordner: [],       // Profimodus: Ordner je Eigentümer { id, name, notiz }; Flurstück.ordnerId, Maßnahme.ordnerId, Buchung.ordnerId
   kontakte: { reviere: {} }, // Revierförster je Forstamt/Revier: { name, tel, mail }
   bestandKorrektur: {}, // eigene Angaben zum Bestand je Flurstück: { haupt, misch, neben: { art, alter }, jahr } // siehe foerderung.js – Entwürfe für Förderanträge (ThüringenForst)
   profile: { name: '', email: '', fbg: '', fbgAnsprech: '', fbgTel: '', fbgMail: '', accountHolder: '', iban: '', strasse: '', ort: '', telefon: '', pi: '' },
@@ -21,6 +22,7 @@ const defaults = () => ({
     basemap: 'osm',         // osm | dop (Luftbild TH)
     demo: false,            // Demo-Flurstücke (Raum Ilmenau) zusätzlich zeigen
     profi: false,           // Profimodus: Eigentümer, Erschließung, Lagerplätze, Wanderwege
+    ordnerAktiv: 'eigen',   // Profimodus: angezeigter Ordner – 'eigen', 'alle' oder Ordner-id
     layers: { alkis: true, demo: false, rettung: true, schutz: false, natura: false, biotope: false, schaden: false, standort: false, Wald: true, Landwirtschaft: true, Gewässer: true, Gebäude: true, info: true, rescue: false, flurnummern: false, grenzpunkte: false, gassen: true, lager: true },
   },
   onboardingDone: false,

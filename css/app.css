@@ -1172,3 +1172,7 @@ li.fin-zeile { cursor: default; }
 .gpunkt span { display: block; width: 100%; height: 100%; border-radius: 50%; background: #F26B1D; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); box-sizing: border-box; }
 .gpunkt-mitte span { background: #fff; border: 2px solid #F26B1D; opacity: .9; }
 .akt-wbi-aus { --wbi: var(--surface-2); --wbi-ink: var(--ink); }
+.ordner-leiste { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.ordner-leiste select { flex: 1; min-height: 40px; border: 0; background: transparent; font: inherit; font-weight: 700; color: var(--ink); }
+.ordner-symbol { font-size: 20px; }
+.ordner-badge { font-size: 13px; font-weight: 700; color: var(--primary); }

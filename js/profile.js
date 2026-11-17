@@ -10,7 +10,7 @@ import { startTour, say } from './mascot.js';
 import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.js';
 import { buzz } from './thinning/feedback.js';
 import * as erinnerung from './erinnerung.js';
-import { istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen } from './profi.js';
+import { ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen } from './profi.js';
 
 export async function openProfile() {
   const all = await source.allParcels();
@@ -204,7 +204,7 @@ export async function openProfile() {
               const kat = CATEGORIES[p.category] || CATEGORIES.Wald;
               return h('li', { class: 'parcel-item' },
                 h('span', { class: 'swatch tall', style: `background:${kat.color}` }),
-                h('div', { class: 'parcel-text' }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${full.gemeinde && full.gemeinde !== '–' ? `${full.gemeinde}, ` : ''}${p.gemarkung}, Flur ${p.flur}`), h('span', { class: 'muted' }, `${kat.label}, ${formatHa(amtlicheFlaecheHa(full))}${full.flaecheAmtlich ? ' (amtlich)' : ''}`), full.nutzungText ? h('span', { class: 'muted small' }, full.nutzungText) : null),
+                h('div', { class: 'parcel-text' }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${full.gemeinde && full.gemeinde !== '–' ? `${full.gemeinde}, ` : ''}${p.gemarkung}, Flur ${p.flur}`), h('span', { class: 'muted' }, `${kat.label}, ${formatHa(amtlicheFlaecheHa(full))}${full.flaecheAmtlich ? ' (amtlich)' : ''}`), full.nutzungText ? h('span', { class: 'muted small' }, full.nutzungText) : null, istProfi() ? h('span', { class: 'ordner-badge' }, `📁 ${ordnerName(p.ordnerId || null)}`) : null),
                 h('button', { class: 'icon-btn', 'aria-label': `Auf ${parcelTitle(full)} zoomen`, html: icon.zoom, onclick: () => { seite.close(); page.close(); focusParcel(p.id); } }),
                 h('button', { class: 'icon-btn danger', 'aria-label': `${parcelTitle(full)} löschen`, html: icon.trash, onclick: async () => { if (await removeParcel(p.id)) { zeichne(); render(); } } }),
               );

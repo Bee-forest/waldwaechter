@@ -304,7 +304,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
       vorschlaege = r.linien.map((line) => ({ line, an: true }));
       zeichneVorschlaege();
       if (vorschlaege.length) map.fitBounds(L.latLngBounds(polysOf(p).flat(2)), { padding: [20, 20] });
-      toast(vorschlaege.length ? `${vorschlaege.length} mögliche Gassen gefunden – bitte prüfen` : 'Keine deutlichen Gassen im Luftbild gefunden.');
+      toast(vorschlaege.length ? `${vorschlaege.length} mögliche Gassen gefunden${r.abstandM ? `, Abstand ca. ${r.abstandM} m` : ''} – bitte prüfen` : 'Keine deutlichen Gassen im Luftbild gefunden.');
     } catch (err) { toast(err.message || 'Erkennung fehlgeschlagen'); }
     erkennt = false; render();
   }

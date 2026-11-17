@@ -34,7 +34,7 @@ function boxBlur(src, w, h, r) {
  * @param {{ rgba: Uint8ClampedArray, w: number, h: number, mask: Uint8Array, mProPx: number }} o
  * @returns {{ linien: Array<[[number,number],[number,number]]>, winkel: number|null, staerke: number }}  Linien in Pixelkoordinaten
  */
-export function erkenneGassenPixel({ rgba, w, h, mask, mProPx }) {
+export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abstandMinM = 22, abstandMaxM = 42 }) {
   const n = w * h;
   const L = new Float32Array(n), G = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -53,7 +53,7 @@ export function erkenneGassenPixel({ rgba, w, h, mask, mProPx }) {
   for (let i = 0; i < n; i++) if (mask[i]) F[i] = Math.min(3, Math.max(0, (Ls[i] - Lb[i]) / sdL) + 0.5 * Math.max(0, (Gb[i] - Gs[i]) / sdG));
 
   const diag = Math.ceil(Math.hypot(w, h));
-  const minLen = 25 / mProPx, abstandMin = Math.round(12 / mProPx), fenster = Math.round(10 / mProPx), kern = Math.round(3 / mProPx);
+  const minLen = 25 / mProPx, abstandMin = Math.round(abstandMinM / mProPx), fenster = Math.round(10 / mProPx), kern = Math.round(3 / mProPx);
   let best = null;
   const scores = [];
   for (let deg = 0; deg < 180; deg += 2) {
@@ -87,32 +87,57 @@ export function erkenneGassenPixel({ rgba, w, h, mask, mProPx }) {
   const deutlich = best.score / Math.max(1e-6, median);
   if (typeof globalThis.__gassenDebug === 'function') globalThis.__gassenDebug({ deutlich, score: best.score, median, top: best.prom[best.spitzen[0]] });
   if (deutlich < 3 || best.prom[best.spitzen[0]] < 0.5) return { linien: [], winkel: null, staerke: deutlich };
-  // Spitzen entlang der Linie verfolgen
-  const { c, s } = best;
+  // Gassenraster: Gassen liegen parallel in festem Abstand (meist 24 m, auch bis 40 m). Abstand und Lage des
+  // Rasters so wählen, dass die Profilspitzen am besten getroffen werden; dann jede Rasterlinie einzeln prüfen.
+  const { c, s, prom } = best;
+  const def = []; for (let k = 0; k < prom.length; k++) if (prom[k] !== 0) def.push(k);
+  const k0 = def[0], k1 = def[def.length - 1];
+  const tol = Math.max(1, Math.round(3 / mProPx));
+  const maxIn = (pos) => { let m = -Infinity, at = pos; for (let j = pos - tol; j <= pos + tol; j++) if (j >= k0 && j <= k1 && prom[j] > m) { m = prom[j]; at = j; } return { m: m === -Infinity ? 0 : m, at }; };
+  let raster = null;
+  for (let sp = Math.round(abstandMinM / mProPx); sp <= Math.round(abstandMaxM / mProPx); sp++) {
+    for (let ph = 0; ph < sp; ph++) {
+      let sum = 0, n2 = 0;
+      for (let pos = k0 + ph; pos <= k1; pos += sp) { sum += Math.max(0, maxIn(pos).m); n2++; }
+      const mittel = n2 ? sum / n2 : 0;
+      if (!raster || mittel > raster.mittel) raster = { sp, ph, mittel };
+    }
+  }
+  const kandidaten = [];
+  if (raster) for (let pos = k0 + raster.ph; pos <= k1; pos += raster.sp) { const t = maxIn(pos); if (t.m > 0.2) kandidaten.push(t.at); }
   const linien = [];
   const halb = Math.max(1, Math.round(2 / mProPx));
-  for (const k of best.spitzen) {
+  const innen = (x, y, m) => { const xi = Math.round(x), yi = Math.round(y); return xi >= 0 && yi >= 0 && xi < w && yi < h && m[yi * w + xi]; };
+  for (const k of kandidaten) {
     const rho = k - diag;
-    // Linie: Punkt (rho*c, rho*s), Richtung (-s, c)
-    const px = rho * c, py = rho * s;
+    const px = rho * c, py = rho * s; // Linie: Punkt (px, py), Richtung (-s, c)
     const werte = [];
     for (let tt = -diag; tt <= diag; tt++) {
       const x = px - s * tt, y = py + c * tt;
-      const xi = Math.round(x), yi = Math.round(y);
-      if (xi < 0 || yi < 0 || xi >= w || yi >= h || !mask[yi * w + xi]) { werte.push(null); continue; }
+      if (!innen(x, y, mask)) { werte.push(null); continue; }
       let a = 0, b = 0;
-      for (let q = -halb; q <= halb; q++) { const xx = Math.round(x + c * q), yy = Math.round(y + s * q); if (xx >= 0 && yy >= 0 && xx < w && yy < h && mask[yy * w + xx]) { a += F[yy * w + xx]; b++; } }
+      for (let q = -halb; q <= halb; q++) { const xx = x + c * q, yy = y + s * q; if (innen(xx, yy, mask)) { a += F[Math.round(yy) * w + Math.round(xx)]; b++; } }
       werte.push(b ? a / b : null);
     }
-    // gleitender Mittelwert über ca. 8 m, dann zusammenhängende Stücke über der Schwelle
     const r = Math.round(4 / mProPx), sm = werte.map((_, i) => { let a = 0, b = 0; for (let j = i - r; j <= i + r; j++) if (werte[j] != null) { a += werte[j]; b++; } return werte[i] == null ? null : a / b; });
-    const schwelle = Math.max(0.35, best.prom[k] * 0.5);
-    let start = null;
-    const ende = (i) => { if (start != null && (i - start) >= minLen) { const t0 = start - diag, t1 = i - 1 - diag; linien.push([[px - s * t0, py + c * t0], [px - s * t1, py + c * t1]]); } start = null; };
-    for (let i = 0; i < sm.length; i++) { if (sm[i] != null && sm[i] >= schwelle) { if (start == null) start = i; } else ende(i); }
-    ende(sm.length);
+    // Gassen laufen durch: vom ersten bis zum letzten deutlichen Stück durchziehen, Lücken (Kronenschluss, Schatten) überbrücken
+    const schwelle = Math.max(0.25, prom[k] * 0.35);
+    let erst = -1, letzt = -1, treffer = 0, innenN = 0;
+    for (let i = 0; i < sm.length; i++) { if (sm[i] == null) continue; innenN++; if (sm[i] >= schwelle) { if (erst < 0) erst = i; letzt = i; treffer++; } }
+    if (erst < 0 || (letzt - erst) < minLen) continue;
+    let spanne = 0; for (let i = erst; i <= letzt; i++) if (sm[i] != null) spanne++;
+    if (treffer / Math.max(1, spanne) < 0.3) continue;
+    // Enden bis an den Rand des Flurstücks verlängern, wenn sie nah am Rand liegen (≤ 30 m)
+    const rand = Math.round(30 / mProPx), aussen = voll || mask;
+    const randAb = (i, dir) => { let j = i; while (innen(px - s * (j + dir - diag), py + c * (j + dir - diag), aussen)) j += dir; return j; };
+    let a0 = erst, a1 = letzt;
+    const r0 = randAb(erst, -1), r1 = randAb(letzt, 1);
+    if (erst - r0 <= rand) a0 = r0;
+    if (r1 - letzt <= rand) a1 = r1;
+    const t0 = a0 - diag, t1 = a1 - diag;
+    linien.push([[px - s * t0, py + c * t0], [px - s * t1, py + c * t1]]);
   }
-  return { linien, winkel: best.deg, staerke: deutlich };
+  return { linien, winkel: best.deg, staerke: deutlich, abstandM: raster ? Math.round(raster.sp * mProPx) : null };
 }
 
 /**
@@ -146,17 +171,20 @@ export async function erkenneGassen(flaeche) {
   mx.beginPath();
   for (const poly of polys) for (const ring of poly) ring.forEach((pt, i) => { const [x, y] = zuPx(pt); if (i) mx.lineTo(x, y); else mx.moveTo(x, y); });
   mx.fill('evenodd');
+  const vd = mx.getImageData(0, 0, W, H).data;
+  const voll = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) voll[i] = vd[i * 4 + 3] > 128 ? 1 : 0;
   mx.globalCompositeOperation = 'destination-out';
   mx.lineWidth = (2 * 6) / ZIEL_M; mx.strokeStyle = '#000';
   mx.stroke();
   const md = mx.getImageData(0, 0, W, H).data;
   const mask = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) mask[i] = md[i * 4 + 3] > 128 ? 1 : 0;
-  const r = erkenneGassenPixel({ rgba, w: W, h: H, mask, mProPx: mProPxBild * f });
+  const r = erkenneGassenPixel({ rgba, w: W, h: H, mask, voll, mProPx: mProPxBild * f });
   const welt = 256 * 2 ** l.z;
   const zuLL = ([x, y]) => {
     const X = l.x0 + x * f, Y = l.y0 + y * f;
     return [(Math.atan(Math.sinh(Math.PI * (1 - (2 * Y) / welt))) * 180) / Math.PI, (X / welt) * 360 - 180];
   };
-  return { linien: r.linien.map((ab) => ab.map(zuLL)), winkel: r.winkel };
+  return { linien: r.linien.map((ab) => ab.map(zuLL)), winkel: r.winkel, abstandM: r.abstandM };
 }

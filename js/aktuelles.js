@@ -20,6 +20,11 @@ export function initAktuelles(el) {
   const beob = new MutationObserver(() => { if (!root.hidden && !wbi && !wbiLaedt && !wbiFehler) ladeWbi(); });
   beob.observe(root, { attributes: true, attributeFilter: ['hidden'] });
   if (!root.hidden) ladeWbi();
+  // Standort beim ersten Öffnen des Reiters (und danach höchstens alle 10 Minuten) neu bestimmen
+  let zuletzt = 0;
+  const ortPruefen = () => { if (!root.hidden && Date.now() - zuletzt > 10 * 60000) { zuletzt = Date.now(); ortBestimmen(); } };
+  new MutationObserver(ortPruefen).observe(root, { attributes: true, attributeFilter: ['hidden'] });
+  ortPruefen();
 }
 
 async function ladeJson(url) {
@@ -96,7 +101,26 @@ const VERHALTEN = {
   5: 'Sehr hohe Gefahr: Wälder können gesperrt werden. Arbeiten im Wald möglichst verschieben. Rauch sofort über 112 melden.',
 };
 
+// Standort des Nutzers (für die nächste DWD-Station); gemerkt, damit die Kachel sofort etwas zeigt
+const STANDORT_KEY = 'waldwaechter.standort';
+let standort = (() => { try { return JSON.parse(localStorage.getItem(STANDORT_KEY) || 'null'); } catch { return null; } })();
+let ortSucht = false, ortFehler = '';
+function ortBestimmen() {
+  if (!navigator.geolocation) { ortFehler = 'Dein Gerät gibt keinen Standort heraus.'; render(); return; }
+  ortSucht = true; ortFehler = ''; render();
+  navigator.geolocation.getCurrentPosition((pos) => {
+    standort = { pt: [pos.coords.latitude, pos.coords.longitude], ts: Date.now() };
+    try { localStorage.setItem(STANDORT_KEY, JSON.stringify(standort)); } catch { /* egal */ }
+    ortSucht = false; render();
+  }, (e) => {
+    ortSucht = false;
+    ortFehler = e.code === 1 ? 'Standortfreigabe abgelehnt – angezeigt wird die Station bei deinen Flächen.' : 'Standort nicht gefunden – angezeigt wird die Station bei deinen Flächen.';
+    render();
+  }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 10 * 60000 });
+}
+
 function region() {
+  if (standort?.pt) return { pt: standort.pt, name: 'dein Standort', eigene: true, gps: true };
   const ps = (store.get().parcels || []).filter((p) => polysOf(p).length);
   const wald = ps.filter((p) => (p.category || 'Wald') === 'Wald');
   const wahl = wald.length ? wald : ps;
@@ -149,7 +173,11 @@ function waldbrandKachel() {
     alt ? h('p', { class: 'fin-alarm' }, `Der letzte Wert ist vom ${fmtDate(tag)}. Außerhalb der Waldbrandsaison meldet der DWD nicht immer täglich – im Zweifel beim Forstamt nachfragen.`) : null,
     wbi.ausCache && wbiLaedt ? h('p', { class: 'muted' }, 'Gespeicherter Stand – wird aktualisiert …') : null,
     h('p', {}, VERHALTEN[stufe]),
-    h('p', { class: 'muted' }, reg.eigene ? 'Berechnet für die Mitte deiner Waldflächen. Verbindlich ist die vom zuständigen Forstamt ausgerufene Waldbrandgefahrenstufe.' : 'Leg Flurstücke an, dann zeigt die App die Gefahr für deine Region. Verbindlich ist die Stufe des zuständigen Forstamts.'),
+    h('p', { class: 'akt-ort' },
+      ortSucht ? h('span', { class: 'muted' }, 'Standort wird bestimmt …')
+        : h('button', { class: 'link-btn', onclick: ortBestimmen }, reg.gps ? 'Standort aktualisieren' : 'Station an meinem Standort zeigen'),
+      ortFehler ? h('small', { class: 'muted' }, ` ${ortFehler}`) : null),
+    h('p', { class: 'muted' }, reg.gps ? 'Nächste DWD-Station zu deinem aktuellen Standort. Verbindlich ist die vom zuständigen Forstamt ausgerufene Waldbrandgefahrenstufe.' : reg.eigene ? 'Berechnet für die Mitte deiner Waldflächen. Verbindlich ist die vom zuständigen Forstamt ausgerufene Waldbrandgefahrenstufe.' : 'Leg Flurstücke an, dann zeigt die App die Gefahr für deine Region. Verbindlich ist die Stufe des zuständigen Forstamts.'),
     links);
 }
 

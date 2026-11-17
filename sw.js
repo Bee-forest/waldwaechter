@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v2.51.0';
+const VERSION = 'v2.51.2';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -92,7 +92,10 @@ self.addEventListener('fetch', (e) => {
 async function tileFirst(req, key) {
   const cache = await caches.open(TILES);
   const hit = await cache.match(key);
-  if (hit) return hit;
+  // Die Karte lädt Kacheln ohne CORS (Antwort „opaque“). Das PDF-Kartenbild braucht dieselbe Kachel mit CORS –
+  // eine gespeicherte opaque-Antwort darf es nicht bekommen, sonst bleibt der Hintergrund leer.
+  const cors = req.mode === 'cors';
+  if (hit && !(cors && hit.type === 'opaque')) return hit;
   try {
     const res = await fetch(req);
     if (res.ok || res.type === 'opaque') {

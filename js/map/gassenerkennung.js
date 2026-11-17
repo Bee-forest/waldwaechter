@@ -51,7 +51,14 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
   if (m < 200) return { linien: [], winkel: null, staerke: 0 };
   const sdL = Math.sqrt(Math.max(1e-6, sl2 / m - (sl / m) ** 2)), sdG = Math.sqrt(Math.max(1e-6, sg2 / m - (sg / m) ** 2));
   const F = new Float32Array(n);
-  for (let i = 0; i < n; i++) if (mask[i]) F[i] = Math.min(3, Math.max(0, (Ls[i] - Lb[i]) / sdL) + 0.5 * Math.max(0, (Gb[i] - Gs[i]) / sdG));
+  // örtlich normieren: in dunkleren oder schattigen Bereichen ist der Kontrast der Gassen kleiner
+  const D = new Float32Array(n), E = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const d = Ls[i] - Lb[i], e = Gb[i] - Gs[i]; D[i] = d * d; E[i] = e * e; }
+  const rLok = Math.round(15 / mProPx), VL = boxBlur(D, w, h, rLok), VG = boxBlur(E, w, h, rLok);
+  for (let i = 0; i < n; i++) if (mask[i]) {
+    const sl0 = Math.max(Math.sqrt(VL[i]), 0.5 * sdL), sg0 = Math.max(Math.sqrt(VG[i]), 0.5 * sdG);
+    F[i] = Math.min(3, Math.max(0, (Ls[i] - Lb[i]) / sl0) + 0.5 * Math.max(0, (Gb[i] - Gs[i]) / sg0));
+  }
 
   const p1 = durchlauf(F, null);
   if (!p1.linien.length) return p1;
@@ -122,29 +129,32 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
     }
   }
   const kandidaten = [];
-  if (raster) for (let pos = k0 + raster.ph; pos <= k1; pos += raster.sp) { const t = maxIn(pos); if (t.m > (streng ? 0.6 : 0.2)) kandidaten.push(t.at); }
+  if (raster) for (let pos = k0 + raster.ph; pos <= k1; pos += raster.sp) { const t = maxIn(pos); if (t.m > (streng ? 0.6 : 0.05)) kandidaten.push(t.at); }
   const linien = [];
   const halb = Math.max(1, Math.round(2 / mProPx));
   const innen = (x, y, m) => { const xi = Math.round(x), yi = Math.round(y); return xi >= 0 && yi >= 0 && xi < w && yi < h && m[yi * w + xi]; };
   for (const k of kandidaten) {
     const rho = k - diag;
     const px = rho * c, py = rho * s; // Linie: Punkt (px, py), Richtung (-s, c)
+    // entlang der Linie: Gassenstreifen (±2 m) im Vergleich zum Kronendach daneben (6–9 m seitlich)
+    const seit = [6, 7.5, 9].map((m2) => Math.round(m2 / mProPx));
     const werte = [];
     for (let tt = -diag; tt <= diag; tt++) {
       const x = px - s * tt, y = py + c * tt;
       if (!innen(x, y, mask)) { werte.push(null); continue; }
-      let a = 0, b = 0;
+      let a = 0, b = 0, sa = 0, sb = 0;
       for (let q = -halb; q <= halb; q++) { const xx = x + c * q, yy = y + s * q; if (innen(xx, yy, mask)) { a += F[Math.round(yy) * w + Math.round(xx)]; b++; } }
-      werte.push(b ? a / b : null);
+      for (const q0 of seit) for (const sg of [-1, 1]) { const xx = x + c * q0 * sg, yy = y + s * q0 * sg; if (innen(xx, yy, mask)) { sa += F[Math.round(yy) * w + Math.round(xx)]; sb++; } }
+      werte.push(b && sb ? a / b - sa / sb : null);
     }
-    const r = Math.round(4 / mProPx), sm = werte.map((_, i) => { let a = 0, b = 0; for (let j = i - r; j <= i + r; j++) if (werte[j] != null) { a += werte[j]; b++; } return werte[i] == null ? null : a / b; });
+    const r = Math.round(5 / mProPx), sm = werte.map((_, i) => { let a = 0, b = 0; for (let j = i - r; j <= i + r; j++) if (werte[j] != null) { a += werte[j]; b++; } return werte[i] == null ? null : a / b; });
     // Gassen laufen durch: vom ersten bis zum letzten deutlichen Stück durchziehen, Lücken (Kronenschluss, Schatten) überbrücken
-    const schwelle = Math.max(0.25, prom[k] * 0.35);
+    const schwelle = streng ? 0.4 : 0.18;
     let erst = -1, letzt = -1, treffer = 0, innenN = 0;
     for (let i = 0; i < sm.length; i++) { if (sm[i] == null) continue; innenN++; if (sm[i] >= schwelle) { if (erst < 0) erst = i; letzt = i; treffer++; } }
     if (erst < 0 || (letzt - erst) < minLen) continue;
     let spanne = 0; for (let i = erst; i <= letzt; i++) if (sm[i] != null) spanne++;
-    if (treffer / Math.max(1, spanne) < 0.3) continue;
+    if (treffer / Math.max(1, spanne) < 0.35) continue;
     // Enden bis an den Rand des Flurstücks verlängern, wenn sie nah am Rand liegen (≤ 30 m)
     const rand = Math.round(30 / mProPx), aussen = voll || mask;
     const randAb = (i, dir) => { let j = i; while (innen(px - s * (j + dir - diag), py + c * (j + dir - diag), aussen)) j += dir; return j; };

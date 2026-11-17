@@ -220,6 +220,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
 
   // Gewähltes Flurstück für die Luftbild-Suche: gelb umrandet; aus der Liste gewählt → Karte springt hin
   let wahlP = flaeche;
+  let empfindlichkeit = (() => { try { return localStorage.getItem('waldwaechter.gassenEmpf') || 'mittel'; } catch { return 'mittel'; } })();
   const wahlLyr = L.layerGroup().addTo(map);
   function waehle(p, zoomen = true) {
     wahlP = p; vorschlaege = []; zeichneVorschlaege();
@@ -300,7 +301,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   async function erkennen(p) {
     erkennt = true; render();
     try {
-      const r = await erkenneGassen(p);
+      const r = await erkenneGassen(p, { empfindlichkeit });
       vorschlaege = r.linien.map((line) => ({ line, an: true }));
       zeichneVorschlaege();
       if (vorschlaege.length) map.fitBounds(L.latLngBounds(polysOf(p).flat(2)), { padding: [20, 20] });
@@ -355,6 +356,9 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
           flaechen.length ? h('label', {}, 'Flurstück', h('select', { onchange: (e) => { waehle(flaechen.find((x) => x.id === e.target.value) || null); } },
             wahlP ? null : h('option', { value: '', selected: true }, '– bitte wählen –'),
             flaechen.map((p) => h('option', { value: p.id, selected: p.id === wahlP?.id }, `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}${store.get().parcels.some((x) => x.id === p.id) ? '' : ' (angetippt)'}`)))) : null,
+          h('div', { class: 'fin-feld' }, h('span', { class: 'fin-feld-label' }, 'Empfindlichkeit'),
+            h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Empfindlichkeit' }, [['niedrig', 'Nur deutliche'], ['mittel', 'Mittel'], ['hoch', 'Auch schwache']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(empfindlichkeit === k), onclick: () => { empfindlichkeit = k; try { localStorage.setItem('waldwaechter.gassenEmpf', k); } catch { /* egal */ } render(); } }, l))),
+            h('small', { class: 'muted' }, 'Zu viele Linien → „Nur deutliche“. Gassen fehlen → „Auch schwache“.')),
           h('button', { class: 'btn btn-primary', disabled: erkennt || !wahlP, onclick: () => { if (wahlP) erkennen(wahlP); } }, erkennt ? 'Luftbild wird ausgewertet …' : wahlP ? `Rückegassen in Flurstück ${wahlP.nr} suchen` : 'Erst ein Flurstück wählen')),
         vorschlaege.length ? h('div', {},
           h('p', {}, `${vorschlaege.length} Vorschläge – grün wird übernommen. Tippe eine Linie an, um sie ab- oder anzuwählen.`),

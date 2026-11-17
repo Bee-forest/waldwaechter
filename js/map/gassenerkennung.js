@@ -35,7 +35,13 @@ function boxBlur(src, w, h, r) {
  * @param {{ rgba: Uint8ClampedArray, w: number, h: number, mask: Uint8Array, mProPx: number }} o
  * @returns {{ linien: Array<[[number,number],[number,number]]>, winkel: number|null, staerke: number }}  Linien in Pixelkoordinaten
  */
-export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abstandMinM = 22, abstandMaxM = 42 }) {
+export const EMPFINDLICH = {
+  niedrig: { schwelle: 0.35, anteil: 0.55, kand: 0.2, zweiter: false },
+  mittel: { schwelle: 0.26, anteil: 0.45, kand: 0.1, zweiter: false },
+  hoch: { schwelle: 0.18, anteil: 0.35, kand: 0.05, zweiter: true },
+};
+export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abstandMinM = 22, abstandMaxM = 42, empfindlichkeit = 'mittel' }) {
+  const E0 = EMPFINDLICH[empfindlichkeit] || EMPFINDLICH.mittel;
   const n = w * h;
   const L = new Float32Array(n), G = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -61,7 +67,7 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
   }
 
   const p1 = durchlauf(F, null);
-  if (!p1.linien.length) return p1;
+  if (!p1.linien.length || !E0.zweiter) return p1;
   // Zweiter Durchgang für Gassen in anderer Richtung (z. B. zusammenlaufende Gassen): gefundene Gassen ausblenden
   const F2 = F.slice();
   const r5 = Math.round(5 / mProPx);
@@ -73,7 +79,10 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
     }
   }
   const p2 = durchlauf(F2, p1.winkel, true);
-  return { ...p1, linien: [...p1.linien, ...p2.linien] };
+  // nur Gassen aus dem zweiten Durchgang, die nirgends dichter als 15 m neben einer schon gefundenen liegen
+  const abstPS = (p, [[x0, y0], [x1, y1]]) => { const dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((p[0] - x0) * dx + (p[1] - y0) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(p[0] - x0 - t * dx, p[1] - y0 - t * dy); };
+  const frei = p2.linien.filter(([a, b]) => { let nah = 0; for (let k = 0; k <= 10; k++) { const p = [a[0] + ((b[0] - a[0]) * k) / 10, a[1] + ((b[1] - a[1]) * k) / 10]; if (p1.linien.some((l) => abstPS(p, l) * mProPx < 15)) nah++; } return nah <= 3; });
+  return { ...p1, linien: [...p1.linien, ...frei] };
 
   function durchlauf(F, sperrDeg, streng = false) {
   const diag = Math.ceil(Math.hypot(w, h));
@@ -81,7 +90,7 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
   let best = null;
   const scores = [];
   for (let deg = 0; deg < 180; deg += 2) {
-    if (sperrDeg != null && Math.min(Math.abs(deg - sperrDeg), 180 - Math.abs(deg - sperrDeg)) < 12) continue;
+    if (sperrDeg != null && Math.min(Math.abs(deg - sperrDeg), 180 - Math.abs(deg - sperrDeg)) < 20) continue;
     const t = (deg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);
     const sum = new Float32Array(2 * diag + 1), cnt = new Uint32Array(2 * diag + 1);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -129,7 +138,7 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
     }
   }
   const kandidaten = [];
-  if (raster) for (let pos = k0 + raster.ph; pos <= k1; pos += raster.sp) { const t = maxIn(pos); if (t.m > (streng ? 0.6 : 0.05)) kandidaten.push(t.at); }
+  if (raster) for (let pos = k0 + raster.ph; pos <= k1; pos += raster.sp) { const t = maxIn(pos); if (t.m > (streng ? 0.6 : E0.kand)) kandidaten.push(t.at); }
   const linien = [];
   const halb = Math.max(1, Math.round(2 / mProPx));
   const innen = (x, y, m) => { const xi = Math.round(x), yi = Math.round(y); return xi >= 0 && yi >= 0 && xi < w && yi < h && m[yi * w + xi]; };
@@ -149,12 +158,12 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
     }
     const r = Math.round(5 / mProPx), sm = werte.map((_, i) => { let a = 0, b = 0; for (let j = i - r; j <= i + r; j++) if (werte[j] != null) { a += werte[j]; b++; } return werte[i] == null ? null : a / b; });
     // Gassen laufen durch: vom ersten bis zum letzten deutlichen Stück durchziehen, Lücken (Kronenschluss, Schatten) überbrücken
-    const schwelle = streng ? 0.4 : 0.18;
+    const schwelle = streng ? 0.4 : E0.schwelle;
     let erst = -1, letzt = -1, treffer = 0, innenN = 0;
     for (let i = 0; i < sm.length; i++) { if (sm[i] == null) continue; innenN++; if (sm[i] >= schwelle) { if (erst < 0) erst = i; letzt = i; treffer++; } }
     if (erst < 0 || (letzt - erst) < minLen) continue;
     let spanne = 0; for (let i = erst; i <= letzt; i++) if (sm[i] != null) spanne++;
-    if (treffer / Math.max(1, spanne) < 0.35) continue;
+    if (treffer / Math.max(1, spanne) < (streng ? 0.5 : E0.anteil)) continue;
     // Enden bis an den Rand des Flurstücks verlängern, wenn sie nah am Rand liegen (≤ 30 m)
     const rand = Math.round(30 / mProPx), aussen = voll || mask;
     const randAb = (i, dir) => { let j = i; while (innen(px - s * (j + dir - diag), py + c * (j + dir - diag), aussen)) j += dir; return j; };
@@ -173,7 +182,7 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
  * Erkennung für ein Flurstück (oder eine Fläche) auf dem Thüringer Luftbild.
  * @returns {Promise<{ linien: [number,number][][], hinweis?: string }>}  Linien in [lat, lng]
  */
-export async function erkenneGassen(flaeche) {
+export async function erkenneGassen(flaeche, { empfindlichkeit = 'mittel' } = {}) {
   const polys = polysOf(flaeche);
   let s = 90, w = 180, n = -90, e = -180;
   for (const poly of polys) for (const ring of poly) for (const [la, lo] of ring) { s = Math.min(s, la); n = Math.max(n, la); w = Math.min(w, lo); e = Math.max(e, lo); }
@@ -209,7 +218,7 @@ export async function erkenneGassen(flaeche) {
   const md = mx.getImageData(0, 0, W, H).data;
   const mask = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) mask[i] = md[i * 4 + 3] > 128 ? 1 : 0;
-  const r = erkenneGassenPixel({ rgba, w: W, h: H, mask, voll, mProPx: mProPxBild * f });
+  const r = erkenneGassenPixel({ rgba, w: W, h: H, mask, voll, mProPx: mProPxBild * f, empfindlichkeit });
   const welt = 256 * 2 ** l.z;
   const zuLL = ([x, y]) => {
     const X = l.x0 + x * f, Y = l.y0 + y * f;

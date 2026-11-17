@@ -1,8 +1,6 @@
 // Rückegassen im Luftbild (DOP) erkennen – als Vorschlag, den man prüft und übernimmt.
-// Idee: Gassen sind 3–5 m breite, gerade Lücken im Kronendach, die hell (Boden, Gras) oder weniger grün
-// erscheinen und meist parallel im Abstand von 20–40 m liegen. Das Bild wird je Richtung zu Linienprofilen
-// aufsummiert (Radon-Transformation); die stärkste Richtung mit mehreren deutlichen, parallelen Spitzen
-// liefert die Gassen. Jede Spitze wird dann entlang der Linie verfolgt und in zusammenhängende Stücke geteilt.
+// Gassen sind ca. 4 m breite Schneisen im Kronendach, mindestens ca. 24 m voneinander entfernt; sie können
+// gebogen sein und ineinander übergehen. Siehe erkenneGassenPixel.
 import { kartenLeinwand } from '../kartenbild.js';
 import { polysOf } from '../geo.js';
 
@@ -31,10 +29,16 @@ function boxBlur(src, w, h, r) {
 
 /**
  * Kern der Erkennung auf einem Pixelraster.
- * @param {{ rgba: Uint8ClampedArray, w: number, h: number, mask: Uint8Array, mProPx: number }} o
- * @returns {{ linien: Array<[[number,number],[number,number]]>, winkel: number|null, staerke: number }}  Linien in Pixelkoordinaten
+ * Gassen sind Schneisen im Kronendach: schmale (ca. 4 m), lang gezogene Streifen, die heller, weniger grün oder
+ * im Schatten dunkler sind als das Kronendach daneben. Sie müssen nicht parallel sein, dürfen gebogen sein und
+ * ineinander übergehen. Vorgehen:
+ *  1. „Lückenbild“ F: Abweichung jedes Punkts vom Kronendach der Umgebung.
+ *  2. Linienfilter: Mittel von F auf einer 16 m langen Strecke minus Mittel daneben (±6 m), in 16 Richtungen.
+ *  3. Von den stärksten Stellen aus werden Gassen in 3-m-Schritten verfolgt (Richtung darf sich langsam ändern),
+ *     kurze Lücken (bis 24 m) werden überbrückt, stößt eine Gasse auf eine schon gefundene, wird sie angeschlossen.
+ * @returns {{ linien: number[][][], staerke: number }}  Linien als Punktfolgen in Pixelkoordinaten
  */
-export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abstandMinM = 22, abstandMaxM = 42 }) {
+export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abstandMinM = 22 }) {
   const n = w * h;
   const L = new Float32Array(n), G = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -44,100 +48,152 @@ export function erkenneGassenPixel({ rgba, w, h, mask, voll = null, mProPx, abst
   const rBg = Math.max(3, Math.round(8 / mProPx));
   const rS = Math.max(1, Math.round(1 / mProPx));
   const Ls = boxBlur(L, w, h, rS), Lb = boxBlur(L, w, h, rBg), Gs = boxBlur(G, w, h, rS), Gb = boxBlur(G, w, h, rBg);
-  // Streuung im Flurstück
   let sl = 0, sl2 = 0, sg = 0, sg2 = 0, m = 0;
   for (let i = 0; i < n; i++) if (mask[i]) { const a = Ls[i] - Lb[i], c = Gb[i] - Gs[i]; sl += a; sl2 += a * a; sg += c; sg2 += c * c; m++; }
-  if (m < 200) return { linien: [], winkel: null, staerke: 0 };
+  if (m < 200) return { linien: [], staerke: 0 };
   const sdL = Math.sqrt(Math.max(1e-6, sl2 / m - (sl / m) ** 2)), sdG = Math.sqrt(Math.max(1e-6, sg2 / m - (sg / m) ** 2));
   const F = new Float32Array(n);
-  for (let i = 0; i < n; i++) if (mask[i]) F[i] = Math.min(3, Math.max(0, (Ls[i] - Lb[i]) / sdL) + 0.5 * Math.max(0, (Gb[i] - Gs[i]) / sdG));
+  for (let i = 0; i < n; i++) if (mask[i]) {
+    const zl = (Ls[i] - Lb[i]) / sdL, zg = (Gb[i] - Gs[i]) / sdG;
+    F[i] = Math.min(3, Math.max(0, zl) + 0.5 * Math.max(0, -zl) + 0.5 * Math.max(0, zg));
+  }
+  const innen = (x, y, mk) => { const xi = Math.round(x), yi = Math.round(y); return xi >= 0 && yi >= 0 && xi < w && yi < h && mk[yi * w + xi] === 1; };
+  const Fat = (x, y) => { const xi = Math.round(x), yi = Math.round(y); return xi >= 0 && yi >= 0 && xi < w && yi < h && mask[yi * w + xi] ? F[yi * w + xi] : null; };
 
-  const diag = Math.ceil(Math.hypot(w, h));
-  const minLen = 25 / mProPx, abstandMin = Math.round(abstandMinM / mProPx), fenster = Math.round(10 / mProPx), kern = Math.round(3 / mProPx);
-  let best = null;
-  const scores = [];
-  for (let deg = 0; deg < 180; deg += 2) {
-    const t = (deg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);
-    const sum = new Float32Array(2 * diag + 1), cnt = new Uint32Array(2 * diag + 1);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const i = y * w + x; if (!mask[i]) continue;
-      const k = Math.round(x * c + y * s) + diag; sum[k] += F[i]; cnt[k]++;
+  // Linienfilter an einem Punkt in Richtung t (Bogenmaß, 0 = nach rechts)
+  const halbL = 8 / mProPx, seit = 6 / mProPx, schritt = 1.5 / mProPx;
+  function antwort(x, y, t) {
+    const dx = Math.cos(t), dy = Math.sin(t), nx = -dy, ny = dx;
+    let a = 0, an = 0, b = 0, bn = 0;
+    for (let u = -halbL; u <= halbL; u += schritt) {
+      const px = x + dx * u, py = y + dy * u;
+      const v = Fat(px, py); if (v != null) { a += v; an++; }
+      for (const sgn of [-1, 1]) { const q = Fat(px + nx * seit * sgn, py + ny * seit * sgn); if (q != null) { b += q; bn++; } }
     }
-    const P = new Float32Array(sum.length).fill(NaN);
-    for (let k = 0; k < P.length; k++) if (cnt[k] >= minLen) P[k] = sum[k] / cnt[k];
-    // Prominenz gegenüber der Umgebung (±fenster, ohne den Kern ±kern)
-    const prom = new Float32Array(P.length).fill(0);
-    for (let k = 0; k < P.length; k++) {
-      if (Number.isNaN(P[k])) continue;
-      let a = 0, b = 0;
-      for (let j = k - fenster; j <= k + fenster; j++) { if (j < 0 || j >= P.length || Math.abs(j - k) <= kern || Number.isNaN(P[j])) continue; a += P[j]; b++; }
-      if (b > 2) prom[k] = P[k] - a / b;
-    }
-    const spitzen = [];
-    const order = [...prom.keys()].filter((k) => prom[k] > 0.25).sort((a2, b2) => prom[b2] - prom[a2]);
-    const top = order.length ? prom[order[0]] : 0;
-    for (const k of order) { if (prom[k] < top * 0.4) break; if (spitzen.every((q) => Math.abs(q - k) >= abstandMin)) spitzen.push(k); if (spitzen.length >= 30) break; }
-    const score = spitzen.slice(0, 8).reduce((a2, k) => a2 + prom[k], 0);
-    scores.push(score);
-    if (!best || score > best.score) best = { deg, c, s, spitzen, prom, score };
+    if (an < 5 || bn < 5) return -Infinity;
+    return a / an - b / bn;
   }
-  if (!best || !best.spitzen.length) return { linien: [], winkel: null, staerke: 0 };
-  // Nur wenn eine Richtung deutlich heraussticht, sind es Gassen (sonst nur Kronenmuster)
-  const median = scores.slice().sort((a2, b2) => a2 - b2)[Math.floor(scores.length / 2)];
-  const deutlich = best.score / Math.max(1e-6, median);
-  if (typeof globalThis.__gassenDebug === 'function') globalThis.__gassenDebug({ deutlich, score: best.score, median, top: best.prom[best.spitzen[0]] });
-  if (deutlich < 3 || best.prom[best.spitzen[0]] < 0.5) return { linien: [], winkel: null, staerke: deutlich };
-  // Gassenraster: Gassen liegen parallel in festem Abstand (meist 24 m, auch bis 40 m). Abstand und Lage des
-  // Rasters so wählen, dass die Profilspitzen am besten getroffen werden; dann jede Rasterlinie einzeln prüfen.
-  const { c, s, prom } = best;
-  const def = []; for (let k = 0; k < prom.length; k++) if (prom[k] !== 0) def.push(k);
-  const k0 = def[0], k1 = def[def.length - 1];
-  const tol = Math.max(1, Math.round(3 / mProPx));
-  const maxIn = (pos) => { let m = -Infinity, at = pos; for (let j = pos - tol; j <= pos + tol; j++) if (j >= k0 && j <= k1 && prom[j] > m) { m = prom[j]; at = j; } return { m: m === -Infinity ? 0 : m, at }; };
-  let raster = null;
-  for (let sp = Math.round(abstandMinM / mProPx); sp <= Math.round(abstandMaxM / mProPx); sp++) {
-    for (let ph = 0; ph < sp; ph++) {
-      let sum = 0, n2 = 0;
-      for (let pos = k0 + ph; pos <= k1; pos += sp) { sum += Math.max(0, maxIn(pos).m); n2++; }
-      const mittel = n2 ? sum / n2 : 0;
-      if (!raster || mittel > raster.mittel) raster = { sp, ph, mittel };
-    }
+  const RICHTUNGEN = 16;
+  // Startpunkte auf einem 3-m-Raster
+  const raster = Math.max(1, Math.round(3 / mProPx));
+  const starts = [];
+  const alle = [];
+  for (let y = 0; y < h; y += raster) for (let x = 0; x < w; x += raster) {
+    if (!mask[y * w + x]) continue;
+    let best = -Infinity, bt = 0;
+    for (let k = 0; k < RICHTUNGEN; k++) { const t = (k * Math.PI) / RICHTUNGEN; const r = antwort(x, y, t); if (r > best) { best = r; bt = t; } }
+    if (best === -Infinity) continue;
+    alle.push(best); starts.push([best, x, y, bt]);
   }
-  const kandidaten = [];
-  if (raster) for (let pos = k0 + raster.ph; pos <= k1; pos += raster.sp) { const t = maxIn(pos); if (t.m > 0.2) kandidaten.push(t.at); }
+  if (alle.length < 20) return { linien: [], staerke: 0 };
+  const sortiert = alle.slice().sort((a, b) => a - b);
+  const med = sortiert[Math.floor(sortiert.length / 2)];
+  const mad = sortiert.map((v) => Math.abs(v - med)).sort((a, b) => a - b)[Math.floor(sortiert.length / 2)] || 0.05;
+  const tStart = Math.max(0.4, med + 3.8 * mad), tWeiter = Math.max(0.2, med + 1.8 * mad);
+  starts.sort((a, b) => b[0] - a[0]);
+
+  const belegt = new Int32Array(n).fill(-1); // Pixel nahe einer gefundenen Gasse → deren Nummer
+  const sperr = Math.round((abstandMinM / 3) / mProPx);
+  const markiere = (pts, id) => {
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+      const len = Math.hypot(x1 - x0, y1 - y0), k = Math.max(1, Math.ceil(len));
+      for (let j = 0; j <= k; j++) {
+        const cx = Math.round(x0 + ((x1 - x0) * j) / k), cy = Math.round(y0 + ((y1 - y0) * j) / k);
+        for (let yy = cy - sperr; yy <= cy + sperr; yy++) for (let xx = cx - sperr; xx <= cx + sperr; xx++)
+          if (xx >= 0 && yy >= 0 && xx < w && yy < h && (xx - cx) ** 2 + (yy - cy) ** 2 <= sperr * sperr && belegt[yy * w + xx] < 0) belegt[yy * w + xx] = id;
+      }
+    }
+  };
+  const schrittPx = 3 / mProPx, maxLuecke = Math.round(40 / 3), maxDreh = (30 * Math.PI) / 180;
+  const randPx = 30 / mProPx, aussen = voll || mask;
   const linien = [];
-  const halb = Math.max(1, Math.round(2 / mProPx));
-  const innen = (x, y, m) => { const xi = Math.round(x), yi = Math.round(y); return xi >= 0 && yi >= 0 && xi < w && yi < h && m[yi * w + xi]; };
-  for (const k of kandidaten) {
-    const rho = k - diag;
-    const px = rho * c, py = rho * s; // Linie: Punkt (px, py), Richtung (-s, c)
-    const werte = [];
-    for (let tt = -diag; tt <= diag; tt++) {
-      const x = px - s * tt, y = py + c * tt;
-      if (!innen(x, y, mask)) { werte.push(null); continue; }
-      let a = 0, b = 0;
-      for (let q = -halb; q <= halb; q++) { const xx = x + c * q, yy = y + s * q; if (innen(xx, yy, mask)) { a += F[Math.round(yy) * w + Math.round(xx)]; b++; } }
-      werte.push(b ? a / b : null);
+  function verfolge(x, y, t, id) {
+    const pts = []; let luecke = 0, treffer = 0, gesamt = 0, anschluss = null;
+    let px = x, py = y, dir = t;
+    for (let iter = 0; iter < 2000; iter++) {
+      let best = -Infinity, bx = 0, by = 0, bt = dir;
+      for (let d = -maxDreh; d <= maxDreh + 1e-9; d += maxDreh / 4) {
+        const tt = dir + d, qx = px + Math.cos(tt) * schrittPx, qy = py + Math.sin(tt) * schrittPx;
+        if (!innen(qx, qy, mask)) continue;
+        const r = antwort(qx, qy, tt) - Math.abs(d) * 0.3;
+        if (r > best) { best = r; bx = qx; by = qy; bt = tt; }
+      }
+      if (best === -Infinity) break; // Rand erreicht
+      gesamt++;
+      if (best >= tWeiter) { luecke = 0; treffer++; dir = dir * 0.6 + bt * 0.4; px = bx; py = by; }
+      else { luecke++; if (luecke > maxLuecke) break; px += Math.cos(dir) * schrittPx; py += Math.sin(dir) * schrittPx; if (!innen(px, py, mask)) break; }
+      pts.push([px, py, best >= tWeiter]);
+      const b = belegt[Math.round(py) * w + Math.round(px)];
+      if (b >= 0 && b !== id && luecke === 0) { anschluss = b; break; } // trifft andere Gasse → anschließen
     }
-    const r = Math.round(4 / mProPx), sm = werte.map((_, i) => { let a = 0, b = 0; for (let j = i - r; j <= i + r; j++) if (werte[j] != null) { a += werte[j]; b++; } return werte[i] == null ? null : a / b; });
-    // Gassen laufen durch: vom ersten bis zum letzten deutlichen Stück durchziehen, Lücken (Kronenschluss, Schatten) überbrücken
-    const schwelle = Math.max(0.25, prom[k] * 0.35);
-    let erst = -1, letzt = -1, treffer = 0, innenN = 0;
-    for (let i = 0; i < sm.length; i++) { if (sm[i] == null) continue; innenN++; if (sm[i] >= schwelle) { if (erst < 0) erst = i; letzt = i; treffer++; } }
-    if (erst < 0 || (letzt - erst) < minLen) continue;
-    let spanne = 0; for (let i = erst; i <= letzt; i++) if (sm[i] != null) spanne++;
-    if (treffer / Math.max(1, spanne) < 0.3) continue;
-    // Enden bis an den Rand des Flurstücks verlängern, wenn sie nah am Rand liegen (≤ 30 m)
-    const rand = Math.round(30 / mProPx), aussen = voll || mask;
-    const randAb = (i, dir) => { let j = i; while (innen(px - s * (j + dir - diag), py + c * (j + dir - diag), aussen)) j += dir; return j; };
-    let a0 = erst, a1 = letzt;
-    const r0 = randAb(erst, -1), r1 = randAb(letzt, 1);
-    if (erst - r0 <= rand) a0 = r0;
-    if (r1 - letzt <= rand) a1 = r1;
-    const t0 = a0 - diag, t1 = a1 - diag;
-    linien.push([[px - s * t0, py + c * t0], [px - s * t1, py + c * t1]]);
+    while (pts.length && !pts[pts.length - 1][2]) pts.pop(); // Lücke am Ende verwerfen
+    return { pts: pts.map(([a, b]) => [a, b]), treffer, gesamt, anschluss };
   }
-  return { linien, winkel: best.deg, staerke: deutlich, abstandM: raster ? Math.round(raster.sp * mProPx) : null };
+  const bisRand = (p, q) => { // vom Endpunkt q in Richtung p→q bis zum Flurstücksrand, wenn nah
+    const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+    let k = 0; while (innen(q[0] + ux * (k + 1), q[1] + uy * (k + 1), aussen)) k++;
+    return k <= randPx && k > 0 ? [q[0] + ux * k, q[1] + uy * k] : null;
+  };
+  for (const [r0, x, y, t] of starts) {
+    if (r0 < tStart) break;
+    if (belegt[y * w + x] >= 0) continue;
+    const id = linien.length;
+    const vor = verfolge(x, y, t, id), zur = verfolge(x, y, t + Math.PI, id);
+    let pts = [...zur.pts.reverse(), [x, y], ...vor.pts];
+    const laenge = pts.reduce((a, p, i) => (i ? a + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0) * mProPx;
+    const anteil = (vor.treffer + zur.treffer + 1) / Math.max(1, vor.gesamt + zur.gesamt + 1);
+    if (laenge < 30 || anteil < 0.55 || pts.length < 3) continue;
+    // Enden bis an den Flurstücksrand ziehen, wenn sie nah daran enden und nicht an eine andere Gasse anschließen
+    if (!vor.anschluss && pts.length > 2) { const e = bisRand(pts[pts.length - 3], pts[pts.length - 1]); if (e) pts.push(e); }
+    if (!zur.anschluss && pts.length > 2) { const e = bisRand(pts[2], pts[0]); if (e) pts.unshift(e); }
+    pts = vereinfachePx(pts, 1.5 / mProPx);
+    linien.push(pts);
+    markiere(pts, id);
+  }
+  return { linien: verbinde(linien, 45 / mProPx, (25 * Math.PI) / 180), staerke: tStart };
+}
+
+/** Stücke derselben Gasse verbinden: Enden nah beieinander und Richtung passt */
+function verbinde(linien, maxAbst, maxWinkel) {
+  const richtung = (a, b) => Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const winkelDiff = (a, b) => { let d = Math.abs(a - b) % (2 * Math.PI); return d > Math.PI ? 2 * Math.PI - d : d; };
+  let L0 = linien.map((l) => l.slice());
+  let geaendert = true;
+  while (geaendert) {
+    geaendert = false;
+    outer: for (let i = 0; i < L0.length; i++) for (let j = 0; j < L0.length; j++) {
+      if (i === j) continue;
+      const a = L0[i], b = L0[j];
+      // Ende von a an Anfang von b (b ggf. umdrehen)
+      for (const bb of [b, b.slice().reverse()]) {
+        const ae = a[a.length - 1], bs = bb[0];
+        const d = Math.hypot(bs[0] - ae[0], bs[1] - ae[1]);
+        if (d > maxAbst) continue;
+        const ra = richtung(a[Math.max(0, a.length - 2)], ae), rb = richtung(bs, bb[Math.min(1, bb.length - 1)]), rv = richtung(ae, bs);
+        if (winkelDiff(ra, rb) > maxWinkel || (d > 3 && winkelDiff(ra, rv) > maxWinkel)) continue;
+        L0[i] = [...a, ...bb];
+        L0.splice(j, 1);
+        geaendert = true;
+        break outer;
+      }
+    }
+  }
+  return L0;
+}
+
+function vereinfachePx(P, tol) {
+  if (P.length < 3) return P;
+  const keep = new Array(P.length).fill(false); keep[0] = keep[P.length - 1] = true;
+  const stack = [[0, P.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const [x1, y1] = P[a], [x2, y2] = P[b], dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+    let best = 0, bi = -1;
+    for (let i = a + 1; i < b; i++) { const d = L < 1e-6 ? Math.hypot(P[i][0] - x1, P[i][1] - y1) : Math.abs(dy * P[i][0] - dx * P[i][1] + x2 * y1 - y2 * x1) / L; if (d > best) { best = d; bi = i; } }
+    if (best > tol) { keep[bi] = true; stack.push([a, bi], [bi, b]); }
+  }
+  return P.filter((_, i) => keep[i]);
 }
 
 /**
@@ -186,5 +242,5 @@ export async function erkenneGassen(flaeche) {
     const X = l.x0 + x * f, Y = l.y0 + y * f;
     return [(Math.atan(Math.sinh(Math.PI * (1 - (2 * Y) / welt))) * 180) / Math.PI, (X / welt) * 360 - 180];
   };
-  return { linien: r.linien.map((ab) => ab.map(zuLL)), winkel: r.winkel, abstandM: r.abstandM };
+  return { linien: r.linien.map((ab) => ab.map(zuLL)) };
 }

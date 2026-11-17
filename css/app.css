@@ -51,6 +51,11 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
+/* Überall dieselbe App-Ansicht: Handy-Layout, auf Tablet und PC als mittige Spalte.
+   transform macht #app zum Bezugsrahmen für alle „fixed“-Elemente (Seiten, Dialoge, Hinweise). */
+:root { --app-max: 480px; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: #C9D3C6; }
+[data-theme="dark"] html, html[data-theme="dark"] { background: #070D09; }
 body {
   font-family: var(--font); font-size: 17px; line-height: 1.45;
   background: var(--bg); color: var(--ink);
@@ -71,10 +76,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .error:empty { display: none; }
 
 #app {
-  position: fixed; inset: 0;
+  position: fixed; top: 0; bottom: 0; left: 50%; width: min(100%, var(--app-max)); transform: translateX(-50%);
+  background: var(--bg);
   display: grid; grid-template-rows: 1fr auto;
   height: 100dvh; overflow: hidden;
 }
+@media (min-width: 520px) { #app { box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 10px 50px rgba(0,0,0,.18); } }
+@media (max-width: 359px) { body { font-size: 16px; } }
 .boot { display: grid; place-items: center; height: 100%; color: var(--ink-2); }
 
 /* ---------- Buttons ---------- */
@@ -146,23 +154,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .profile-chip { display: grid; justify-items: center; gap: 4px; border: 0; background: none; cursor: pointer; padding: 4px; color: var(--ink); border-radius: 16px; }
 .avatar { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #1F4A2C; color: #fff; font-weight: 700; font-size: 17px; }
 .profile-chip .who, .profile-chip .chev { display: none; }
-@media (min-width: 560px) {
-  .app-head { padding: 22px 26px; gap: 22px; }
-  .app-logo { width: 80px; height: 80px; border-radius: 22px; }
-  .app-title h1 { font-size: 44px; }
-  .app-title p { font-size: 17px; }
-  .profile-chip { justify-items: start; grid-template-columns: auto; }
-  .profile-chip .who { grid-template-columns: 1fr auto; column-gap: 8px; } .profile-chip .who span { grid-column: 1; }
-  .profile-chip .who { display: grid; text-align: left; }
-  .profile-chip .who strong { font-size: 16px; }
-  .profile-chip .who span { font-size: 13px; color: var(--ink-2); }
-  .profile-chip .chev { display: block; color: var(--ink); }
-  .profile-chip .chev svg { width: 16px; height: 16px; }
-}
 .map-card { padding: 16px 14px 18px; display: grid; gap: 14px; }
 .map-card-head { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; padding: 0 4px; }
 .map-card-head p { grid-column: 1 / -1; }
-@media (min-width: 640px) { .map-card-head { grid-template-columns: 1fr auto; } .map-card-head h2 { align-self: end; } .map-card-head p { grid-column: 1; grid-row: 2; } .map-card-head .segmented { grid-row: 1 / span 2; grid-column: 2; } }
 .map-card-head h2 { font-size: 17px; }
 .map-card-head p { font-size: 14px; margin-top: 2px; font-weight: 700; color: var(--ink-2); }
 .segmented.compact { flex: none; padding: 4px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
@@ -282,7 +276,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--surface); border-radius: var(--r-sheet) var(--r-sheet) 0 0;
   padding: 22px 18px calc(18px + var(--safe-b)); animation: sheet-in .2s ease-out;
 }
-@media (min-width: 640px) { .scrim { align-items: center; } .dialog { border-radius: var(--r-sheet); } }
 .dialog-mascot { width: 76px; height: 76px; margin: -4px auto 8px; animation: hop .5s ease-out; }
 @keyframes hop { 40% { transform: translateY(-10px) rotate(-6deg); } }
 .dialog-title { font-size: 22px; margin-bottom: 8px; }
@@ -506,9 +499,6 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .target-pulse span { animation: none; opacity: 1; transform: scale(1); }
 }
-@media (min-width: 900px) {
-  .view:not(.view-home) { padding-left: max(16px, calc(50% - 360px)); padding-right: max(16px, calc(50% - 360px)); }
-  .page-body { padding-left: max(16px, calc(50% - 360px)); padding-right: max(16px, calc(50% - 360px)); }
 }
 
 [data-theme="dark"] .placeholder-bug svg, [data-theme="dark"] .empty-bug svg, [data-theme="dark"] .finished-bug svg, [data-theme="dark"] .callout-bug svg, [data-theme="dark"] .dialog-mascot svg { filter: drop-shadow(0 0 1.5px rgba(234, 242, 231, .55)); }

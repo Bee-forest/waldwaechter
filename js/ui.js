@@ -73,7 +73,7 @@ export function dialog({ title, body, actions = [{ label: 'OK', value: true, pri
       ),
     );
     const wrap = h('div', { class: 'scrim', onclick: (e) => { if (e.target === wrap) close(null); } }, box);
-    document.body.append(wrap);
+    (document.getElementById('app') || document.body).append(wrap);
     document.addEventListener('keydown', onKey);
     (box.querySelector('input, select') || box.querySelector('.btn-primary, .btn'))?.focus();
   });
@@ -85,7 +85,7 @@ export const confirmDialog = (title, { ok = 'Ja', cancel = 'Abbrechen', danger =
 let toastTimer;
 export function toast(text) {
   let t = document.getElementById('toast');
-  if (!t) { t = h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' }); document.body.append(t); }
+  if (!t) { t = h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' }); (document.getElementById('app') || document.body).append(t); }
   t.textContent = text;
   t.classList.add('show');
   clearTimeout(toastTimer);

@@ -1449,7 +1449,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     if (kameraPopup) return;
     document.querySelectorAll('.mascot-say').forEach((e) => e.remove());
     kameraPopup = h('div', { class: 'kpop', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Baum mit Kamera messen' }, h('div', { class: 'kpop-karte' }));
-    document.body.append(kameraPopup);
+    (document.getElementById('app') || document.body).append(kameraPopup);
     requestAnimationFrame(() => kameraPopup?.classList.add('offen'));
     renderWorkF4();
   }

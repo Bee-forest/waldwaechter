@@ -89,7 +89,7 @@ async function kompassMessen() {
   });
 }
 
-export async function gasseDialog(g, { neu = false } = {}) {
+export async function gasseDialog(g, { neu = false, verlauf = false } = {}) {
   const w = { name: g.name || '', grad: g.grad ?? '', befahrbar: g.befahrbar || '', breite: g.breite ?? '', abstand: g.abstand ?? '', notiz: g.notiz || '' };
   const ausLinie = richtungAusLinie(g.line);
   const gradFeld = h('input', { type: 'number', min: 0, max: 359, step: 1, inputmode: 'numeric', value: w.grad, placeholder: ausLinie != null ? `laut Karte ${ausLinie}°` : '', oninput: (e) => { w.grad = e.target.value; zeigeRichtung(); } });
@@ -115,9 +115,10 @@ export async function gasseDialog(g, { neu = false } = {}) {
         h('label', {}, 'Breite (m)', h('input', { type: 'number', min: 1, max: 10, step: 0.5, inputmode: 'decimal', value: w.breite, placeholder: '4', oninput: (e) => { w.breite = e.target.value; } })),
         h('label', {}, 'Gassenabstand (m)', h('input', { type: 'number', min: 10, max: 80, step: 1, inputmode: 'numeric', value: w.abstand, placeholder: '20', oninput: (e) => { w.abstand = e.target.value; } }))),
       h('label', {}, 'Notiz', h('textarea', { rows: 2, placeholder: 'z. B. Graben am Anfang, Bäume markiert, Steigung', oninput: (e) => { w.notiz = e.target.value; } }, w.notiz))),
-    actions: [{ label: 'Löschen', value: 'weg' }, { label: neu ? 'Später' : 'Abbrechen', value: null }, { label: 'Speichern', value: 'ok', primary: true }],
+    actions: [{ label: 'Löschen', value: 'weg' }, ...(verlauf ? [{ label: 'Verlauf bearbeiten', value: 'verlauf' }] : []), { label: neu ? 'Später' : 'Abbrechen', value: null }, { label: 'Speichern', value: 'ok', primary: true }],
   });
   if (r === 'weg') { if (await confirmDialog('Rückegasse löschen?', { ok: 'Löschen', danger: true })) { speichere((e) => { e.gassen = e.gassen.filter((x) => x.id !== g.id); }); toast('Rückegasse gelöscht'); } return; }
+  if (r === 'verlauf') return 'verlauf';
   if (r !== 'ok') return;
   const zahl = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
   speichere((e) => {
@@ -147,21 +148,24 @@ function lagerPopup(l, { aufBearbeiten } = {}) {
 
 // ---------- Kartenebenen ----------
 /** Ebenen für eine Karte; zeichnen sich bei Änderungen selbst neu */
-export function createErschliessungLayers(map, { klickbar = () => true } = {}) {
+export function createErschliessungLayers(map, { klickbar = () => true, aufGasse = null, verschiebbar = false, ausblenden = () => null } = {}) {
   const gassen = L.layerGroup(), lager = L.layerGroup();
   function zeichne() {
     gassen.clearLayers(); lager.clearLayers();
     const d = daten();
     for (const g of d.gassen || []) {
-      if (!g.line || g.line.length < 2) continue;
-      const pl = L.polyline(g.line, { color: GASSE_FARBE, weight: 5, opacity: 0.9, dashArray: '10 6', lineCap: 'butt' });
+      if (!g.line || g.line.length < 2 || ausblenden() === g.id) continue;
+      gassen.addLayer(L.polyline(g.line, { color: GASSE_FARBE, weight: 5, opacity: 0.9, dashArray: '10 6', lineCap: 'butt', interactive: false }));
+      // breite, unsichtbare Linie zum Antippen (gestrichelte Linien sind sonst in den Lücken nicht antippbar)
+      const pl = L.polyline(g.line, { color: '#000', weight: 24, opacity: 0, lineCap: 'round', className: 'gasse-treffer' });
       pl.bindTooltip(gasseText(g), { sticky: true });
-      pl.on('click', (e) => { if (!klickbar()) return; L.DomEvent.stop(e); gasseDialog(g); });
+      pl.on('click', (e) => { if (!klickbar()) return; L.DomEvent.stop(e); (aufGasse || gasseDialog)(g); });
       gassen.addLayer(pl);
     }
     for (const l of d.lager || []) {
       if (!l.at) continue;
-      const m = L.marker(l.at, { icon: lagerIcon(), title: l.name || 'Lagerplatz', zIndexOffset: 400 });
+      const m = L.marker(l.at, { icon: lagerIcon(), title: l.name || 'Lagerplatz', zIndexOffset: 400, draggable: verschiebbar });
+      if (verschiebbar) m.on('dragend', () => { const ll = m.getLatLng(); speichere((e) => { const x = e.lager.find((y) => y.id === l.id); if (x) x.at = [Number(ll.lat.toFixed(7)), Number(ll.lng.toFixed(7))]; }); toast('Lagerplatz verschoben'); });
       m.bindPopup(() => lagerPopup(l, { aufBearbeiten: () => map.closePopup() }));
       m.on('click', (e) => { if (!klickbar()) { L.DomEvent.stop(e); m.closePopup(); } });
       lager.addLayer(m);
@@ -169,7 +173,7 @@ export function createErschliessungLayers(map, { klickbar = () => true } = {}) {
   }
   zeichne();
   const ab = store.subscribe(zeichne);
-  return { gassen, lager, entfernen: ab };
+  return { gassen, lager, entfernen: ab, neuZeichnen: zeichne };
 }
 
 // ---------- Bearbeiten ----------
@@ -184,7 +188,13 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   const base = createBaseMap(mapEl, { center, zoom, basemap: s0.settings.basemap, alkis: true });
   const map = base.map;
   L.control.zoom({ position: 'topleft' }).addTo(map);
-  const lyr = createErschliessungLayers(map, { klickbar: () => modus === 'ansehen' });
+  let edit = null; // Verlauf einer bestehenden Gasse wird bearbeitet: { g, line }
+  const lyr = createErschliessungLayers(map, {
+    klickbar: () => !edit && modus !== 'erkennen' && !(modus === 'gasse' && draft.length),
+    verschiebbar: true,
+    ausblenden: () => edit?.g.id,
+    aufGasse: async (g) => { if (await gasseDialog(g, { verlauf: true }) === 'verlauf') verlaufStarten(g); },
+  });
   lyr.gassen.addTo(map); lyr.lager.addTo(map);
   const draftLyr = L.layerGroup().addTo(map), vorLyr = L.layerGroup().addTo(map);
   setTimeout(() => map.invalidateSize(), 250);
@@ -194,6 +204,11 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
 
   map.on('click', async (e) => {
     const ll = [e.latlng.lat, e.latlng.lng];
+    if (edit) { // an das nähere Ende anhängen
+      const L0 = edit.line;
+      if (distance(ll, L0[0]) < distance(ll, L0[L0.length - 1])) L0.unshift(ll); else L0.push(ll);
+      zeichneEdit(); render(); return;
+    }
     if (modus === 'gasse') { draft.push(ll); zeichneDraft(); render(); }
     else if (modus === 'lager') { const l = await lagerDialog({ at: ll }); if (l) toast('Lagerplatz gespeichert'); }
     else if (modus === 'erkennen' && !erkennt) {
@@ -214,6 +229,51 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
       if (zoomen) map.fitBounds(pl.getBounds(), { padding: [20, 20], maxZoom: 18 });
     }
     render();
+  }
+
+  // ---------- Verlauf einer bestehenden Gasse bearbeiten ----------
+  const editLyr = L.layerGroup().addTo(map);
+  const punktIcon = (klein) => L.divIcon({ className: klein ? 'gpunkt gpunkt-mitte' : 'gpunkt', html: '<span></span>', iconSize: klein ? [18, 18] : [26, 26], iconAnchor: klein ? [9, 9] : [13, 13] });
+  function verlaufStarten(g) {
+    edit = { g, line: g.line.map((p) => [...p]) };
+    draft = []; zeichneDraft();
+    lyr.neuZeichnen();
+    map.fitBounds(L.latLngBounds(edit.line), { padding: [40, 40], maxZoom: 19 });
+    zeichneEdit(); render();
+  }
+  function verlaufEnde(speichern) {
+    if (speichern && edit.line.length >= 2) {
+      const id = edit.g.id, line = edit.line.map(([a, b]) => [Number(a.toFixed(7)), Number(b.toFixed(7))]);
+      speichere((e) => { const x = e.gassen.find((y) => y.id === id); if (x) x.line = line; });
+      toast(`Verlauf gespeichert (${formatDist(Math.round(laenge(line)))})`);
+    }
+    edit = null; editLyr.clearLayers(); lyr.neuZeichnen(); render();
+  }
+  function zeichneEdit() {
+    editLyr.clearLayers();
+    if (!edit) return;
+    const L0 = edit.line;
+    editLyr.addLayer(L.polyline(L0, { color: '#F26B1D', weight: 6, opacity: 0.9, interactive: false }));
+    L0.forEach((p, i) => {
+      const m = L.marker(p, { icon: punktIcon(false), draggable: true, zIndexOffset: 800, title: 'Punkt ziehen · antippen zum Löschen' });
+      m.on('drag', () => { const ll = m.getLatLng(); L0[i] = [ll.lat, ll.lng]; editLyr.eachLayer((x) => { if (x instanceof L.Polyline) x.setLatLngs(L0); }); });
+      m.on('dragend', () => { zeichneEdit(); render(); });
+      m.on('click', async (e) => {
+        L.DomEvent.stop(e);
+        if (L0.length <= 2) { toast('Eine Gasse braucht mindestens zwei Punkte.'); return; }
+        if (await confirmDialog('Diesen Punkt löschen?', { ok: 'Löschen' })) { L0.splice(i, 1); zeichneEdit(); render(); }
+      });
+      editLyr.addLayer(m);
+      if (i < L0.length - 1) {
+        const mitte = [(p[0] + L0[i + 1][0]) / 2, (p[1] + L0[i + 1][1]) / 2];
+        const mm = L.marker(mitte, { icon: punktIcon(true), draggable: true, zIndexOffset: 700, title: 'Ziehen fügt einen Punkt ein' });
+        mm.on('dragstart', () => { L0.splice(i + 1, 0, mitte); });
+        mm.on('drag', () => { const ll = mm.getLatLng(); L0[i + 1] = [ll.lat, ll.lng]; editLyr.eachLayer((x) => { if (x instanceof L.Polyline && !(x instanceof L.Polygon)) x.setLatLngs(L0); }); });
+        mm.on('dragend', () => { zeichneEdit(); render(); });
+        mm.on('click', (e) => { L.DomEvent.stop(e); L0.splice(i + 1, 0, mitte); zeichneEdit(); render(); });
+        editLyr.addLayer(mm);
+      }
+    });
   }
 
   function zeichneDraft() {
@@ -262,11 +322,21 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
       modus = k; if (k !== 'gasse') { umlauf.stop?.(); } if (k === 'erkennen' && base.basemap !== 'dop') base.setBasemap('dop'); render();
     } }, l)));
     mapEl.classList.toggle('malt', modus === 'gasse' || modus === 'lager');
+    if (edit) {
+      fill(leiste,
+        h('p', { class: 'draw-status' }, `Verlauf von „${edit.g.name || 'Rückegasse'}“: ${edit.line.length} Punkte, ${formatDist(Math.round(laenge(edit.line)))}`),
+        h('p', { class: 'hint' }, 'Große Punkte ziehen verschiebt sie, Antippen löscht sie. Kleine Punkte in der Mitte ziehen oder antippen fügt einen Punkt ein. Tippen in die Karte verlängert die Gasse am näheren Ende.'),
+        h('div', { class: 'btn-row' },
+          h('button', { class: 'btn btn-small', onclick: () => verlaufEnde(false) }, 'Abbrechen'),
+          h('button', { class: 'btn btn-small btn-primary', onclick: () => verlaufEnde(true) }, 'Verlauf speichern')));
+      umlaufHost.hidden = true;
+      return;
+    }
     const d = daten();
     const kopf = h('p', { class: 'muted' }, `${d.gassen.length} Rückegassen (${formatDist(Math.round(d.gassen.reduce((s, g) => s + laenge(g.line || []), 0)))}), ${d.lager.length} Lagerplätze gespeichert.`);
     if (modus === 'gasse') {
       fill(leiste, kopf,
-        h('p', { class: 'draw-status' }, draft.length ? `${draft.length} Punkte, ${formatDist(Math.round(laenge(draft)))}` : 'Tippe den Verlauf der Gasse Punkt für Punkt in die Karte – oder lauf sie mit dem GPS ab.'),
+        h('p', { class: 'draw-status' }, draft.length ? `${draft.length} Punkte, ${formatDist(Math.round(laenge(draft)))}` : 'Tippe den Verlauf einer neuen Gasse Punkt für Punkt in die Karte – oder lauf sie mit dem GPS ab. Eine bestehende Gasse antippen, um Angaben oder Verlauf zu ändern.'),
         h('div', { class: 'btn-row' },
           h('button', { class: 'btn btn-small', disabled: !draft.length, onclick: () => { draft.pop(); zeichneDraft(); render(); } }, 'Letzten Punkt zurück'),
           h('button', { class: 'btn btn-small', disabled: !draft.length, onclick: () => { draft = []; quelle = 'hand'; zeichneDraft(); render(); } }, 'Verwerfen'),
@@ -293,8 +363,8 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
             h('button', { class: 'btn btn-small btn-primary', disabled: !an, onclick: uebernehmen }, `${an} übernehmen`))) : null,
         h('p', { class: 'hint' }, 'Die Suche wertet das aktuelle Luftbild (DOP, © GDI-Th) aus: gerade, parallele Lücken im Kronendach. Das ist ein Vorschlag – unter dichtem Kronendach, in Laubholz ohne Laub oder bei Schatten kann sie Gassen übersehen oder Wege und Schneisen für Gassen halten. Bitte vor Ort prüfen.'));
     }
-    if (modus === 'lager') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe in die Karte, wo der Lagerplatz liegt. Danach trägst du Befahrbarkeit und Beschreibung ein.'));
-    if (modus === 'ansehen') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe eine Gasse oder einen Lagerplatz an, um ihn zu bearbeiten oder zu löschen.'));
+    if (modus === 'lager') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe in die Karte, wo ein neuer Lagerplatz liegt. Bestehende Lagerplätze antippen zum Bearbeiten, gedrückt halten und ziehen zum Verschieben.'));
+    if (modus === 'ansehen') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe eine Gasse oder einen Lagerplatz an, um Angaben oder Verlauf zu ändern. Lagerplätze lassen sich mit gedrücktem Finger verschieben.'));
   }
   render();
   if (modus === 'erkennen') { if (base.basemap !== 'dop') base.setBasemap('dop'); if (flaeche) { waehle(flaeche); erkennen(flaeche); } }

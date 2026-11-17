@@ -1,0 +1,23 @@
+name: Hangneigung prüfen
+
+on:
+  push:
+    paths: ['tools/check_hangneigung.py']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q pyproj && python3 tools/check_hangneigung.py
+      - run: |
+          git config user.name "Waldwächter-Daten"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/geodienste
+          git commit -m "Hangneigung: Dienst geprüft" || echo "Keine Änderungen"
+          for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 10; done

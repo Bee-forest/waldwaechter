@@ -1208,3 +1208,9 @@ li.fin-zeile { cursor: default; }
 .neig-ampel { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
 .neig-0 { background: #4CAF50; } .neig-1 { background: #CDDC39; } .neig-2 { background: #FF9800; } .neig-3 { background: #E53935; }
 .neig-legende li { align-items: flex-start; }
+/* „Weitere Layer“: Abschnitte als abgesetzte Boxen */
+.layer-sheet { display: grid; gap: 12px; }
+.layer-box { background: var(--surface-2, #f1f4ee); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px 12px; display: grid; gap: 4px; }
+.layer-box { overflow: hidden; }
+.layer-box-titel { margin: -10px -12px 6px; padding: 10px 14px; background: var(--primary-soft); border-bottom: 1px solid var(--line); font-size: 17px; font-weight: 800; color: var(--primary); letter-spacing: .01em; }
+.layer-box .btn-block { margin-top: 6px; }

@@ -982,36 +982,33 @@ function openLayerSheet() {
     ),
   );
   const groups = [...new Set(OVERLAYS.map((o) => o.group))];
+  const box = (titel, ...inhalt) => h('section', { class: 'layer-box' }, h('h3', { class: 'layer-box-titel' }, titel), inhalt);
   const punktBearbeiten = (art, label) => h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openPunktEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()), art }); } }, label);
   dialog({
     title: 'Weitere Layer',
     body: h('div', { class: 'layer-sheet' },
-      h('p', { class: 'sheet-label' }, 'Flurstücke'),
-      sw('alkis', 'Flurstücksgrenzen (ALKIS)', { color: '#F6D32D', note: 'ab Zoomstufe 16', onchange: (e) => {
-        store.update((st) => { st.settings.layers.alkis = e.target.checked; });
-        base.setAlkis(e.target.checked);
-      } }),
-      sw('flurnummern', 'Flurstücksnummern', { note: 'ab Zoomstufe 16' }),
-      OVERLAYS.filter((o) => o.group === 'Flurstücke').map((o) => sw(o.key, o.label, { note: o.note })),
-      [
-        h('p', { class: 'sheet-label' }, 'Erschließung'),
+      box('Flurstücke',
+        sw('alkis', 'Flurstücksgrenzen (ALKIS)', { color: '#F6D32D', note: 'ab Zoomstufe 16', onchange: (e) => {
+          store.update((st) => { st.settings.layers.alkis = e.target.checked; });
+          base.setAlkis(e.target.checked);
+        } }),
+        sw('flurnummern', 'Flurstücksnummern', { note: 'ab Zoomstufe 16' }),
+        OVERLAYS.filter((o) => o.group === 'Flurstücke').map((o) => sw(o.key, o.label, { note: o.note }))),
+      box('Erschließung',
         sw('gassen', 'Rückegassen', { color: '#8D5A2B' }),
         sw('lager', 'Lagerplätze (Polterplätze)', { color: '#B5651D' }),
-        h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten'),
-      ],
-      h('p', { class: 'sheet-label' }, 'Gelände'),
-      sw('hangneigung', 'Hangneigung und Befahrbarkeit', { note: 'ab Zoomstufe 12' }),
-      groups.filter((g) => g !== 'Flurstücke').map((g) => [
-        h('p', { class: 'sheet-label' }, g),
+        h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten')),
+      box('Gelände',
+        sw('hangneigung', 'Hangneigung und Befahrbarkeit', { note: 'ab Zoomstufe 12' })),
+      groups.filter((g) => g !== 'Flurstücke').map((g) => box(g,
         OVERLAYS.filter((o) => o.group === g).map((o) => sw(o.key, o.label, { disabled: o.pending, note: o.pending ? 'wird gerade angebunden' : null })),
         g === 'Naturschutz' ? [
           sw('habitat', 'Habitatbäume (stehend / liegend)', { color: HABITAT_FARBE }),
           punktBearbeiten('habitat', 'Habitatbäume bearbeiten'),
-        ] : null,
-      ]),
-      h('p', { class: 'sheet-label' }, 'Jagd'),
-      sw('jagd', 'Jagdliche Einrichtungen', { color: JAGD_FARBE, note: 'Kanzel, Drückjagdbock, Erdsitz' }),
-      punktBearbeiten('jagd', 'Jagdliche Einrichtungen bearbeiten'),
+        ] : null)),
+      box('Jagd',
+        sw('jagd', 'Jagdliche Einrichtungen', { color: JAGD_FARBE, note: 'Kanzel, Drückjagdbock, Erdsitz' }),
+        punktBearbeiten('jagd', 'Jagdliche Einrichtungen bearbeiten')),
       h('p', { class: 'hint' }, 'Quellen: Geoportal Thüringen (© GDI-Th, dl-de/by-2-0), ThüringenForst, TLUBN, OpenStreetMap. Fachebenen erscheinen je nach Dienst erst ab einer bestimmten Zoomstufe.'),
     ),
     actions: [{ label: 'Fertig', value: true, primary: true }],

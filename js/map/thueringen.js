@@ -408,6 +408,38 @@ export function legendUrls(key) {
   return pairs.map(([url, layer]) => ({ layer, src: `${url}?${new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetLegendGraphic', FORMAT: 'image/png', LAYER: layer, SLD_VERSION: '1.1.0' })}` }));
 }
 
+// Grenzpunkte: Der Name der Ebene im Geoportal ist nicht dokumentiert – mögliche Namen der Reihe nach prüfen.
+export const GRENZPUNKT_KANDIDATEN = [
+  [GP, 'Grenzpunkt'], [GP, 'FlurstueckGrenzpunkt'], [GP, 'FlurstueckeLagePunkt'], [`${GP}/ALKISV`, 'Grenzpunkt'],
+];
+/**
+ * Fragt für den Kartenausschnitt ein Bild je Kandidat ab.
+ * @returns {Promise<{ url, layer, punkte: number } | { fehler: string[] }>}
+ */
+export async function grenzpunkteFinden(bounds) {
+  const R = 6378137, merc = (lat, lng) => [(lng * Math.PI / 180) * R, Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R];
+  const [x0, y0] = merc(bounds.getSouth(), bounds.getWest()), [x1, y1] = merc(bounds.getNorth(), bounds.getEast());
+  const fehler = [];
+  let ersatz = null;
+  for (const [url, layer] of GRENZPUNKT_KANDIDATEN) {
+    const q = new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: layer, STYLES: '', CRS: 'EPSG:3857',
+      BBOX: [x0, y0, x1, y1].join(','), WIDTH: '512', HEIGHT: '512', FORMAT: 'image/png', TRANSPARENT: 'TRUE' });
+    try {
+      const r = await fetch(`${url}?${q}`);
+      const typ = r.headers.get('content-type') || '';
+      if (!r.ok || !typ.startsWith('image')) { fehler.push(`${layer}: ${(await r.text()).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) || r.status}`); continue; }
+      const bild = await createImageBitmap(await r.blob());
+      const cv = document.createElement('canvas'); cv.width = bild.width; cv.height = bild.height;
+      const ctx = cv.getContext('2d'); ctx.drawImage(bild, 0, 0);
+      const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
+      let punkte = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 40) punkte++;
+      if (punkte > 0) return { url, layer, punkte };
+      ersatz ||= { url, layer, punkte: 0 };
+    } catch (e) { fehler.push(`${layer}: ${e.message || e}`); }
+  }
+  return ersatz || { fehler };
+}
+
 export function overlayLayer(o) {
   if (o.vector && o.key === 'baumarten') return createBaumartenLayer({ minZoom: o.minZoom });
   return wms(o.url, o.layers, { opacity: o.opacity ?? 0.85, minZoom: o.minZoom ?? 10 });

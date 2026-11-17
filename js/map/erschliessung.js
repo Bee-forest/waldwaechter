@@ -97,7 +97,7 @@ export function createErschliessungLayers(map, { klickbar = () => true } = {}) {
 }
 
 // ---------- Bearbeiten ----------
-export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse' } = {}) {
+export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', flaeche = null } = {}) {
   const s0 = store.get();
   const mapEl = h('div', { class: 'ersch-map' });
   const leiste = h('div', { class: 'ersch-leiste' });
@@ -181,11 +181,12 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse' } =
     }
     if (modus === 'erkennen') {
       const flaechen = (store.get().parcels || []).filter((p) => polysOf(p).length).sort((a, b) => (a.category === 'Wald' ? -1 : 0) - (b.category === 'Wald' ? -1 : 0));
-      let wahl = flaechen[0]?.id || '';
+      if (flaeche && !flaechen.some((p) => p.id === flaeche.id)) flaechen.unshift(flaeche);
+      let wahl = flaeche?.id || flaechen[0]?.id || '';
       const an = vorschlaege.filter((v) => v.an).length;
       fill(leiste, kopf,
         flaechen.length ? h('div', { class: 'form' },
-          h('label', {}, 'Flurstück', h('select', { onchange: (e) => { wahl = e.target.value; } }, flaechen.map((p) => h('option', { value: p.id }, `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}`)))),
+          h('label', {}, 'Flurstück', h('select', { onchange: (e) => { wahl = e.target.value; } }, flaechen.map((p) => h('option', { value: p.id, selected: p.id === wahl }, `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}`)))),
           h('button', { class: 'btn btn-primary', disabled: erkennt, onclick: () => { const p = flaechen.find((x) => x.id === wahl); if (p) erkennen(p); } }, erkennt ? 'Luftbild wird ausgewertet …' : 'Rückegassen im Luftbild suchen'))
           : h('p', { class: 'muted' }, 'Leg zuerst Flurstücke als deine Flächen an – die Suche läuft je Flurstück.'),
         vorschlaege.length ? h('div', {},
@@ -199,6 +200,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse' } =
     if (modus === 'ansehen') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe eine Gasse oder einen Lagerplatz an, um ihn zu bearbeiten oder zu löschen.'));
   }
   render();
+  if (modus === 'erkennen') { if (base.basemap !== 'dop') base.setBasemap('dop'); if (flaeche) erkennen(flaeche); }
   const abo = store.subscribe(() => { if (modus !== 'gasse' || !draft.length) render(); });
   return page;
 }

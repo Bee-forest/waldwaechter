@@ -6,7 +6,7 @@ import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, formatDist, centroid, compassLabel, polysOf } from './geo.js';
 import { WANZE_SVG, say } from './mascot.js';
-import { wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa, localIndexInfo } from './map/thueringen.js';
+import { grenzpunkteFinden, wfsDiagnose, ALKIS_MIN_ZOOM, featureInfoUrl, OVERLAYS, overlayLayer, INFO_SOURCES, nearestRescue, LAYER_INFO, legendUrls, amtlicheFlaecheHa, localIndexInfo } from './map/thueringen.js';
 import { openProfile } from './profile.js';
 import { besonderheiten } from './map/besonderheiten.js';
 import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
@@ -227,8 +227,23 @@ function zeigeBesonderheit(f, p) {
 }
 
 const PROFI_LAYER = new Set(['gassen', 'lager']);
+let grenzGeprueft = false, grenzLaeuft = false;
+/** Grenzpunkte: passende Ebene des Geoportals einmal suchen und melden, was der Dienst liefert */
+async function grenzpunktePruefen() {
+  if (grenzGeprueft || grenzLaeuft) return;
+  if (map.getZoom() < 16) { toast('Grenzsteine erscheinen ab Zoomstufe 16 – näher heranzoomen.'); map.once('zoomend', () => { if (store.get().settings.layers.grenzpunkte) grenzpunktePruefen(); }); return; }
+  grenzLaeuft = true;
+  const r = await grenzpunkteFinden(map.getBounds()).catch((e) => ({ fehler: [e.message] }));
+  grenzLaeuft = false;
+  if (r.fehler) { toast('Grenzsteine: Der Dienst des Geoportals liefert keine Grenzpunkte.'); say(`Grenzsteine konnten nicht geladen werden. Antwort des Geoportals: ${r.fehler.join(' | ').slice(0, 400)}`, { duration: 0 }); return; }
+  grenzGeprueft = true;
+  overlays.grenzpunkte.setUrl(r.url, true); overlays.grenzpunkte.setParams({ layers: r.layer });
+  if (!r.punkte) toast('Grenzsteine: In diesem Kartenausschnitt sind keine Grenzpunkte verzeichnet.');
+}
+
 export function applyLayerVisibility() {
   const { layers } = store.get().settings;
+  if (layers.grenzpunkte && map) grenzpunktePruefen();
   for (const [k, g] of Object.entries(catGroups)) {
     if (layers[k]) { if (!map.hasLayer(g)) g.addTo(map); } else map.removeLayer(g);
   }
@@ -744,6 +759,7 @@ async function renderInfo() {
     catSection,
     istProfi() ? eigentuemerBlock(p) : null,
     istProfi() && isAlkis ? wanderwegeBlock(p) : null,
+    istProfi() && isAlkis ? h('div', { class: 'info-block' }, h('button', { class: 'btn btn-block', onclick: () => openErschliessungEditor({ center: centroid(p.ring), zoom: 17, modus: 'erkennen', flaeche: p }) }, 'Rückegassen im Luftbild suchen')) : null,
     isAlkis ? rescueBlock(latlng) : null,
     isAlkis ? geoInfoBlock(latlng, p.id) : null,
     isAlkis ? null : h('div', { class: 'info-block' },

@@ -349,16 +349,16 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     if (s.bzt || !alle().length) return;
     const c = centroid(groesste());
     try {
-      const [{ queryPoint, naechsterStandort }, { empfehlung }] = await Promise.all([import('./map/geoinfo.js'), import('./bzt.js')]);
+      const [{ queryPoint }, { empfehlungMitErsatz }] = await Promise.all([import('./map/geoinfo.js'), import('./bzt.js')]);
       const info = await queryPoint(c);
-      let sp = info.standort || {}, ersatz = null;
-      if (!String(sp.Standortseinheiten || '').trim() && !String(sp.Standortsguppe || sp.Standortsgruppe || '').trim()) {
-        // keine Kartierung in der Flächenmitte: nächstgelegenen kartierten Standort verwenden
-        const n = await naechsterStandort(c).catch(() => null);
-        if (n) { sp = n.standort; ersatz = { abstand: n.abstand, richtung: n.richtung }; }
-      }
-      s.standort = { einheit: String(sp.Standortseinheiten || '').trim(), gruppe: String(sp.Standortsguppe || sp.Standortsgruppe || '').trim(), text: sp.Beschreibung || '', ersatz };
-      s.bzt = (s.standort.einheit || s.standort.gruppe) ? await empfehlung(c, s.standort) : { status: 'keinStandort' };
+      const sp = info.standort || {};
+      const einheit = String(sp.Standortseinheiten || '').trim(), gruppe = String(sp.Standortsguppe || sp.Standortsgruppe || '').trim();
+      // ohne Kartierung oder ohne Eintrag im Tabellenwerk: nächstgelegenen Standort mit Empfehlung verwenden
+      const { r, ersatz } = await empfehlungMitErsatz(c, { einheit, gruppe });
+      s.standort = ersatz
+        ? { einheit: ersatz.einheit, gruppe: ersatz.gruppe, text: ersatz.standort?.Beschreibung || '', ersatz: { abstand: ersatz.abstand, richtung: ersatz.richtung, grund: ersatz.grund, original: einheit || gruppe } }
+        : { einheit, gruppe, text: sp.Beschreibung || '', ersatz: null };
+      s.bzt = r;
     } catch { s.bzt = { status: 'fehler' }; }
     if (schritt === 1) render();
   }
@@ -458,10 +458,10 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
         h('div', { class: 'geo-card' },
           h('p', { class: 'geo-kicker' }, 'Standort der Pflanzfläche'),
           !r ? h('p', { class: 'muted' }, 'Standort und Baumartenempfehlung werden geladen …')
-            : r.status === 'ok' ? [s.standort?.ersatz ? h('p', { class: 'warn-line' }, `In der Flächenmitte ist keine Standortskartierung hinterlegt – verwendet wird der nächstgelegene kartierte Standort, ca. ${s.standort.ersatz.abstand.toLocaleString('de-DE')} m in Richtung ${s.standort.ersatz.richtung}.`) : null,
+            : r.status === 'ok' ? [s.standort?.ersatz ? h('p', { class: 'warn-line' }, `${s.standort.ersatz.grund === 'keinEintrag' ? `Für die Standortseinheit ${s.standort.ersatz.original} in der Flächenmitte enthält das Tabellenwerk keine Empfehlung` : 'In der Flächenmitte ist keine Standortskartierung hinterlegt'} – verwendet wird der nächstgelegene kartierte Standort mit Empfehlung (${s.standort.einheit || s.standort.gruppe}), ca. ${s.standort.ersatz.abstand.toLocaleString('de-DE')} m in Richtung ${s.standort.ersatz.richtung}.`) : null,
               h('p', {}, h('strong', {}, `${r.code}: ${r.eintrag.name}`)), h('p', { class: 'muted' }, `${r.wuchseinheitName} · Klimabereich 2041–2070: ${r.klimabereichTabelleName} (${r.klimabereichTabelle})`),
               h('p', { class: 'muted' }, `Tabellenwerk: Hauptbaumarten ${r.eintrag.B.join(', ')} · Mischbaumarten ${r.eintrag.C.join(', ')} · Nebenbaumarten ${r.eintrag.D.join(', ')}`)]
-            : h('p', { class: 'muted' }, r.status === 'keinStandort' ? 'Für die Fläche und im Umkreis von 1,5 km ist keine Standortskartierung hinterlegt – die Baumartenwahl bitte mit dem Forstamt abstimmen.' : 'Für diesen Standort liegt keine Empfehlung aus dem Tabellenwerk vor.')),
+            : h('p', { class: 'muted' }, r.status === 'keinStandort' ? 'Für die Fläche und im Umkreis von 2,5 km ist kein kartierter Standort mit Empfehlung hinterlegt – die Baumartenwahl bitte mit dem Forstamt abstimmen.' : 'Für diesen Standort liegt keine Empfehlung aus dem Tabellenwerk vor.')),
         h('p', { class: 'sheet-label' }, empf.length ? 'Für diesen Standort empfohlen' : 'Baumarten'),
         h('div', { class: 'art-chips' }, (empf.length ? empf : alle).map(chip)),
         empf.length ? h('details', { class: 'weitere-arten', open: weitereOffen, ontoggle: (e) => { weitereOffen = e.target.open; } }, h('summary', {}, 'Weitere Baumarten'), h('div', { class: 'art-chips' }, weitere.map(chip))) : null,

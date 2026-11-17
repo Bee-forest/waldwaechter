@@ -92,7 +92,7 @@ export async function queryPoint(latlng) {
  * Sucht in Ringen (50 m … 1,5 km) in 8 bzw. 16 Richtungen, Ring für Ring, und nimmt den ersten Treffer.
  * @returns {Promise<{ standort: object, latlng: [number, number], abstand: number, richtung: string } | null>}
  */
-export async function naechsterStandort(latlng, radien = [50, 100, 200, 350, 600, 1000, 1500]) {
+export async function naechsterStandort(latlng, radien = [50, 100, 200, 350, 600, 1000, 1500, 2500], akzeptiere = null) {
   const lat = latlng.lat ?? latlng[0], lng = latlng.lng ?? latlng[1];
   const q = QUERIES.find((x) => x.key === 'standort');
   const RICHTUNG = ['Norden', 'Nordosten', 'Osten', 'Südosten', 'Süden', 'Südwesten', 'Westen', 'Nordwesten'];
@@ -110,7 +110,8 @@ export async function naechsterStandort(latlng, radien = [50, 100, 200, 350, 600
         return f && (String(f.Standortseinheiten || '').trim() || String(f.Standortsguppe || f.Standortsgruppe || '').trim()) ? { ...pt, f } : null;
       } catch { return null; }
     }));
-    const t = treffer.find(Boolean);
+    let t = null;
+    for (const x of treffer) { if (x && (!akzeptiere || await akzeptiere(x.f))) { t = x; break; } }
     if (t) return { standort: t.f, latlng: t.ll, abstand: r, richtung: RICHTUNG[Math.round((t.w / (2 * Math.PI)) * 8) % 8] };
   }
   return null;

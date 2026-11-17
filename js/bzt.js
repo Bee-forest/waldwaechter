@@ -61,7 +61,6 @@ export async function empfehlung(latlng, { einheit = '', gruppe = '' } = {}) {
   if (!weNr) return { status: 'ausserhalb' };
   const weDaten = katalog.wuchseinheiten[weNr];
   const ergebnis = { wuchseinheit: weNr, wuchseinheitName: weDaten?.name || weNr, klimabereich: String(kbHier), klimabereichName: katalog.klimabereiche[kbHier] || '', einheit, gruppe };
-  if (!weDaten) return { ...ergebnis, status: 'keineDaten' };
 
   // Klimabereiche in der Nähe (bis 1,5 km): an Grenzen sollen auch die Empfehlungen des Nachbarbereichs geprüft werden
   const nah = new Map();
@@ -84,6 +83,30 @@ export async function empfehlung(latlng, { einheit = '', gruppe = '' } = {}) {
     if (grp && aehnlich.length) return { code: aehnlich[0], art: 'gruppe', alle: aehnlich };
     return null;
   };
+  // Kein Eintrag in der eigenen Wuchseinheit: nächstgelegene Wuchseinheit (bis ca. 5 km), die für diesen Standort
+  // einen Eintrag hat – zuerst im Klimabereich des Punkts, sonst in einem anderen Klimabereich
+  function ersatzWuchseinheit() {
+    const gesehen = new Set([weIdx]);
+    const maxRad = Math.ceil(5000 / meta.zelle);
+    for (let rad = 1; rad <= maxRad; rad++) for (let r = -rad; r <= rad; r++) for (let c = -rad; c <= rad; c++) {
+      if (Math.max(Math.abs(r), Math.abs(c)) !== rad) continue;
+      const [, w] = at(col + c, row + r);
+      if (!w || gesehen.has(w)) continue;
+      gesehen.add(w);
+      const nr = meta.wuchseinheiten[w - 1], we2 = katalog.wuchseinheiten[nr];
+      if (!we2) continue;
+      const kbs = [String(kbHier), ...Object.keys(we2.kb).filter((k) => k !== String(kbHier))];
+      for (const k of kbs) {
+        const s2 = suche(we2.kb[k]);
+        if (!s2) continue;
+        return { ...ergebnis, status: 'ok', klimabereichTabelle: k, klimabereichTabelleName: katalog.klimabereiche[k], code: s2.code, treffer: s2.art,
+          eintrag: we2.kb[k][s2.code], nachbarn: [], quelle: katalog.quelle,
+          ersatzWE: { wuchseinheit: nr, name: we2.name, abstand: Math.round((Math.hypot(r, c) * meta.zelle) / 100) * 100 } };
+      }
+    }
+    return null;
+  }
+  if (!weDaten) return ersatzWuchseinheit() || { ...ergebnis, status: 'keineDaten' };
   let wahl = null, kbWahl = null;
   for (const k of kbListe) {
     const s = suche(weDaten.kb[k]);
@@ -93,7 +116,7 @@ export async function empfehlung(latlng, { einheit = '', gruppe = '' } = {}) {
     // andere Klimabereiche derselben Wuchseinheit
     for (const k of Object.keys(weDaten.kb)) { const s = suche(weDaten.kb[k]); if (s) { wahl = s; kbWahl = k; break; } }
   }
-  if (!wahl) return { ...ergebnis, status: 'keinEintrag' };
+  if (!wahl) return ersatzWuchseinheit() || { ...ergebnis, status: 'keinEintrag' };
   const eintrag = weDaten.kb[kbWahl][wahl.code];
   const nachbarn = [...nah.entries()].filter(([k]) => String(k) !== kbWahl && weDaten.kb[String(k)]).map(([k, d]) => {
     const s = suche(weDaten.kb[String(k)]);
@@ -126,4 +149,28 @@ export function eichenHinweis(gruppe = '') {
   if (bereich || feuchte === '1') return 'Eiche hier: Stieleiche (hydromorphe und frische Standorte).';
   if (['A', 'Z'].includes(troph)) return 'Eiche hier: Roteiche (trockene, arme Standorte).';
   return 'Eiche hier: Traubeneiche (trockene, mäßig nährstoffhaltige bis reiche Standorte).';
+}
+
+/**
+ * Empfehlung mit Rückfall: Gibt es am Punkt keine Standortskartierung oder für die kartierte Standortseinheit
+ * keinen Eintrag (auch nicht in einer Nachbar-Wuchseinheit), wird der nächstgelegene kartierte Standort verwendet,
+ * für den das Tabellenwerk eine Empfehlung hat (Klimabereich und Wuchseinheit bleiben die des Punkts).
+ * @returns {Promise<{ r, ersatz: null | { abstand, richtung, einheit, gruppe, grund } }>}
+ */
+export async function empfehlungMitErsatz(pt, { einheit = '', gruppe = '' } = {}) {
+  let r = null;
+  if (einheit || gruppe) {
+    r = await empfehlung(pt, { einheit, gruppe });
+    if (r.status === 'ok' || r.status === 'ausserhalb') return { r, ersatz: null };
+  }
+  const { naechsterStandort } = await import('./map/geoinfo.js');
+  const sp = (f) => ({ einheit: String(f.Standortseinheiten || '').trim(), gruppe: String(f.Standortsguppe || f.Standortsgruppe || '').trim() });
+  const n = await naechsterStandort(pt, undefined, async (f) => {
+    const x = sp(f);
+    if (x.einheit === einheit && x.gruppe === gruppe) return false; // derselbe Standort hat ja keinen Eintrag
+    return (await empfehlung(pt, x)).status === 'ok';
+  }).catch(() => null);
+  if (!n) return { r: r || { status: 'keinStandort' }, ersatz: null };
+  const x = sp(n.standort);
+  return { r: await empfehlung(pt, x), ersatz: { abstand: n.abstand, richtung: n.richtung, ...x, standort: n.standort, grund: einheit || gruppe ? 'keinEintrag' : 'keineKartierung' } };
 }

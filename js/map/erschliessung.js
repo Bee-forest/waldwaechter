@@ -134,21 +134,21 @@ export function gasseText(g) {
     gasseBefahrbarText(g.befahrbar) || null, g.breite ? `${String(g.breite).replace('.', ',')} m breit` : null, g.notiz || null].filter(Boolean).join(' · ');
 }
 
-function lagerPopup(l, { aufBearbeiten } = {}) {
+function lagerPopup(l, { aufBearbeiten, nurAnsehen = false } = {}) {
   return h('div', { class: 'lager-popup' },
     h('strong', {}, l.name || 'Lagerplatz'),
     h('p', {}, befahrbarText(l.befahrbar), l.lkw ? ' · LKW kann wenden' : ''),
     l.menge ? h('p', {}, `Platz für ca. ${l.menge} Fm`) : null,
     l.text ? h('p', { class: 'muted' }, l.text) : null,
     h('div', { class: 'btn-row' },
-      h('button', { class: 'btn btn-small', onclick: () => { aufBearbeiten?.(); lagerDialog(l); } }, 'Bearbeiten'),
-      h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => { aufBearbeiten?.(); if (await confirmDialog('Lagerplatz löschen?', { ok: 'Löschen', danger: true })) speichere((e) => { e.lager = e.lager.filter((x) => x.id !== l.id); }); } }, 'Löschen'),
+      nurAnsehen ? null : h('button', { class: 'btn btn-small', onclick: () => { aufBearbeiten?.(); lagerDialog(l); } }, 'Bearbeiten'),
+      nurAnsehen ? null : h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => { aufBearbeiten?.(); if (await confirmDialog('Lagerplatz löschen?', { ok: 'Löschen', danger: true })) speichere((e) => { e.lager = e.lager.filter((x) => x.id !== l.id); }); } }, 'Löschen'),
       h('a', { class: 'btn btn-small', href: `https://www.google.com/maps/dir/?api=1&destination=${l.at[0]},${l.at[1]}`, target: '_blank', rel: 'noopener' }, 'Navigation')));
 }
 
 // ---------- Kartenebenen ----------
 /** Ebenen für eine Karte; zeichnen sich bei Änderungen selbst neu */
-export function createErschliessungLayers(map, { klickbar = () => true, aufGasse = null, verschiebbar = false, ausblenden = () => null } = {}) {
+export function createErschliessungLayers(map, { klickbar = () => true, aufGasse = null, verschiebbar = false, ausblenden = () => null, nurAnsehen = false } = {}) {
   const gassen = L.layerGroup(), lager = L.layerGroup();
   function zeichne() {
     gassen.clearLayers(); lager.clearLayers();
@@ -159,14 +159,15 @@ export function createErschliessungLayers(map, { klickbar = () => true, aufGasse
       // breite, unsichtbare Linie zum Antippen (gestrichelte Linien sind sonst in den Lücken nicht antippbar)
       const pl = L.polyline(g.line, { color: '#000', weight: 24, opacity: 0, lineCap: 'round', className: 'gasse-treffer' });
       pl.bindTooltip(gasseText(g), { sticky: true });
-      pl.on('click', (e) => { if (!klickbar()) return; L.DomEvent.stop(e); (aufGasse || gasseDialog)(g); });
+      if (nurAnsehen) pl.bindPopup(() => h('div', { class: 'lager-popup' }, h('strong', {}, g.name || 'Rückegasse'), h('p', {}, gasseText(g)), h('p', { class: 'muted' }, 'Bearbeiten unter „Weitere Layer“ → „Rückegassen und Lagerplätze bearbeiten“.')));
+      else pl.on('click', (e) => { if (!klickbar()) return; L.DomEvent.stop(e); (aufGasse || gasseDialog)(g); });
       gassen.addLayer(pl);
     }
     for (const l of d.lager || []) {
       if (!l.at) continue;
       const m = L.marker(l.at, { icon: lagerIcon(), title: l.name || 'Lagerplatz', zIndexOffset: 400, draggable: verschiebbar });
       if (verschiebbar) m.on('dragend', () => { const ll = m.getLatLng(); speichere((e) => { const x = e.lager.find((y) => y.id === l.id); if (x) x.at = [Number(ll.lat.toFixed(7)), Number(ll.lng.toFixed(7))]; }); toast('Lagerplatz verschoben'); });
-      m.bindPopup(() => lagerPopup(l, { aufBearbeiten: () => map.closePopup() }));
+      m.bindPopup(() => lagerPopup(l, { aufBearbeiten: () => map.closePopup(), nurAnsehen }));
       m.on('click', (e) => { if (!klickbar()) { L.DomEvent.stop(e); m.closePopup(); } });
       lager.addLayer(m);
     }

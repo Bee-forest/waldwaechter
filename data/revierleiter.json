@@ -497,6 +497,294 @@
      "mail": "uta.krispin@forst.thueringen.de"
     }
    ]
+  },
+  "Gehren": {
+   "url": "https://www.thueringenforst.de/ueber-uns/standorte/forstaemter/forstamt-gehren",
+   "tel": "036783 8870",
+   "mail": "",
+   "leiter": "Karsten Rose",
+   "reviere": [
+    {
+     "revier": "Meura",
+     "nr": 1,
+     "name": "David Wiemer",
+     "tel": "+49 36783 8870",
+     "mobil": "+49 174 1828 456",
+     "mail": "david.wiemer@forst.thueringen.de"
+    },
+    {
+     "revier": "Saalfelder Höhe",
+     "nr": 2,
+     "name": "Andrea Loch",
+     "tel": "+49 361 573913201",
+     "mobil": "+49 172 3480172",
+     "mail": "andrea.loch@forst.thueringen.de"
+    },
+    {
+     "revier": "Schwarzburg",
+     "nr": 3,
+     "name": "Marie Attula",
+     "tel": "",
+     "mobil": "+49 160 8832721",
+     "mail": "marie.attula@forst.thueringen.de"
+    },
+    {
+     "revier": "Unterweißbach",
+     "nr": 4,
+     "name": "Franko Buttig",
+     "tel": "+49 36738 42-799",
+     "mobil": "+49 172 3480174",
+     "mail": "franko.buttig@forst.thueringen.de"
+    },
+    {
+     "revier": "Mellenbach",
+     "nr": 5,
+     "name": "Volker-Christian Hassenstein",
+     "tel": "+49 361 573913142",
+     "mobil": "+49 172 3480175",
+     "mail": "volker-christian.hassenstein@forst.thueringen.de"
+    },
+    {
+     "revier": "Großbreitenbach",
+     "nr": 6,
+     "name": "Jens Schinkitz",
+     "tel": "+49 36783 70-244",
+     "mobil": "+49 172 3480176",
+     "mail": "jens.schinkitz@forst.thueringen.de"
+    },
+    {
+     "revier": "Reuscheltal",
+     "nr": 7,
+     "name": "Sebastian Kroll",
+     "tel": "+49 36783 887-0",
+     "mobil": "+49 172 3480177",
+     "mail": "sebastian.kroll@forst.thueringen.de"
+    },
+    {
+     "revier": "Hohe Tanne",
+     "nr": 8,
+     "name": "Tom Albert",
+     "tel": "+49 36783 8870",
+     "mobil": "+49 172 3480178",
+     "mail": "tom.albert@forst.thueringen.de"
+    },
+    {
+     "revier": "Wohlrose",
+     "nr": 9,
+     "name": "Torsten Krebs",
+     "tel": "+49 36874 38139",
+     "mobil": "+49 172 3480179",
+     "mail": "torsten.krebs@forst.thueringen.de"
+    },
+    {
+     "revier": "Gehren",
+     "nr": 10,
+     "name": "Ronny Luc",
+     "tel": "+49 3677 2059-967",
+     "mobil": "+49 172 3480180",
+     "mail": "ronny.luc@forst.thueringen.de"
+    },
+    {
+     "revier": "Auerhahnsgrund",
+     "nr": 11,
+     "name": "Steffen Wedekind",
+     "tel": "+49 361 573913119",
+     "mobil": "+49 172 3480326",
+     "mail": "steffen.wedekind@forst.thueringen.de"
+    },
+    {
+     "revier": "Kienberg",
+     "nr": 12,
+     "name": "Matthias Wagner",
+     "tel": "+49 36739 29-789",
+     "mobil": "+49 172 3480327",
+     "mail": "matthias.wagner@forst.thueringen.de"
+    }
+   ]
+  },
+  "Frauenwald": {
+   "url": "https://www.thueringenforst.de/forstamt-frauenwald",
+   "tel": "036782 6585",
+   "mail": "",
+   "leiter": "Hagen Dargel",
+   "reviere": [
+    {
+     "revier": "Tannengrund",
+     "nr": 1,
+     "name": "Kati Fröhlich",
+     "tel": "+49 361 573913272",
+     "mobil": "+49 172 3480159",
+     "mail": "kati.froehlich@forst.thueringen.de"
+    },
+    {
+     "revier": "Morast",
+     "nr": 2,
+     "name": "Christoph Gehrecke",
+     "tel": "+49 36782 6585",
+     "mobil": "+49 172 3480160",
+     "mail": "christoph.gehrecke@forst.thueringen.de"
+    },
+    {
+     "revier": "Oehrenstock",
+     "nr": 3,
+     "name": "Andre Deglau",
+     "tel": "+49 361 573913-165",
+     "mobil": "+49 172 3480161",
+     "mail": "andre.deglau@forst.thueringen.de"
+    },
+    {
+     "revier": "Frauenwald",
+     "nr": 4,
+     "name": "Fanny Hurtig",
+     "tel": "",
+     "mobil": "+49 172 3480162",
+     "mail": "fanny.hurtig@forst.thueringen.de"
+    },
+    {
+     "revier": "Finsterberg",
+     "nr": 5,
+     "name": "Maik Brummundt",
+     "tel": "+49 361 573913-223",
+     "mobil": "+49 172 3480163",
+     "mail": "maik.brummundt@forst.thueringen.de"
+    },
+    {
+     "revier": "Kickelhahn",
+     "nr": 6,
+     "name": "Torsten Weinhardt",
+     "tel": "+49 361 573913-102",
+     "mobil": "+49 172 3480164",
+     "mail": "torsten.weinhardt@forst.thueringen.de"
+    },
+    {
+     "revier": "Zwei Wiesen",
+     "nr": 7,
+     "name": "Martin Gebser",
+     "tel": "+49 361 573913-060",
+     "mobil": "+49 172 3480165",
+     "mail": "martin.gebser@forst.thueringen.de"
+    },
+    {
+     "revier": "Arlesberg",
+     "nr": 8,
+     "name": "Christian Dorn",
+     "tel": "+49 361 573913273",
+     "mobil": "+49 172 3480166",
+     "mail": "christian.dorn@forst.thueringen.de"
+    },
+    {
+     "revier": "Martinroda",
+     "nr": 9,
+     "name": "Malte Rupp",
+     "tel": "+49 36782 6585",
+     "mobil": "+49 172 3480167",
+     "mail": "malte.rupp@forst.thueringen.de"
+    },
+    {
+     "revier": "Ilmenau",
+     "nr": 10,
+     "name": "Matthias Wetzel",
+     "tel": "+49 361 573913-091",
+     "mobil": "+49 172 3480168",
+     "mail": "matthias.wetzel@forst.thueringen.de"
+    },
+    {
+     "revier": "Wolfsberg",
+     "nr": 11,
+     "name": "Robin Horn",
+     "tel": "+49 36782 6585",
+     "mobil": "+49 172 3480169",
+     "mail": "robin.horn@forst.thueringen.de"
+    }
+   ]
+  },
+  "Oberhof": {
+   "url": "https://www.thueringenforst.de/ueber-uns/standorte/forstaemter/forstamt-oberhof/forstamt-oberhof",
+   "tel": "036842 526-0",
+   "mail": "forstamt.oberhof@forst.thueringen.de",
+   "leiter": "Jan Pietzko",
+   "reviere": [
+    {
+     "revier": "Vesser",
+     "nr": 1,
+     "name": "Olaf Sachs",
+     "tel": "+49 361 573913058",
+     "mobil": "+49 172 3480298",
+     "mail": "olaf.sachs@forst.thueringen.de"
+    },
+    {
+     "revier": "Goldlauter",
+     "nr": 2,
+     "name": "Karsten Winkler",
+     "tel": "+49 361 573913-227",
+     "mobil": "+49 172 3480299",
+     "mail": "karsten.winkler@forst.thueringen.de"
+    },
+    {
+     "revier": "Heinrichs",
+     "nr": 3,
+     "name": "Christian Pöllath",
+     "tel": "+49 361 573913-195",
+     "mobil": "+49 172 3480300",
+     "mail": "christian.poellath@forst.thueringen.de"
+    },
+    {
+     "revier": "Dietzhausen",
+     "nr": 4,
+     "name": "Alexander Paschold",
+     "tel": "",
+     "mobil": "+49 175 721 93 09",
+     "mail": "alexander.paschold@forst.thueringen.de"
+    },
+    {
+     "revier": "Benshausen",
+     "nr": 5,
+     "name": "Holger Meinert",
+     "tel": "+49 361 573913-265",
+     "mobil": "+49 172 3480302",
+     "mail": "holger.meinert@forst.thueringen.de"
+    },
+    {
+     "revier": "Marisfeld",
+     "nr": 6,
+     "name": "Bernd Ehrling",
+     "tel": "+49 361 573913-164",
+     "mobil": "+49 172 3480372",
+     "mail": "bernd.ehrling@forst.thueringen.de"
+    },
+    {
+     "revier": "Zella-Mehlis",
+     "nr": 8,
+     "name": "Michael Willmann",
+     "tel": "+49 361 573913-226",
+     "mobil": "+49 172 3480305",
+     "mail": "michael.willmann@forst.thueringen.de"
+    },
+    {
+     "revier": "Schneekopf",
+     "nr": 9,
+     "name": "Ronny Eckhardt",
+     "tel": "+49 361 573913-161",
+     "mobil": "+49 172 3480306",
+     "mail": "ronny.eckhardt@forst.thueringen.de"
+    },
+    {
+     "revier": "Spitziger Berg",
+     "nr": 10,
+     "name": "Thomas Noack",
+     "tel": "+49 361 573913-162",
+     "mobil": "+49 172 3480307",
+     "mail": "thomas.noack@forst.thueringen.de"
+    },
+    {
+     "revier": "Oberhof",
+     "nr": 11,
+     "name": "Christian Goldstein",
+     "tel": "+49 36842 5260",
+     "mobil": "+49 172 3480308",
+     "mail": "christian.goldstein@forst.thueringen.de"
+    }
+   ]
   }
  }
 }

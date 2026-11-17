@@ -148,7 +148,7 @@ export async function openProfile() {
         h('h2', {}, 'Profimodus'),
         h('label', { class: 'switch-row compact' }, h('span', { class: 'switch-label' }, an ? 'an' : 'aus'),
           h('input', { type: 'checkbox', role: 'switch', checked: an, 'aria-label': 'Profimodus', onchange: (e) => { store.update((st) => { st.settings.profi = e.target.checked; }); render(); toast(e.target.checked ? 'Profimodus an' : 'Profimodus aus'); } }))),
-      h('p', { class: 'hint' }, 'Für Betreuer, FBG und Dienstleister: Eigentümer je Flurstück, Wanderwege in der Flurstücks-Info, Rückegassen und Lagerplätze als eigene Kartenebenen (unter „Weitere Layer“).'),
+      h('p', { class: 'hint' }, 'Für Betreuer, FBG und Dienstleister: Ordner je Eigentümer mit getrennten Maßnahmen und Finanzen, Eigentümer je Flurstück (Excel-Import) und Wanderwege in der Flurstücks-Info.'),
       an ? h('div', { class: 'form' },
         h('p', { class: 'sheet-label' }, 'Eigentümer'),
         h('p', {}, n ? `${n} Flurstücke mit Eigentümer hinterlegt.` : 'Noch keine Eigentümer hinterlegt.'),

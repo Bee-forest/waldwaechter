@@ -239,7 +239,7 @@ function zeigeBesonderheit(f, p) {
   say(`${f.title}${extra}:${kartiert} ${f.text}${angaben ? ` (${angaben})` : ''}`, { duration: 0, actions: actions.length ? actions : undefined });
 }
 
-const PROFI_LAYER = new Set(['gassen', 'lager']);
+const PROFI_LAYER = new Set([]); // Rückegassen und Lagerplätze gibt es für alle
 let grenzGeprueft = false, grenzLaeuft = false;
 /** Grenzpunkte: passende Ebene des Geoportals einmal suchen und melden, was der Dienst liefert */
 async function grenzpunktePruefen() {
@@ -951,12 +951,12 @@ function openLayerSheet() {
       } }),
       sw('flurnummern', 'Flurstücksnummern', { note: 'ab Zoomstufe 16' }),
       OVERLAYS.filter((o) => o.group === 'Flurstücke').map((o) => sw(o.key, o.label, { note: o.note })),
-      istProfi() ? [
-        h('p', { class: 'sheet-label' }, 'Erschließung (Profimodus)'),
+      [
+        h('p', { class: 'sheet-label' }, 'Erschließung'),
         sw('gassen', 'Rückegassen', { color: '#8D5A2B' }),
         sw('lager', 'Lagerplätze (Polterplätze)', { color: '#B5651D' }),
         h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten'),
-      ] : null,
+      ],
       groups.filter((g) => g !== 'Flurstücke').map((g) => [
         h('p', { class: 'sheet-label' }, g),
         OVERLAYS.filter((o) => o.group === g).map((o) => sw(o.key, o.label, { disabled: o.pending, note: o.pending ? 'wird gerade angebunden' : null })),

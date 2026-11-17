@@ -159,3 +159,25 @@ export function kontaktLinks({ tel, mail }) {
     t ? h('a', { class: 'btn btn-small', href: `tel:${t}` }, `☎ ${tel}`) : null,
     mail ? h('a', { class: 'btn btn-small', href: `mailto:${mail}` }, `✉ ${mail}`) : null);
 }
+
+// ---------- Revierleiter laut ThüringenForst (data/revierleiter.json) ----------
+let RL = null;
+export function ladeRevierleiter() {
+  RL ??= fetch('./data/revierleiter.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  return RL;
+}
+const rlNorm = (t) => String(t || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+  .replace(/forstamt|forstrevier|revier|rev\./g, '').replace(/\(.*?\)/g, '').replace(/[^a-z]/g, '');
+/** Revierleiter und Forstamt zum Ergebnis des Dienstes „Hoheitsstruktur“; null, wenn nicht hinterlegt */
+export function revierleiterVon(daten, z) {
+  if (!daten?.forstaemter || !z) return null;
+  const fa = rlNorm(z.Forstamt), rv = rlNorm(z.Revier);
+  const aemter = Object.entries(daten.forstaemter);
+  const amt = aemter.find(([k]) => fa && (rlNorm(k) === fa || fa.includes(rlNorm(k)) || rlNorm(k).includes(fa)));
+  const suche = amt ? [amt] : aemter;
+  for (const [name, a] of suche) {
+    const r = rv ? a.reviere.find((x) => rlNorm(x.revier) === rv || rv.includes(rlNorm(x.revier))) : null;
+    if (r || amt) return { forstamt: name, amt: a, revier: r || null, stand: daten.stand };
+  }
+  return null;
+}

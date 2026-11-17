@@ -18,7 +18,7 @@ import { empfehlung, bztName, GRUPPEN, BAUMARTEN_KURZ, eichenHinweis } from './b
 import { wanderwege } from './map/wanderwege.js';
 import { createFlurnummernLayer } from './map/flurnummern.js';
 import { createErschliessungLayers, openErschliessungEditor } from './map/erschliessung.js';
-import { istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
+import { ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
 import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
@@ -362,9 +362,10 @@ function eigentuemerBlock(p) {
 }
 
 const WEG_FARBE = '#7B3FA0';
-function wanderwegeBlock(p) {
+function wanderwegeTeil(p) {
   const host = h('div', { 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Suche Wanderwege …'));
-  const block = klapp('wanderwege', 'Wanderwege', host, 'Suche …');
+  const block = h('div', { class: 'besonder-wege' }, h('span', { class: 'feature-type' }, 'Wanderwege'), host);
+  block.setKurz = () => {};
   wanderwege(p).then((wege) => {
     if (selected?.parcel.id !== p.id) return;
     if (!wege.length) { block.setKurz('keine'); fill(host, h('p', { class: 'muted' }, 'Durch dieses Flurstück führt kein in OpenStreetMap erfasster Wanderweg.')); return; }
@@ -476,16 +477,24 @@ function renderGeoInfo(info) {
     else if (/leiter|f(oe|ö)rster|ansprech/i.test(k)) dienst.name ||= v;
   }
   const eigen = revierKontakt(z) || {};
-  const rf = { name: eigen.name || dienst.name, tel: eigen.tel || dienst.tel, mail: eigen.mail || dienst.mail };
+  const tf = info.rl?.revier || {};
+  const rf = { name: eigen.name || tf.name || dienst.name, tel: eigen.tel || tf.tel || dienst.tel, mobil: eigen.tel ? '' : tf.mobil, mail: eigen.mail || tf.mail || dienst.mail };
+  const amt = info.rl?.amt;
   g.zust.push(h('div', { class: 'geo-card' },
     h('p', { class: 'geo-kicker' }, 'Hoheitsförster (ThüringenForst)'),
     z ? h('p', {}, h('strong', {}, `Forstamt ${z.Forstamt || '–'}`), z.Revier ? `, Revier ${z.Revier}` : '') : h('p', { class: 'muted' }, 'Zuständigkeit gerade nicht abrufbar.'),
     z ? h('div', { class: 'kontakt-karte' },
-      h('span', { class: 'muted' }, 'Revierförster'),
-      h('strong', {}, rf.name || 'Name noch nicht hinterlegt'),
-      kontaktLinks(rf),
-      h('button', { class: 'link-btn', onclick: async () => { if (await revierKontaktBearbeiten(z)) { toast('Kontakt gespeichert'); renderInfo(); } } }, rf.name || rf.tel || rf.mail ? 'Kontakt bearbeiten' : 'Name, Telefon und E-Mail eintragen')) : null,
-    z ? h('p', { class: 'hint' }, 'Der Revierförster berät kostenlos zu Waldbau, Förderung, Waldschutz und Holzverkauf. Eingetragene Kontakte gelten für alle Flurstücke im Revier.') : null,
+      h('span', { class: 'muted' }, 'Revierleiter/in'),
+      h('strong', {}, rf.name || 'Name nicht hinterlegt'),
+      kontaktLinks({ tel: rf.tel, mail: rf.mail }),
+      rf.mobil ? h('div', { class: 'kontakt-links' }, h('a', { class: 'btn btn-small', href: `tel:${String(rf.mobil).replace(/[^\d+]/g, '')}` }, `📱 ${rf.mobil}`)) : null,
+      h('button', { class: 'link-btn', onclick: async () => { if (await revierKontaktBearbeiten(z)) { toast('Kontakt gespeichert'); renderInfo(); } } }, eigen.name || eigen.tel || eigen.mail ? 'Eigenen Kontakt bearbeiten' : rf.name ? 'Kontakt korrigieren' : 'Name, Telefon und E-Mail eintragen')) : null,
+    amt ? h('div', { class: 'kontakt-karte' },
+      h('span', { class: 'muted' }, `Forstamt ${info.rl.forstamt}${amt.leiter ? ` · Leitung: ${amt.leiter}` : ''}`),
+      kontaktLinks({ tel: amt.tel, mail: amt.mail })) : null,
+    z ? h('p', { class: 'hint' }, info.rl?.revier && !eigen.name
+      ? h('span', {}, `Kontakt laut ThüringenForst (Stand ${new Date(info.rl.stand).toLocaleDateString('de-DE')}). `, h('a', { href: amt.url, target: '_blank', rel: 'noopener' }, 'Mitarbeiterseite des Forstamts'))
+      : 'Der Revierförster berät kostenlos zu Waldbau, Förderung, Waldschutz und Holzverkauf. Eingetragene Kontakte gelten für alle Flurstücke im Revier.') : null,
   ));
   g.zust.push(h('div', { class: 'geo-card' },
     h('p', { class: 'geo-kicker' }, 'Forstbetriebsgemeinschaft'),
@@ -628,6 +637,7 @@ function geoInfoBlock(latlng, parcelId = null) {
   queryPoint(latlng).then(async (info) => {
     if (info.failed) throw new Error('offline');
     const b = await bestandP;
+    info.rl = revierleiterVon(await ladeRevierleiter(), info.zustaendig);
     const g = renderGeoInfo(info);
     const pf = pflanzungAm([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]]);
     fill(B.standort, bestandCard(b, parcelId, pf), ...g.standort);
@@ -758,8 +768,6 @@ async function renderInfo() {
     ),
     catSection,
     istProfi() ? eigentuemerBlock(p) : null,
-    istProfi() && isAlkis ? wanderwegeBlock(p) : null,
-    istProfi() && isAlkis ? h('div', { class: 'info-block' }, h('button', { class: 'btn btn-block', onclick: () => openErschliessungEditor({ center: centroid(p.ring), zoom: 17, modus: 'erkennen', flaeche: p }) }, 'Rückegassen im Luftbild suchen')) : null,
     isAlkis ? rescueBlock(latlng) : null,
     isAlkis ? geoInfoBlock(latlng, p.id) : null,
     isAlkis ? null : h('div', { class: 'info-block' },
@@ -774,7 +782,8 @@ async function renderInfo() {
       ))),
       rescue.length ? h('p', { class: 'hint' }, 'Demo-Rettungspunkte. Im Notfall immer 112 wählen und die Rettungspunkt-Nummer nennen.') : null,
     ),
-    isAlkis ? klapp('besonder', 'Besonderheiten', h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …')), 'Verkehrssicherung, Biotope') : null,
+    isAlkis ? klapp('besonder', 'Besonderheiten', [h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …')),
+      istProfi() ? wanderwegeTeil(p) : null], istProfi() ? 'Verkehrssicherung, Biotope, Wanderwege' : 'Verkehrssicherung, Biotope') : null,
     isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Besonderheiten'),
       p.features?.length

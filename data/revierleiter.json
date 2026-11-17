@@ -1,0 +1,502 @@
+{
+ "stand": "2026-11-17",
+ "quelle": "ThüringenForst, Mitarbeiterseiten der Forstämter (www.thueringenforst.de)",
+ "forstaemter": {
+  "Weida": {
+   "url": "https://www.thueringenforst.de/ueber-uns/standorte/forstaemter/forstamt-weida/forstamt-weida",
+   "tel": "036603 714990",
+   "mail": "forstamt.weida@forst.thueringen.de",
+   "leiter": "Karsten Schröder",
+   "reviere": [
+    {
+     "revier": "Großebersdorf",
+     "nr": 9,
+     "name": "Amelie Wohlleben",
+     "tel": "+49 36603 7149 931",
+     "mobil": "+49 172 3480 419",
+     "mail": "amelie.wohlleben@forst.thueringen.de"
+    },
+    {
+     "revier": "Greiz",
+     "nr": 5,
+     "name": "Bärbel Ruder",
+     "tel": "+49 361 573913 - 073",
+     "mobil": "+49 172 3480415",
+     "mail": "baerbel.ruder@forst.thueringen.de"
+    },
+    {
+     "revier": "Neuärgerniß",
+     "nr": 4,
+     "name": "Claudia Kindermann-Weiss",
+     "tel": "+49 361 573913263",
+     "mobil": "+49 172 3480414",
+     "mail": "claudia.kindermann-weiss@forst.thueringen.de"
+    },
+    {
+     "revier": "Lucka",
+     "nr": 16,
+     "name": "Felix Pietsch",
+     "tel": "",
+     "mobil": "+49 172 3480426",
+     "mail": "felix.pietsch@forst.thueringen.de"
+    },
+    {
+     "revier": "Schömberg",
+     "nr": 8,
+     "name": "Frank Weller",
+     "tel": "+49 361 573913 - 245",
+     "mobil": "+49 172 3480418",
+     "mail": "frank.weller@forst.thueringen.de"
+    },
+    {
+     "revier": "Schmölln",
+     "nr": 13,
+     "name": "Hans-Peter Schenk",
+     "tel": "+49 361 573913 - 143",
+     "mobil": "+49 172 3480423",
+     "mail": "hans-peter.schenk@forst.thueringen.de"
+    },
+    {
+     "revier": "Ronneburg",
+     "nr": 11,
+     "name": "Heiko Dutschke",
+     "tel": "+49 361 5740266 - 12",
+     "mobil": "+49 172 3480411",
+     "mail": "heiko.dutschke@forst.thueringen.de"
+    },
+    {
+     "revier": "Weckersdorf",
+     "nr": 2,
+     "name": "Holger Lenz",
+     "tel": "",
+     "mobil": "+49 1723480412",
+     "mail": "holger.lenz@forst.thueringen.de"
+    },
+    {
+     "revier": "Waldhaus",
+     "nr": 6,
+     "name": "Jens Frotscher",
+     "tel": "+49 361 573913 - 070",
+     "mobil": "+49 172 3480416",
+     "mail": "jens.frotscher@forst.thueringen.de"
+    },
+    {
+     "revier": "Zedlitz",
+     "nr": 10,
+     "name": "Jörg Barabas",
+     "tel": "+49 361 573913 - 199",
+     "mobil": "+49 172 3480420",
+     "mail": "joerg.barabas@forst.thueringen.de"
+    },
+    {
+     "revier": "Leina",
+     "nr": 14,
+     "name": "Jörg Zippel",
+     "tel": "+49 361 573913 - 158",
+     "mobil": "+49 172 3480424",
+     "mail": "joerg.zippel@forst.thueringen.de"
+    },
+    {
+     "revier": "Auma",
+     "nr": 3,
+     "name": "Max Teubner",
+     "tel": "+49 36603 71499 - 0",
+     "mobil": "+49 172 3480413",
+     "mail": "max.teubner@forst.thueringen.de"
+    },
+    {
+     "revier": "Gommla",
+     "nr": 7,
+     "name": "Sarah Ruder",
+     "tel": "+49 36603 714990",
+     "mobil": "+49 172 3480417",
+     "mail": "sarah.ruder@forst.thueringen.de"
+    },
+    {
+     "revier": "Treben",
+     "nr": 15,
+     "name": "Thomas Anders",
+     "tel": "+49 3447 51 - 360",
+     "mobil": "+49 172 3480425",
+     "mail": "thomas.anders@forst.thueringen.de"
+    }
+   ]
+  },
+  "Schleiz": {
+   "url": "https://www.thueringenforst.de/ueber-uns/standorte/forstaemter/forstamt-schleiz/forstamt-schleiz",
+   "tel": "03663 4899-90",
+   "mail": "forstamt.schleiz@forst.thueringen.de",
+   "leiter": "Katharina Pietzko",
+   "reviere": [
+    {
+     "revier": "Oberlemnitz",
+     "nr": 5,
+     "name": "Andre Pasold",
+     "tel": "+49 361573913035",
+     "mobil": "+49 172 3480333",
+     "mail": "andre.pasold@forst.thueringen.de"
+    },
+    {
+     "revier": "Gräfenwarth",
+     "nr": 8,
+     "name": "Andreas Bähr",
+     "tel": "+49 36647 22590",
+     "mobil": "+49 172 3480338",
+     "mail": "andreas.baehr@forst.thueringen.de"
+    },
+    {
+     "revier": "Heberndorf",
+     "nr": 4,
+     "name": "Burkhardt Reuter",
+     "tel": "+49 361 573913 - 262",
+     "mobil": "+49 172 3480334",
+     "mail": "burkhardt.reuter@forst.thueringen.de"
+    },
+    {
+     "revier": "Tanna",
+     "nr": 7,
+     "name": "Denny Thiele",
+     "tel": "+49 361 573913 - 166",
+     "mobil": "+49 172 3480337",
+     "mail": "denny.thiele@forst.thueringen.de"
+    },
+    {
+     "revier": "Drognitz",
+     "nr": 12,
+     "name": "Hagen Scherf",
+     "tel": "+49 361 573913 - 039",
+     "mobil": "+49 172 3480258",
+     "mail": "hagen.scherf@forst.thueringen.de"
+    },
+    {
+     "revier": "Burglemnitz",
+     "nr": 3,
+     "name": "Hans Leeder",
+     "tel": "+49 361 573913 - 130",
+     "mobil": "+49 172 3480251",
+     "mail": "hans.leeder@forst.thueringen.de"
+    },
+    {
+     "revier": "Liebengrün",
+     "nr": 9,
+     "name": "Heino Linke",
+     "tel": "+49 361 573913 - 132",
+     "mobil": "+49 172 3480339",
+     "mail": "heino.linke@forst.thueringen.de"
+    },
+    {
+     "revier": "Bad Lobenstein",
+     "nr": 2,
+     "name": "Jens Baumann",
+     "tel": "+49 3663 48999 - 29",
+     "mobil": "+49 172 3480331",
+     "mail": "jens.baumann@forst.thueringen.de"
+    },
+    {
+     "revier": "Schleiz",
+     "nr": 11,
+     "name": "Martin Hirsch",
+     "tel": "+49 3663 48999 - 27",
+     "mobil": "+49 172 3480335",
+     "mail": "martin.hirsch@forst.thueringen.de"
+    },
+    {
+     "revier": "Gefell",
+     "nr": 6,
+     "name": "Thomas Wagner",
+     "tel": "+49 361 573913 - 231",
+     "mobil": "+49 172 3480336",
+     "mail": "thomas.wagner@forst.thueringen.de"
+    },
+    {
+     "revier": "Ziegenrück",
+     "nr": 10,
+     "name": "Wolfgang Ladwig",
+     "tel": "+49 361 573913 - 144",
+     "mobil": "+49 172 3480340",
+     "mail": "wolfgang.ladwig@forst.thueringen.de"
+    }
+   ]
+  },
+  "Neustadt": {
+   "url": "https://www.thueringenforst.de/ueber-uns/standorte/forstaemter/forstamt-neustadt/forstamt-neustadt",
+   "tel": "036481 248-6",
+   "mail": "forstamt.neustadt@forst.thueringen.de",
+   "leiter": "Sören Sterzik",
+   "reviere": [
+    {
+     "revier": "Wernburg",
+     "nr": 4,
+     "name": "Christian Schmitz",
+     "tel": "+49 36481 2486",
+     "mobil": "+49 172 3480291",
+     "mail": ""
+    },
+    {
+     "revier": "Friedebach",
+     "nr": 6,
+     "name": "Florian Berthold",
+     "tel": "+49 36481 2486",
+     "mobil": "+49 172 3480293",
+     "mail": ""
+    },
+    {
+     "revier": "Langendembach",
+     "nr": 8,
+     "name": "Gerald Schmidt",
+     "tel": "+49 361 57 3913 123",
+     "mobil": "+49 172 3480295",
+     "mail": ""
+    },
+    {
+     "revier": "Triptis",
+     "nr": 10,
+     "name": "Ines Simon",
+     "tel": "+49 361 57 3913 275",
+     "mobil": "+49 172 3480297",
+     "mail": ""
+    },
+    {
+     "revier": "Knau",
+     "nr": 1,
+     "name": "Iro Lange",
+     "tel": "+49 361 57 3913 118",
+     "mobil": "+49 172 3480288",
+     "mail": ""
+    },
+    {
+     "revier": "Gössitz",
+     "nr": 5,
+     "name": "Jacqueline Konradi",
+     "tel": "+49 36481 24886",
+     "mobil": "+49 172 4554637",
+     "mail": ""
+    },
+    {
+     "revier": "Lemnitz",
+     "nr": 2,
+     "name": "Jens Engler",
+     "tel": "+49 36481 248 - 75",
+     "mobil": "+49 172 3480289",
+     "mail": ""
+    },
+    {
+     "revier": "Weira",
+     "nr": 3,
+     "name": "Jonas Nelkenbrecher",
+     "tel": "+49 36481 2486",
+     "mobil": "+49 172 3480290",
+     "mail": ""
+    },
+    {
+     "revier": "Pößneck",
+     "nr": 7,
+     "name": "Lisa Feustel",
+     "tel": "+49 36481 24885",
+     "mobil": "+49 172 3480294",
+     "mail": ""
+    },
+    {
+     "revier": "Weißbach",
+     "nr": 11,
+     "name": "Maik Meißner",
+     "tel": "+49 361 57 3913 238",
+     "mobil": "+49 172 3480322",
+     "mail": ""
+    },
+    {
+     "revier": "Strößwitz",
+     "nr": 9,
+     "name": "Torsten Veckenstedt",
+     "tel": "+49 172 3480296",
+     "mobil": "+49 175 9838883",
+     "mail": ""
+    }
+   ]
+  },
+  "Finsterbergen": {
+   "url": "https://www.thueringenforst.de/ueber-uns/standorte/forstaemter/forstamt-finsterbergen/forstamt-finsterbergen-kontakt",
+   "tel": "03623 36250",
+   "mail": "",
+   "leiter": "Heike Schlehahn",
+   "reviere": [
+    {
+     "revier": "Georgenthal",
+     "nr": 6,
+     "name": "Alexander Hopf",
+     "tel": "+49 3623 3625 - 0",
+     "mobil": "+49 172 2598163",
+     "mail": "alexander.hopf@forst.thueringen.de"
+    },
+    {
+     "revier": "Frankenhain",
+     "nr": 3,
+     "name": "Axel Große",
+     "tel": "+49 361 573913 - 274",
+     "mobil": "+49 172 3480148",
+     "mail": "axel.grosse@forst.thueringen.de"
+    },
+    {
+     "revier": "Neues Haus",
+     "nr": 5,
+     "name": "Heidi Mecke",
+     "tel": "",
+     "mobil": "+49 1723480292",
+     "mail": "heidi.mecke@forst.thueringen.de"
+    },
+    {
+     "revier": "Saukopf",
+     "nr": 12,
+     "name": "Jürgen Schorcht",
+     "tel": "+49 361 573913 - 133",
+     "mobil": "+49 172 3480147",
+     "mail": "juergen.schorcht@forst.thueringen.de"
+    },
+    {
+     "revier": "Sondra",
+     "nr": 10,
+     "name": "Katja Schwachheim",
+     "tel": "+49 3623 362516",
+     "mobil": "+49 173 5695816",
+     "mail": "katja.schwachheim@forst.thueringen.de"
+    },
+    {
+     "revier": "Luisenthal",
+     "nr": 4,
+     "name": "Lilli Mette",
+     "tel": "+49 362336250",
+     "mobil": "+49 1722443591",
+     "mail": "lilli.mette@forst.thueringen.de"
+    },
+    {
+     "revier": "Waltershausen",
+     "nr": 8,
+     "name": "Marcel Birke",
+     "tel": "+49 361 573913 - 049",
+     "mobil": "+49 172 3480153",
+     "mail": "marcel.birke@forst.thueringen.de"
+    },
+    {
+     "revier": "Gräfenroda",
+     "nr": 1,
+     "name": "Ramon Enke",
+     "tel": "+49 361 573913 - 067",
+     "mobil": "+49 172 3480146",
+     "mail": "ramon.enke@forst.thueringen.de"
+    },
+    {
+     "revier": "Gotha",
+     "nr": 11,
+     "name": "Thomas Melcher",
+     "tel": "+49 361 573913 - 006",
+     "mobil": "+49 172 3480156",
+     "mail": "thomas.melcher@forst.thueringen.de"
+    },
+    {
+     "revier": "Finsterbergen",
+     "nr": 7,
+     "name": "Tom Bayer",
+     "tel": "",
+     "mobil": "+49 152 22144793",
+     "mail": "tom.bayer@forst.thueringen.de"
+    }
+   ]
+  },
+  "Erfurt-Willrode": {
+   "url": "https://www.thueringenforst.de/ueber-uns/standorte/forstaemter/forstamt-erfurt-willrode/mitarbeiter-kontakt",
+   "tel": "036209 43020",
+   "mail": "",
+   "leiter": "Sascha Schlehahn",
+   "reviere": [
+    {
+     "revier": "Schwansee",
+     "nr": 10,
+     "name": "Alexander Albrecht",
+     "tel": "+49 361 573913 - 065",
+     "mobil": "+49 172 3480110",
+     "mail": "alexander.albrecht@forst.thueringen.de"
+    },
+    {
+     "revier": "Egstedt",
+     "nr": 8,
+     "name": "Andreas Kannebier",
+     "tel": "+49 36209 4302-08",
+     "mobil": "+49 172 2570502",
+     "mail": "andreas.kannebier@forst.thueringen.de"
+    },
+    {
+     "revier": "Singen",
+     "nr": 1,
+     "name": "Gabriel Schirmer",
+     "tel": "",
+     "mobil": "+49 1723480101",
+     "mail": "gabriel.schirmer@forst.thueringen.de"
+    },
+    {
+     "revier": "Stadtilm",
+     "nr": 5,
+     "name": "Juliane Hesselbach",
+     "tel": "+49 36209 43020",
+     "mobil": "+49 172 3480105",
+     "mail": "juliane.hesselbach@forst.thueringen.de"
+    },
+    {
+     "revier": "Wipfra",
+     "nr": 2,
+     "name": "Jörg Stiebitz",
+     "tel": "+49 361 573913 - 065",
+     "mobil": "+49 172 3480102",
+     "mail": "joerg.stiebitz@forst.thueringen.de"
+    },
+    {
+     "revier": "Espenfeld",
+     "nr": 4,
+     "name": "Martin Simons",
+     "tel": "+49 361 573913 - 131",
+     "mobil": "+49 172 3480104",
+     "mail": "martin.simons@forst.thueringen.de"
+    },
+    {
+     "revier": "Siegelbach",
+     "nr": 3,
+     "name": "Michael Tausch",
+     "tel": "+49 36209 43020",
+     "mobil": "+49 1723480103",
+     "mail": "michael.tausch@forst.thueringen.de"
+    },
+    {
+     "revier": "Kranichfeld",
+     "nr": 6,
+     "name": "Nicklas Singer",
+     "tel": "+49 36209 4302 - 0",
+     "mobil": "+49 1723480106",
+     "mail": "nicklas.singer@forst.thueringen.de"
+    },
+    {
+     "revier": "Gräfentonna",
+     "nr": 11,
+     "name": "Ralf Kühnert",
+     "tel": "+49 361 573913 - 234",
+     "mobil": "+49 172 3480111",
+     "mail": "ralf.kuehnert@forst.thueringen.de"
+    },
+    {
+     "revier": "Osthausen",
+     "nr": 7,
+     "name": "Torsten Singer",
+     "tel": "+49 361 573913 - 232",
+     "mobil": "+49 172 3480107",
+     "mail": "torsten.singer@forst.thueringen.de"
+    },
+    {
+     "revier": "Erfurt",
+     "nr": 9,
+     "name": "Uta Krispin",
+     "tel": "+49 361 573913 - 048",
+     "mobil": "+49 172 3480109",
+     "mail": "uta.krispin@forst.thueringen.de"
+    }
+   ]
+  }
+ }
+}

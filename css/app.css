@@ -1151,3 +1151,30 @@ li.fin-zeile { cursor: default; }
 .akt-datum strong { font-size: 20px; line-height: 1; }
 .akt-termin-text { display: grid; gap: 2px; flex: 1; }
 .akt-termin-aktionen { display: flex; gap: 14px; margin-top: 4px; font-size: 15px; }
+
+/* ---------- Profimodus ---------- */
+.profi-kopf { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.profi-kopf h2 { margin: 0; }
+.switch-row.compact { gap: 8px; min-height: 0; padding: 0; border: 0; background: none; }
+.form-gruppe { display: grid; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); }
+.kontakt-karte { display: grid; gap: 4px; margin: 6px 0; }
+.kontakt-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.kontakt-links .btn { text-decoration: none; }
+.et-box { display: grid; gap: 8px; justify-items: start; }
+.wege-liste { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 8px; }
+.wege-liste li { display: flex; gap: 10px; align-items: flex-start; }
+.wege-liste small { display: block; }
+.weg-strich { flex: none; width: 26px; height: 0; margin-top: 10px; border-top: 4px dotted var(--weg); }
+.flurnr { background: none; border: 0; }
+.flurnr span { display: inline-block; transform: translate(-50%, -50%); white-space: nowrap; font: 700 12px/1 system-ui, sans-serif; color: #1E2A22; padding: 1px 4px; border-radius: 5px; background: rgba(255, 255, 255, .78); box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+[data-basemap="dop"] .flurnr span { background: rgba(255, 245, 160, .9); }
+.lagerpunkt span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #B5651D; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.lager-popup p { margin: 4px 0; }
+.lager-popup .btn-row { margin-top: 6px; flex-wrap: wrap; }
+.ersch { display: grid; gap: 10px; }
+.ersch-modus { flex-wrap: wrap; }
+.ersch-map { height: 58vh; min-height: 320px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+.ersch-leiste { display: grid; gap: 8px; }
+.ersch-leiste p { margin: 0; }
+.check-row { display: flex; align-items: center; gap: 8px; }
+.ersch-modus { display: grid; grid-template-columns: 1fr 1fr; }

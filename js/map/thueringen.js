@@ -343,6 +343,7 @@ export function featureInfoUrl([lat, lng]) {
 // Adresse sind mit pending markiert und erscheinen noch nicht in der Auswahl.
 export const FORST = `${GP}/forst/FORST`; // ThüringenForst (Maßstab bis 1:150.000 → ab Zoom 12)
 export const OVERLAYS = [
+  { key: 'grenzpunkte', label: 'Grenzsteine (Grenzpunkte)', group: 'Flurstücke', url: GP, layers: 'Grenzpunkt', minZoom: 16, opacity: 1, note: 'ab Zoomstufe 16' },
   { key: 'rettung', label: 'Rettungspunkte', group: 'Sicherheit', url: FORST, layers: 'rettungspunkte', minZoom: 11 },
   { key: 'baumarten', label: 'Baumarten und Alter (Waldverzeichnis)', group: 'Wald', vector: true, minZoom: 13 },
   { key: 'standort', label: 'Standortkarte (Forst)', group: 'Wald', url: FORST, layers: 'standort_fl', opacity: 0.6, minZoom: 12 },
@@ -384,6 +385,10 @@ export const INFO_SOURCES = {
 /** Erklärungen für die Legenden-„i“ in „Weitere Layer“ */
 export const LAYER_INFO = {
   alkis: { title: 'Flurstücksgrenzen (ALKIS)', text: 'Amtliche Flurstücksgrenzen mit Flurstücksnummern aus dem Liegenschaftskataster Thüringen. Gut zur Orientierung, aber keine rechtsverbindliche Grenzfeststellung – die macht nur ein Vermesser.', legend: [[`${GP}/adv_alkis_wms_th`, 'adv_alkis_flurstuecke']] },
+  grenzpunkte: { title: 'Grenzsteine (Grenzpunkte)', text: 'Grenzpunkte des Liegenschaftskatasters (ALKIS) – dort, wo Flurstücksgrenzen abknicken oder sich treffen. Abgemarkte Punkte sind meist mit einem Grenzstein, Rohr oder Bolzen vermarkt. Die Lage stammt teils aus alten Karten und kann im Gelände einige Meter abweichen; verbindlich bestimmt sie nur ein Vermesser. Grenzsteine dürfen nicht entfernt oder versetzt werden.' },
+  flurnummern: { title: 'Flurstücksnummern', text: 'Schreibt die Flurstücksnummer (z. B. 112/2) in jedes Flurstück. Erscheint ab Zoomstufe 16. Quelle: Liegenschaftskataster Thüringen (ALKIS, © GDI-Th).' },
+  gassen: { title: 'Rückegassen', text: 'Deine eingezeichneten Rückegassen – per Hand, per GPS abgelaufen oder aus dem Luftbild vorgeschlagen. Über „Bearbeiten“ fügst du Gassen hinzu oder löschst sie. Nur auf diesem Gerät gespeichert.' },
+  lager: { title: 'Lagerplätze (Polterplätze)', text: 'Deine Lager- und Polterplätze mit Befahrbarkeit und Beschreibung. Antippen zeigt die Angaben und die Navigation dorthin. Nur auf diesem Gerät gespeichert.' },
   rettung: { title: 'Rettungspunkte', text: 'Forstliche Rettungspunkte von ThüringenForst und Bundesforst. Hier treffen sich Rettungsdienst und Hilfesuchende. Im Notfall 112 anrufen und die Nummer des Rettungspunkts nennen (z. B. SOK-6456). Die Schilder hängen meist an Wegkreuzungen.' },
   standort: { title: 'Standortkarte (Forst)', text: 'Ergebnis der forstlichen Standortskartierung: Wie gut ist der Boden mit Nährstoffen (Nährkraft) und Wasser versorgt, in welcher Klimastufe liegt die Fläche? Das ist die wichtigste Grundlage dafür, welche Baumarten hier dauerhaft gut wachsen.' },
   waldfunktionen: { title: 'Waldfunktionen', text: 'Besondere Aufgaben des Waldes neben der Holzerzeugung: Bodenschutz an steilen Hängen, Erholung, Klima-, Immissions-, Lärm- und Sichtschutz. Bei Maßnahmen sollen diese Funktionen erhalten bleiben – z. B. keine Kahlschläge im Bodenschutzwald.' },

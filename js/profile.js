@@ -6,10 +6,11 @@ import { CATEGORIES } from './map/basemap.js';
 import { formatHa } from './geo.js';
 import { amtlicheFlaecheHa, nutzungAnteile, parcelExact } from './map/thueringen.js';
 import { focusParcel, removeParcel, parcelTitle } from './home.js';
-import { startTour } from './mascot.js';
+import { startTour, say } from './mascot.js';
 import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.js';
 import { buzz } from './thinning/feedback.js';
 import * as erinnerung from './erinnerung.js';
+import { istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen } from './profi.js';
 
 export async function openProfile() {
   const all = await source.allParcels();
@@ -68,8 +69,15 @@ export async function openProfile() {
           field('Name', 'name', { autocomplete: 'name' }),
           field('E-Mail', 'email', { type: 'email', autocomplete: 'email' }),
           field('Forstbetriebsgemeinschaft (FBG)', 'fbg', { placeholder: 'z. B. FBG Ilm-Saale' }),
+          h('div', { class: 'form-gruppe' },
+            field('Ansprechpartner der FBG', 'fbgAnsprech', { autocomplete: 'off' }),
+            h('div', { class: 'form-row' },
+              field('Telefon der FBG', 'fbgTel', { type: 'tel', autocomplete: 'off' }),
+              field('E-Mail der FBG', 'fbgMail', { type: 'email', autocomplete: 'off' }))),
         ),
       ),
+
+      profiKarte(),
 
       h('section', { class: 'card' },
         h('h2', {}, 'Kontodaten'),
@@ -119,6 +127,35 @@ export async function openProfile() {
     const a = Object.assign(document.createElement('a'), { href: url, download: name }); document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 600000);
     toast('Daten gespeichert');
+  }
+
+  /** Profimodus: zusätzliche Funktionen für Betreuer, FBG und Dienstleister */
+  function profiKarte() {
+    const an = istProfi();
+    const n = eigentuemerAnzahl();
+    const eingabe = h('input', { type: 'file', accept: '.xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv', hidden: true, onchange: async (e) => {
+      const f = e.target.files?.[0]; e.target.value = '';
+      if (!f) return;
+      try {
+        const r = await eigentuemerImport(f);
+        toast(`${r.gesamt} Eigentümer übernommen${r.fehler ? `, ${r.fehler} Zeilen ohne Gemarkung/Flur/Flurstück übersprungen` : ''}`);
+        say(`Import fertig: ${r.neu} neu, ${r.aktualisiert} aktualisiert${r.meine ? `, davon ${r.meine} bei deinen Flächen` : ''}. Tippe ein Flurstück an, dann steht der Eigentümer in der Infobox.`);
+      } catch (err) { toast(`Import fehlgeschlagen: ${err.message || err}`); }
+      render();
+    } });
+    return h('section', { class: 'card profi-karte' },
+      h('div', { class: 'profi-kopf' },
+        h('h2', {}, 'Profimodus'),
+        h('label', { class: 'switch-row compact' }, h('span', { class: 'switch-label' }, an ? 'an' : 'aus'),
+          h('input', { type: 'checkbox', role: 'switch', checked: an, 'aria-label': 'Profimodus', onchange: (e) => { store.update((st) => { st.settings.profi = e.target.checked; }); render(); toast(e.target.checked ? 'Profimodus an' : 'Profimodus aus'); } }))),
+      h('p', { class: 'hint' }, 'Für Betreuer, FBG und Dienstleister: Eigentümer je Flurstück, Wanderwege in der Flurstücks-Info, Rückegassen und Lagerplätze als eigene Kartenebenen (unter „Weitere Layer“).'),
+      an ? h('div', { class: 'form' },
+        h('p', { class: 'sheet-label' }, 'Eigentümer'),
+        h('p', {}, n ? `${n} Flurstücke mit Eigentümer hinterlegt.` : 'Noch keine Eigentümer hinterlegt.'),
+        h('label', { class: 'btn btn-primary' }, h('span', { html: icon.plus }), 'Excel-Tabelle importieren (.xlsx)', eingabe),
+        h('p', { class: 'hint' }, 'Spalten: Gemarkung · Flur · Flurstück · Vorname · Nachname · Straße · Hausnummer · PLZ · Ort · Telefon · E-Mail. Mit Kopfzeile ist die Reihenfolge egal. Flurstück als „112“ oder „112/2“. Gleiche Flurstücke werden aktualisiert.'),
+        h('p', { class: 'hint' }, 'Eigentümerdaten sind personenbezogen: Sie bleiben nur auf diesem Gerät und sind nicht in „Daten sichern“ enthalten.'),
+        n ? h('button', { class: 'btn btn-danger-ghost', onclick: async () => { if (await confirmDialog('Alle Eigentümerdaten löschen?', { ok: 'Löschen', danger: true, body: `${n} Einträge werden von diesem Gerät entfernt.` })) { eigentuemerAlleLoeschen(); render(); toast('Eigentümerdaten gelöscht'); } } }, 'Alle Eigentümerdaten löschen') : null) : null);
   }
 
   /** Erinnerungen an anstehende Maßnahmen */

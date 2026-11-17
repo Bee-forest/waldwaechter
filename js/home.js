@@ -15,6 +15,10 @@ import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt, KORREKTUR_ARTEN, SCHICHTEN, korrAlter, pflanzungAm } from './map/bestand.js';
 import { empfehlung, bztName, GRUPPEN, BAUMARTEN_KURZ, eichenHinweis } from './bzt.js';
+import { wanderwege } from './map/wanderwege.js';
+import { createFlurnummernLayer } from './map/flurnummern.js';
+import { createErschliessungLayers, openErschliessungEditor } from './map/erschliessung.js';
+import { istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
 import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
@@ -123,6 +127,9 @@ export async function initHome(root) {
   renderBaseSwitch();
   // Fachebenen (Standortkarte, Schutzgebiete, …)
   for (const o of OVERLAYS) if (!o.pending) overlays[o.key] = overlayLayer(o);
+  overlays.flurnummern = createFlurnummernLayer(map, () => ALL);
+  const ersch = createErschliessungLayers(map, { klickbar: () => istProfi() });
+  overlays.gassen = ersch.gassen; overlays.lager = ersch.lager;
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
   // Verschiebt man die Karte von Hand, läuft sie nicht mehr mit (Verfolgung bleibt an)
   map.on('dragstart', () => { if (ortung === 'folgen') { ortung = 'an'; ortBtn(); } });
@@ -219,6 +226,7 @@ function zeigeBesonderheit(f, p) {
   say(`${f.title}${extra}:${kartiert} ${f.text}${angaben ? ` (${angaben})` : ''}`, { duration: 0, actions: actions.length ? actions : undefined });
 }
 
+const PROFI_LAYER = new Set(['gassen', 'lager']);
 export function applyLayerVisibility() {
   const { layers } = store.get().settings;
   for (const [k, g] of Object.entries(catGroups)) {
@@ -226,7 +234,8 @@ export function applyLayerVisibility() {
   }
   if (layers.info) { if (!map.hasLayer(infoLayer)) infoLayer.addTo(map); } else map.removeLayer(infoLayer);
   for (const [k, l] of Object.entries(overlays)) {
-    if (layers[k]) { if (!map.hasLayer(l)) l.addTo(map); } else map.removeLayer(l);
+    const an = layers[k] && (!PROFI_LAYER.has(k) || istProfi());
+    if (an) { if (!map.hasLayer(l)) l.addTo(map); } else map.removeLayer(l);
   }
   if (layers.rescue) { if (!map.hasLayer(rescueLayer)) { drawRescue(); rescueLayer.addTo(map); } } else map.removeLayer(rescueLayer);
 }
@@ -328,6 +337,34 @@ function rescueBlock(latlng) {
   return block;
 }
 
+function eigentuemerBlock(p) {
+  const host = h('div');
+  const e0 = eigentuemerVon(p);
+  const block = klapp('eigentuemer', 'Eigentümer', host, e0 ? etName(e0) || 'hinterlegt' : 'nicht hinterlegt');
+  const zeichne = () => { const e = eigentuemerVon(p); block.setKurz(e ? etName(e) || 'hinterlegt' : 'nicht hinterlegt'); fill(host, eigentuemerInhalt(p, zeichne)); };
+  zeichne();
+  return block;
+}
+
+const WEG_FARBE = '#7B3FA0';
+function wanderwegeBlock(p) {
+  const host = h('div', { 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Suche Wanderwege …'));
+  const block = klapp('wanderwege', 'Wanderwege', host, 'Suche …');
+  wanderwege(p).then((wege) => {
+    if (selected?.parcel.id !== p.id) return;
+    if (!wege.length) { block.setKurz('keine'); fill(host, h('p', { class: 'muted' }, 'Durch dieses Flurstück führt kein in OpenStreetMap erfasster Wanderweg.')); return; }
+    block.setKurz(wege.map((w) => w.name).slice(0, 2).join(', ') + (wege.length > 2 ? ` +${wege.length - 2}` : ''));
+    for (const w of wege) for (const l of w.linien) selectionLayer.addLayer(L.polyline(l, { color: WEG_FARBE, weight: 5, opacity: 0.85, dashArray: '2 8', lineCap: 'round', interactive: false }));
+    fill(host,
+      h('ul', { class: 'wege-liste' }, wege.map((w) => h('li', {},
+        h('span', { class: 'weg-strich', style: `--weg:${WEG_FARBE}`, 'aria-hidden': 'true' }),
+        h('div', {}, h('strong', {}, w.name, w.ref ? ` (${w.ref})` : ''),
+          h('small', { class: 'muted' }, [`ca. ${formatDist(Math.round(w.laengeM / 10) * 10)} im Flurstück`, w.netz ? `${w.netz}er Wanderweg` : null, w.betreiber].filter(Boolean).join(' · ')))))),
+      h('p', { class: 'hint' }, 'Lila gepunktet in der Karte. Bei Holzernte und Wegebau: Wanderwege sichern oder sperren, Beschilderung erhalten, Verkehrssicherung beachten. Quelle: © OpenStreetMap-Mitwirkende, live abgefragt.'));
+  }).catch(() => { block.setKurz('nicht erreichbar'); fill(host, h('p', { class: 'muted' }, 'Die Wanderwege konnten gerade nicht abgefragt werden (keine Verbindung zu OpenStreetMap).')); });
+  return block;
+}
+
 function showRescueOnMap(rp, from) {
   rescueMarkers?.remove(); // immer nur ein Rettungspunkt gleichzeitig
   rescueMarkers = L.layerGroup([
@@ -412,14 +449,37 @@ function renderGeoInfo(info) {
       })),
     ));
   }
-  // Zuständigkeit: Forstamt/Revier und die eigene FBG
-  const fbg = store.get().profile.fbg;
+  // Zuständigkeit: Forstamt/Revier mit Revierförster und die eigene FBG – jeweils mit Telefon und E-Mail
+  const pr = store.get().profile;
+  const fbg = pr.fbg;
+  const z = info.zustaendig;
+  // Kontaktangaben, falls der Dienst sie mitliefert (Feldnamen je nach Stand des Dienstes)
+  const dienst = { name: '', tel: '', mail: '' };
+  if (z) for (const [k, v] of Object.entries(z)) {
+    if (/mail/i.test(k)) dienst.mail ||= v;
+    else if (/tel|fon/i.test(k)) dienst.tel ||= v;
+    else if (/leiter|f(oe|ö)rster|ansprech/i.test(k)) dienst.name ||= v;
+  }
+  const eigen = revierKontakt(z) || {};
+  const rf = { name: eigen.name || dienst.name, tel: eigen.tel || dienst.tel, mail: eigen.mail || dienst.mail };
   g.zust.push(h('div', { class: 'geo-card' },
-    h('p', { class: 'geo-kicker' }, 'Zuständig'),
-    info.zustaendig ? h('p', {}, h('strong', {}, `Forstamt ${info.zustaendig.Forstamt || '–'}`), info.zustaendig.Revier ? `, Revier ${info.zustaendig.Revier}` : '') : null,
-    info.zustaendig ? h('p', { class: 'hint' }, 'ThüringenForst berät zu Waldbau, Förderung und Waldschutz.') : null,
+    h('p', { class: 'geo-kicker' }, 'Hoheitsförster (ThüringenForst)'),
+    z ? h('p', {}, h('strong', {}, `Forstamt ${z.Forstamt || '–'}`), z.Revier ? `, Revier ${z.Revier}` : '') : h('p', { class: 'muted' }, 'Zuständigkeit gerade nicht abrufbar.'),
+    z ? h('div', { class: 'kontakt-karte' },
+      h('span', { class: 'muted' }, 'Revierförster'),
+      h('strong', {}, rf.name || 'Name noch nicht hinterlegt'),
+      kontaktLinks(rf),
+      h('button', { class: 'link-btn', onclick: async () => { if (await revierKontaktBearbeiten(z)) { toast('Kontakt gespeichert'); renderInfo(); } } }, rf.name || rf.tel || rf.mail ? 'Kontakt bearbeiten' : 'Name, Telefon und E-Mail eintragen')) : null,
+    z ? h('p', { class: 'hint' }, 'Der Revierförster berät kostenlos zu Waldbau, Förderung, Waldschutz und Holzverkauf. Eingetragene Kontakte gelten für alle Flurstücke im Revier.') : null,
+  ));
+  g.zust.push(h('div', { class: 'geo-card' },
+    h('p', { class: 'geo-kicker' }, 'Forstbetriebsgemeinschaft'),
     fbg
-      ? h('p', {}, h('strong', {}, 'Deine FBG: '), fbg)
+      ? h('div', { class: 'kontakt-karte' },
+          h('strong', {}, fbg),
+          pr.fbgAnsprech ? h('span', {}, `Ansprechpartner: ${pr.fbgAnsprech}`) : null,
+          kontaktLinks({ tel: pr.fbgTel, mail: pr.fbgMail }),
+          !pr.fbgAnsprech && !pr.fbgTel && !pr.fbgMail ? h('button', { class: 'link-btn', onclick: () => openProfile() }, 'Ansprechpartner, Telefon und E-Mail im Profil eintragen') : null)
       : h('p', { class: 'hint' }, 'Bist du Mitglied einer Forstbetriebsgemeinschaft? ',
           h('button', { class: 'link-btn', onclick: () => openProfile() }, 'Im Profil eintragen')),
   ));
@@ -428,7 +488,7 @@ function renderGeoInfo(info) {
   g.vorschau.standort = st0 ? (st0.desc ? st0.desc[0].toUpperCase() + st0.desc.slice(1) : `Standortsgruppe ${st0.gruppe}`) : 'keine Standortskartierung';
   g.vorschau.schutz = [info.schutz.length ? info.schutz.map((x) => x.short).filter((v, i, arr) => arr.indexOf(v) === i).join(', ') : 'kein Schutzgebiet',
     info.funktion.length ? `${info.funktion.length} Waldfunktion${info.funktion.length > 1 ? 'en' : ''}` : null].filter(Boolean).join(' · ');
-  g.vorschau.zust = info.zustaendig?.Forstamt ? `Forstamt ${info.zustaendig.Forstamt}${info.zustaendig.Revier ? `, Revier ${info.zustaendig.Revier}` : ''}` : (fbg || '');
+  g.vorschau.zust = [z?.Revier ? `Revier ${z.Revier}${rf.name ? ` (${rf.name})` : ''}` : z?.Forstamt ? `Forstamt ${z.Forstamt}` : null, fbg || null].filter(Boolean).join(' · ');
   return g;
 }
 
@@ -547,7 +607,7 @@ function geoInfoBlock(latlng, parcelId = null) {
     standort: klapp('standort', 'Standort und Bestand', [B.standort, quelle.cloneNode(true)], 'Lädt …'),
     bzt: klapp('bzt', 'Baumartenempfehlung', B.bzt, 'Lädt …'),
     schutz: klapp('schutz', 'Schutzstatus und Waldfunktionen', [B.schutz, quelle.cloneNode(true)], 'Lädt …'),
-    zust: klapp('zust', 'Zuständigkeiten', B.zust, 'Lädt …'),
+    zust: klapp('zust', 'Ansprechpartner', B.zust, 'Lädt …'),
   };
   const bestandP = bestandAt([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]]).catch(() => null);
   queryPoint(latlng).then(async (info) => {
@@ -682,6 +742,8 @@ async function renderInfo() {
       h('div', { class: 'wide' }, h('dt', {}, 'Angetippter Punkt'), h('dd', { class: 'mono' }, `${latlng[0].toFixed(5)} N, ${latlng[1].toFixed(5)} O`)),
     ),
     catSection,
+    istProfi() ? eigentuemerBlock(p) : null,
+    istProfi() && isAlkis ? wanderwegeBlock(p) : null,
     isAlkis ? rescueBlock(latlng) : null,
     isAlkis ? geoInfoBlock(latlng, p.id) : null,
     isAlkis ? null : h('div', { class: 'info-block' },
@@ -847,7 +909,15 @@ function openLayerSheet() {
         store.update((st) => { st.settings.layers.alkis = e.target.checked; });
         base.setAlkis(e.target.checked);
       } }),
-      groups.map((g) => [
+      sw('flurnummern', 'Flurstücksnummern', { note: 'ab Zoomstufe 16' }),
+      OVERLAYS.filter((o) => o.group === 'Flurstücke').map((o) => sw(o.key, o.label, { note: o.note })),
+      istProfi() ? [
+        h('p', { class: 'sheet-label' }, 'Erschließung (Profimodus)'),
+        sw('gassen', 'Rückegassen', { color: '#8D5A2B' }),
+        sw('lager', 'Lagerplätze (Polterplätze)', { color: '#B5651D' }),
+        h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten'),
+      ] : null,
+      groups.filter((g) => g !== 'Flurstücke').map((g) => [
         h('p', { class: 'sheet-label' }, g),
         OVERLAYS.filter((o) => o.group === g).map((o) => sw(o.key, o.label, { disabled: o.pending, note: o.pending ? 'wird gerade angebunden' : null })),
       ]),

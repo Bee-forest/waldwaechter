@@ -20,9 +20,20 @@ function ladeBild(url, ms = 10000) {
  * @param {{ nord, sued, west, ost, basemap: 'osm'|'dop', breitePx?: number }} o
  * @returns {Promise<{ jpeg: Uint8Array, w: number, h: number } | null>}  null, wenn keine Kachel geladen werden konnte
  */
-export async function kartenBild({ nord, sued, west, ost, basemap = 'osm', breitePx = 1400, beschriftung = false }) {
+export async function kartenBild(o) {
+  const l = await kartenLeinwand(o);
+  if (!l) return null;
+  try {
+    const blob = await new Promise((res) => l.cv.toBlob(res, 'image/jpeg', 0.85));
+    if (!blob) return null;
+    return { jpeg: new Uint8Array(await blob.arrayBuffer()), w: l.w, h: l.h };
+  } catch { return null; } // Leinwand durch fremde Kacheln gesperrt
+}
+
+/** Kacheln eines Ausschnitts auf einer Leinwand; liefert { cv, w, h, z, x0, y0 } (Pixel in Kachelkoordinaten der Zoomstufe z) */
+export async function kartenLeinwand({ nord, sued, west, ost, basemap = 'osm', breitePx = 1400, beschriftung = false, zoom = null }) {
   const maxZ = basemap === 'osm' ? 19 : 20;
-  let z = Math.ceil(Math.log2(breitePx / (((ost - west) / 360) * 256)));
+  let z = zoom ?? Math.ceil(Math.log2(breitePx / (((ost - west) / 360) * 256)));
   z = Math.max(10, Math.min(maxZ, z));
   // höchstens ca. 2400 Pixel Kantenlänge
   while (z > 10 && Math.max(lon2px(ost, z) - lon2px(west, z), lat2px(sued, z) - lat2px(nord, z)) > 2400) z--;
@@ -45,10 +56,6 @@ export async function kartenBild({ nord, sued, west, ost, basemap = 'osm', breit
     bilder.forEach((img, i) => { if (img) { ctx.drawImage(img, kacheln[i][0] * 256 - x0, kacheln[i][1] * 256 - y0, 256, 256); if (e === 0) geladen++; } });
   }
   if (!geladen) return null;
-  try {
-    const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.85));
-    if (!blob) return null;
-    return { jpeg: new Uint8Array(await blob.arrayBuffer()), w, h };
-  } catch { return null; } // Leinwand durch fremde Kacheln gesperrt
+  return { cv, w, h, z, x0, y0, lon2px, lat2px };
 }
 export const KARTEN_QUELLE = { osm: '© OpenStreetMap-Mitwirkende', dop: 'Digitales Orthophoto (Luftbild) © GDI-Th, Datenlizenz Deutschland – Namensnennung 2.0 (dl-de/by-2-0)' };

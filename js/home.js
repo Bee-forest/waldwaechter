@@ -35,6 +35,7 @@ const catGroups = {};
 let allParcelsLayer, infoLayer, rescueLayer, selectionLayer, posMarker;
 const overlays = {};
 let selected = null; // { parcel, latlng }
+let zoomHintGezeigt = false; // Zoom-Hinweis in dieser Suche schon gezeigt?
 let rescueMarkers = null;
 /** Entfernt alles, was zur vorherigen Auswahl gehört (Umriss, „i“, Rettungspunkt-Linie) */
 function clearMarks() { selectionLayer?.clearLayers(); rescueMarkers?.remove(); rescueMarkers = null; }
@@ -136,10 +137,19 @@ export async function initHome(root) {
   map.on('moveend', () => {
     try { const c = map.getCenter(); localStorage.setItem('waldwaechter.view', JSON.stringify({ c: [c.lat, c.lng], z: map.getZoom() })); } catch { /* egal */ }
   });
-  const updateZoomHint = () => { zoomHint.hidden = map.getZoom() >= ALKIS_MIN_ZOOM || store.get().settings.layers.alkis === false; };
+  // Hinweis „näher heranzoomen“: einmal pro Suche, kurz eingeblendet. Nach dem Antippen eines Flurstücks
+  // ist er wieder „scharf“ für die nächste Suche.
+  zoomHint.hidden = true;
+  let hintTimer = 0;
+  const updateZoomHint = () => {
+    const zuWeit = map.getZoom() < ALKIS_MIN_ZOOM && store.get().settings.layers.alkis !== false;
+    if (!zuWeit) { zoomHint.hidden = true; clearTimeout(hintTimer); return; }
+    if (zoomHintGezeigt) return;
+    zoomHintGezeigt = true;
+    zoomHint.hidden = false;
+    clearTimeout(hintTimer); hintTimer = setTimeout(() => { zoomHint.hidden = true; }, 3500);
+  };
   map.on('zoomend', updateZoomHint);
-  store.subscribe(updateZoomHint);
-  updateZoomHint();
 
   osmLayer = createOsmFeatureLayer(map, () => store.get().settings.layers);
   allParcelsLayer = L.layerGroup().addTo(map);
@@ -265,6 +275,7 @@ async function drawRescue() {
 
 async function select(parcel, latlng) {
   selected = { parcel, latlng };
+  zoomHintGezeigt = false; // nächste Suche darf den Hinweis wieder einmal zeigen
   clearMarks();
   selectionLayer.addLayer(L.polygon(polysOf(parcel), { color: '#FFFFFF', weight: 3.5, fillColor: '#1F4A2C', fillOpacity: 0.35, interactive: false }));
   selectionLayer.addLayer(infoPin(latlng));

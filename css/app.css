@@ -1272,3 +1272,9 @@ li.fin-zeile { cursor: default; }
 .ampel-karte.ampel-rot { border-left: 5px solid #C62828; }
 .ampel-karte.ampel-gelb { border-left: 5px solid #F9A825; }
 .ampel-karte.ampel-gruen { border-left: 5px solid #2E7D32; }
+/* Reihenmuster-Editor */
+.muster-editor { display: grid; gap: 8px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.muster-reihen { margin: 0; padding-left: 26px; display: grid; gap: 6px; }
+.muster-reihen li { display: flex; align-items: center; gap: 8px; }
+.muster-reihen select { flex: 1; min-width: 0; }
+.muster-reihen .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px #fff; }

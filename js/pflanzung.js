@@ -165,20 +165,21 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   const nHaVon = (x) => { if (x.nHa == null) { const V = verbandVon(x.name); x.nHa = Math.round((V[0] + V[1]) / 2 / 100) * 100; } return x.nHa; };
   const verbandVon = (name) => VERBAND[artInfo(name)?.verband || 'elb'][s.art === 'voranbau' ? 'voranbau' : 'frei'];
   // Übermalte Pflanzen gehören zu festen Pflanzplätzen; ändern sich Fläche, Baumarten, Verband, Gassen oder Mischung, gilt die Übermalung nicht mehr
-  const basis = () => JSON.stringify([alle(), s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed, s.reihe]);
+  const basis = () => JSON.stringify([alle(), s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed, s.reihe, s.vert.form === 'muster' ? musterListe() : null]);
+  const musterListe = () => { const namen = s.arten.map((x) => x.name); const m = (s.vert.muster || []).filter((n) => namen.includes(n)); return m.length ? m : namen; };
   const layoutArten = () => s.arten.map((x) => ({ name: x.name, anteil: Number(x.anteil) || 0, nHa: nHaVon(x), gruppeHa: artInfo(x.name)?.gruppeHa || 0 }));
   function layout(mitPunkten = false) {
     if (s.gassen.winkel == null && alle().length) s.gassen.winkel = Math.round(hauptRichtung(groesste()));
     const b = basis();
     if (s.vert.basis && s.vert.basis !== b && Object.keys(s.vert.mal).length) { s.vert.mal = {}; toast('Übermalung zurückgesetzt, weil sich die Pflanzung geändert hat.'); }
     s.vert.basis = b;
-    return pflanzLayout({ ring: alle(), arten: layoutArten(), gassen: s.gassen, form: s.vert.form, seed: s.vert.seed, mal: s.vert.mal, reihe: s.reihe, frei: s.vert.frei }, mitPunkten);
+    return pflanzLayout({ ring: alle(), arten: layoutArten(), gassen: s.gassen, form: s.vert.form, seed: s.vert.seed, mal: s.vert.mal, reihe: s.reihe, frei: s.vert.frei, muster: musterListe() }, mitPunkten);
   }
 
   // ---------- Karte ----------
   function karteNeu() {
     umlauf?.stop(); karte?.remove();
-    karte = miniKarte(mapEl, byId[s.parcelId] || null, { zoom: 17 });
+    karte = miniKarte(mapEl, byId[s.parcelId] || null, { zoom: 17, hell: true });
     const map = karte.map;
     map.doubleClickZoom.disable();
     lyr.addTo(map); lyrGassen.addTo(map); lyrPunkte.addTo(map);
@@ -294,8 +295,10 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
       for (const st of streifen(lay)) L.polygon(st.ring, { renderer: canvas, stroke: false, fillColor: farbe(st.art === 'mix' ? s.grund : st.art), fillOpacity: 0.7, interactive: false }).addTo(lyrPunkte);
       return;
     }
-    const z = karte.map.getZoom(), frei = s.vert.form === 'frei', rad = frei ? (z >= 19 ? 6 : z >= 17 ? 4.5 : 3) : z >= 19 ? 3.2 : z >= 18 ? 2.3 : z >= 17 ? 1.6 : 1.1;
-    marker = lay.punkte.map(([x, y, art]) => L.circleMarker(lay.R.toLL([x, y]), { renderer: canvas, radius: rad, stroke: frei, color: '#fff', weight: 1.5, fillColor: farbe(art), fillOpacity: 1, interactive: false }).addTo(lyrPunkte));
+    const z = karte.map.getZoom(), frei = s.vert.form === 'frei', rad = frei ? (z >= 19 ? 6 : z >= 17 ? 4.5 : 3) : z >= 19 ? 3.6 : z >= 18 ? 2.7 : z >= 17 ? 2 : 1.4;
+    // weißer Rand (Halo) und kräftige Farbe: auf Luftbild, Karte und hellem Grund gut sichtbar
+    const rand = frei || z >= 17;
+    marker = lay.punkte.map(([x, y, art]) => L.circleMarker(lay.R.toLL([x, y]), { renderer: canvas, radius: rad, stroke: rand, color: '#fff', weight: z >= 18 ? 1.5 : 1, fillColor: kraeftig(farbe(art)), fillOpacity: 1, interactive: false }).addTo(lyrPunkte));
   }
   function malen(e) {
     const ll = karte.map.mouseEventToLatLng(e);
@@ -335,6 +338,44 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     karte.map.getContainer().classList.toggle('malt', !!p);
   }
   const farbe = (name) => artInfo(name)?.farbe || '#2E7D32';
+  // Farbe für Pflanzpunkte: Sättigung anheben, zu helle Töne abdunkeln
+  const kraeftigCache = new Map();
+  const kraeftig = (hex) => {
+    if (kraeftigCache.has(hex)) return kraeftigCache.get(hex);
+    const n = parseInt(hex.slice(1), 16); let r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let hh = 0, l = (mx + mn) / 2, sat = 0;
+    if (mx !== mn) { const d = mx - mn; sat = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); hh = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; hh /= 6; }
+    sat = Math.min(1, sat * 1.35 + 0.1); l = Math.min(0.52, Math.max(0.32, l));
+    const f = (t) => { const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat, p = 2 * l - q; t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    const out = `#${[f(hh + 1 / 3), f(hh), f(hh - 1 / 3)].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`;
+    kraeftigCache.set(hex, out); return out;
+  };
+  /** Reihenmuster bearbeiten: Baumart je Reihe, Muster wird wiederholt; Reihen- und Pflanzabstand */
+  function musterEditor() {
+    const m = musterListe();
+    const kuerzel = (name) => (artInfo(name)?.code && s.arten.filter((x) => artInfo(x.name)?.code === artInfo(name).code).length === 1 ? artInfo(name).code : name.slice(0, 3).toUpperCase());
+    const setze = (neu) => { s.vert.muster = neu; s.vert.mal = {}; render(); };
+    const text = h('input', { type: 'text', value: m.map(kuerzel).join('-'), placeholder: 'z. B. BU-BU-EI', 'aria-label': 'Muster als Text',
+      onchange: (e) => {
+        const teile = e.target.value.split(/[\s,;\-–\/]+/).map((t) => t.trim()).filter(Boolean);
+        const neu = teile.map((t) => s.arten.find((x) => kuerzel(x.name).toLowerCase() === t.toLowerCase()) || s.arten.find((x) => x.name.toLowerCase().startsWith(t.toLowerCase()))).filter(Boolean).map((x) => x.name);
+        if (neu.length) setze(neu); else toast('Muster nicht erkannt – Kürzel oder Anfang des Baumartennamens verwenden.');
+      } });
+    const dAktuell = s.arten.length ? 10000 / (nHaVon(s.arten[0]) * s.reihe) : 1.5;
+    return h('div', { class: 'muster-editor' },
+      h('p', { class: 'sheet-label' }, 'Reihenmuster'),
+      h('ol', { class: 'muster-reihen' }, m.map((n, i) => h('li', {},
+        h('span', { class: 'dot', style: `background:${kraeftig(farbe(n))}` }),
+        h('select', { 'aria-label': `Reihe ${i + 1}`, onchange: (e) => { const neu = [...m]; neu[i] = e.target.value; setze(neu); } }, s.arten.map((x) => h('option', { value: x.name, selected: x.name === n }, x.name))),
+        m.length > 1 ? h('button', { type: 'button', class: 'link-btn', 'aria-label': `Reihe ${i + 1} entfernen`, onclick: () => setze(m.filter((_, k) => k !== i)) }, 'entfernen') : null))),
+      h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn btn-small', onclick: () => setze([...m, m[m.length - 1] || s.arten[0]?.name]) }, '+ Reihe')),
+      h('label', {}, 'Muster als Text (wird wiederholt)', text),
+      h('div', { class: 'form-row' },
+        h('label', {}, 'Reihenabstand (m)', h('input', { type: 'number', min: 1, max: 5, step: 0.1, inputmode: 'decimal', value: s.reihe, onchange: (e) => { const v = zahl(e.target.value); if (v >= 1 && v <= 5) { s.reihe = Math.round(v * 10) / 10; s.vert.mal = {}; render(); } } })),
+        h('label', {}, 'Pflanzabstand in der Reihe (m)', h('input', { type: 'number', min: 0.3, max: 10, step: 0.05, inputmode: 'decimal', value: Math.round(dAktuell * 100) / 100,
+          onchange: (e) => { const d = zahl(e.target.value); if (d > 0) { s.arten.forEach((x) => { x.nHa = 10000 / (d * s.reihe); }); s.vert.mal = {}; render(); } } }))),
+      h('p', { class: 'hint' }, `Muster: ${m.map(kuerzel).join(' – ')}, dann von vorn. Die Stückzahlen je Baumart stehen unten in der Aufteilung.`));
+  }
   function renderStatus() {
     // „Weiter“ freigeben, sobald die Fläche drei Punkte hat (ohne die Seite neu aufzubauen)
     if (schritt === 0 && weiterBtn) weiterBtn.disabled = !alle().length;
@@ -563,6 +604,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
           onclick: () => { if (s.vert.form === k) return; s.vert.form = k; s.vert.mal = {}; render(); } }, f.label))),
         h('p', { class: 'hint' }, `${F.text}${s.vert.form !== 'einzeln' && s.vert.form !== 'reihen' ? ' Baumarten mit Mindestgruppengröße (z. B. Eiche ab 0,3 ha) werden automatisch zu größeren Gruppen zusammengefasst.' : ''}`),
         mapEl,
+        s.vert.form === 'muster' ? musterEditor() : null,
         ...(s.vert.form === 'frei' ? freiWerkzeuge(pinselChip) : [
         h('p', { class: 'sheet-label' }, 'Übermalen'),
         h('div', { class: 'art-chips pinsel' }, pinselChip(null, 'Karte verschieben', '#2E7D32'), s.arten.map((x) => pinselChip(x.name, x.name, farbe(x.name))), pinselChip('__auto', 'Radierer (automatisch)', '#9E9E9E')),

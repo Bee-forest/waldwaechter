@@ -19,6 +19,11 @@ export const BASEMAPS = {
     maxZoom: 21, maxNativeZoom: 19,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende',
   }),
+  // Heller Hintergrund (CARTO Positron) – Pflanzpunkte bleiben gut sichtbar
+  hell: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 21, maxNativeZoom: 20,
+    attribution: '© <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }),
   // TopPlusOpen des Bundesamts für Kartographie und Geodäsie (amtliche Topokarte)
   topo: () => L.tileLayer('https://sgx.geodatenzentrum.de/wmts_topplus_open/tile/1.0.0/web/default/WEBMERCATOR/{z}/{y}/{x}.png', {
     maxZoom: 21, maxNativeZoom: 18,

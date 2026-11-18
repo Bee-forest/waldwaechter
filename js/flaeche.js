@@ -10,7 +10,7 @@ const STIL_FLURSTUECK = { color: '#F2C94C', weight: 3, fillOpacity: 0.06, intera
 const STIL_MASSNAHME = { color: '#F26B1D', weight: 3, fillColor: '#F26B1D', fillOpacity: 0.28, interactive: false };
 
 /** Kleine Karte mit Flurstück; optional weitere Fläche hervorgehoben. */
-export function miniKarte(el, parcel, { zoom = 17 } = {}) {
+export function miniKarte(el, parcel, { zoom = 17, hell = false } = {}) {
   const settings = store.get().settings || {};
   const polys = parcel ? polysOf(parcel) : [];
   const base = createBaseMap(el, { center: parcel ? centroid(parcel.ring) : [50.9, 11.0], zoom, basemap: settings.basemap, alkis: false });
@@ -21,10 +21,10 @@ export function miniKarte(el, parcel, { zoom = 17 } = {}) {
       const el = L.DomUtil.create('div', 'segmented compact karten-schalter');
       el.setAttribute('role', 'radiogroup'); el.setAttribute('aria-label', 'Hintergrundkarte');
       const malen = () => {
-        el.replaceChildren(...Object.entries(BASEMAP_LABELS).map(([k, l]) => {
+        el.replaceChildren(...Object.entries(hell ? { dop: 'Luftbild', osm: 'Karte', hell: 'Hell' } : BASEMAP_LABELS).map(([k, l]) => {
           const b = L.DomUtil.create('button', '');
           b.type = 'button'; b.textContent = l; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(base.basemap === k));
-          b.onclick = (e) => { e.preventDefault(); base.setBasemap(k); store.update((x) => { x.settings.basemap = k; }); malen(); };
+          b.onclick = (e) => { e.preventDefault(); base.setBasemap(k); if (k !== 'hell') store.update((x) => { x.settings.basemap = k; }); malen(); };
           return b;
         }));
       };

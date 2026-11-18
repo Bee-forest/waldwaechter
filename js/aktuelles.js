@@ -4,6 +4,7 @@ import { store, uid } from './store.js';
 import { kopfInhalt } from './home.js';
 import { centroid, polysOf, distance } from './geo.js';
 import { passtFlurstueck } from './profi.js';
+import { ladeRisiko, bewerte, risikoInhalt } from './risiko.js';
 
 const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const monatText = (ym) => { const [y, m] = String(ym || '').split('-').map(Number); return y && m ? `${MONATE[m - 1]} ${y}` : ''; };
@@ -11,6 +12,7 @@ const preisText = (s) => (s.von === s.bis ? `${s.von}` : `${s.von}–${s.bis}`) 
 
 let root;
 let preise = null, termineFbg = null, wbi = null, wbiFehler = false, wbiLaedt = false;
+let risiko = null, risikoFehler = false, risikoPt = null;
 
 export function initAktuelles(el) {
   root = el;
@@ -40,6 +42,7 @@ function render() {
   fill(root,
     h('header', { class: 'card app-head' }, kopfInhalt()),
     h('div', { class: 'view-head akt-kopf' }, h('h1', {}, 'Aktuelles')),
+    risikoKachel(),
     waldbrandKachel(),
     holzpreisKachel(),
     termineKachel(),
@@ -63,7 +66,19 @@ function holzpreisKachel() {
       h('ul', { class: 'akt-preise' }, zeilen.map(({ art, s }) => h('li', {},
         h('span', {}, h('strong', {}, art), ' ', h('small', { class: 'muted' }, [s.sortiment, s.guete, s.staerke].filter(Boolean).join(' · '))),
         h('strong', {}, preisText(s))))),
-      h('span', { class: 'akt-mehr' }, 'Alle Baumarten und Sortimente', h('span', { html: icon.chevron }))));
+      h('span', { class: 'akt-mehr' }, 'Alle Baumarten und Sortimente', h('span', { html: icon.chevron }))),
+    h('button', { type: 'button', class: 'btn btn-block', onclick: () => import('./schaden.js').then((x) => x.openHolzVerkaufen()) }, 'Holz verkaufen – Anfrage an die FBG'));
+}
+
+// ---------- Wetter- und Risikowarnungen ----------
+function risikoKachel() {
+  const reg = region();
+  const key = reg.pt.map((v) => v.toFixed(2)).join(',');
+  if (risikoPt !== key) { risikoPt = key; risiko = null; risikoFehler = false; ladeRisiko(reg.pt).then((d) => { risiko = bewerte(d); render(); }).catch(() => { risikoFehler = true; render(); }); }
+  const kopf = h('div', { class: 'akt-titelzeile' }, h('h2', { class: 'kachel-titel' }, 'Wetter und Risiko'), h('span', { class: 'akt-stand' }, reg.name));
+  if (risikoFehler) return h('section', { class: 'kachel' }, kopf, h('p', { class: 'muted' }, 'Die Wetterdaten sind gerade nicht erreichbar.'));
+  if (!risiko) return h('section', { class: 'kachel' }, kopf, h('p', { class: 'muted' }, 'Wird geladen …'));
+  return h('section', { class: 'kachel' }, kopf, risikoInhalt(risiko), h('p', { class: 'hint' }, 'Vorhersage: Open-Meteo (u. a. Modelle des DWD). Amtliche Unwetterwarnungen: warnwetter.de bzw. DWD-WarnWetter-App.'));
 }
 
 function openHolzpreise() {

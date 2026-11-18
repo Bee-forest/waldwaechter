@@ -32,6 +32,8 @@ export const MEASURE_TYPES = {
   durchforstung:{ label: 'Durchforstung mit GPS', gruppe: 'holzernte', info: 'Geführt per GPS-Raster', fields: [] },
   holzernte_df: { label: 'Durchforstung', gruppe: 'holzernte', info: 'Ohne GPS-Raster dokumentieren', fields: [['verfahren', 'Verfahren', ['motormanuell', 'Harvester', 'Harvester und motormanuell', 'Seilkran', 'Rückepferd']], ['species', 'Hauptbaumart', 'species'], ['baeume', 'Anzahl entnommener Bäume', 'number'], ['menge', 'Entnahmemenge (Fm)', 'decimal'], ['area', 'Fläche (ha)', 'decimal']] },
   polter:       { label: 'Poltervermessung', gruppe: 'holzernte', info: 'Schritt für Schritt nach RVR: Messverfahren, Sortiment, Volumen', fields: [['polterNr', 'Polter-Nr.', 'text'], ['species', 'Baumart', 'species'], ['sortiment', 'Sortiment', 'text'], ['verfahren', 'Messverfahren', 'text'], ['laenge', 'Poltertiefe/Bestelllänge (m)', 'text'], ['uebermass', 'Zugabe/Übermaß (m)', 'text'], ['rindenabzug', 'Rindenabzug', 'text'], ['stueck', 'Anzahl Stämme', 'text'], ['unterlagen', 'Unterlagen im Los (Rm m.R.)', 'text'], ['rm', 'Raummaß netto (Rm m.R.)', 'text'], ['red', 'Reduktionsfaktor', 'text'], ['faktor', 'Umrechnungsfaktor', 'text'], ['fm', 'Holzmenge (Fm o.R.)', 'text'], ['pos', 'Standort des Polters', 'text']] },
+  schaden:      { label: 'Schadensmeldung', info: 'Käfer, Windwurf, Bruch – mit GPS, Foto und Meldung an die FBG', fields: [['schaden', 'Schaden', 'text'], ['species', 'Baumart', 'text'], ['menge', 'Menge grob (Fm)', 'text'], ['baeume', 'Anzahl Bäume', 'text'], ['gps', 'GPS', 'text'], ['gemeldet', 'An FBG gemeldet am', 'text']] },
+  holzverkauf:  { label: 'Holzverkauf (Anfrage)', info: 'Anfrage an die FBG mit Fläche, Baumart und Menge', fields: [['species', 'Baumart', 'text'], ['menge', 'Menge geschätzt (Fm)', 'text'], ['zustand', 'Zustand', 'text'], ['wann', 'Zeitraum', 'text'], ['gemeldet', 'Angefragt am', 'text']] },
   verkehrssicherung: { label: 'Verkehrssicherung', fields: [] },
   sonstiges:    { label: 'Sonstiges', fields: [['what', 'Was wird gemacht?', 'text'], ['amount', 'Menge / Umfang', 'text']] },
 };
@@ -287,6 +289,7 @@ function measureCard(m, byId) {
       ? h('p', { class: 'warn-line' }, `Termin in der Brut- und Setzzeit (${schutzzeitText(schutzzeitVon(m))}, Schutzgebiet) – verschieben oder Verträglichkeits-Vorprüfung ausfüllen.`) : null,
     h('div', { class: 'measure-actions' },
       action,
+      m.type === 'schaden' ? h('button', { class: 'btn btn-voll', onclick: () => import('./schaden.js').then((x) => x.schadenMelden(m.id)) }, m.schaden?.gemeldet ? 'Erneut an FBG melden' : 'An FBG melden') : null,
       m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn btn-status', title: m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren', onclick: () => {
         store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = x.status === 'geplant' ? 'arbeit' : 'fertig'; if (x.status === 'fertig') x.finishedAt = Date.now(); });
       } }, h('span', { html: m.status === 'geplant' ? icon.play : icon.checkmark }), m.status === 'geplant' ? 'Begonnen' : 'Erledigt') : null,
@@ -329,6 +332,8 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null } = {}) {
     if (k === 'zaunbau') openZaunPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
     else if (k === 'einzelschutz') import('./einzelschutz.js').then(({ openEinzelschutzPlanung }) => openEinzelschutzPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) }));
     else if (k === 'pflanzung') openPflanzPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
+    else if (k === 'schaden') import('./schaden.js').then((x) => x.openSchadensmeldung({ parcelId, onSaved: alleSchliessen }));
+    else if (k === 'holzverkauf') { alleSchliessen(); import('./schaden.js').then((x) => x.openHolzVerkaufen({ parcelId })); }
     else formularSeite(k, foerdern);
   });
 

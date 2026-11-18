@@ -49,7 +49,7 @@ function kompass(onHeading) {
     hd = (hd + (screen.orientation?.angle ?? window.orientation ?? 0) + 360) % 360;
     // Glätten über den Einheitskreis, damit der Pfeil nicht zittert
     const c = Math.cos((hd * Math.PI) / 180), s2 = Math.sin((hd * Math.PI) / 180);
-    sx = sx == null ? c : sx * 0.75 + c * 0.25; sy = sy == null ? s2 : sy * 0.75 + s2 * 0.25;
+    sx = sx == null ? c : sx * 0.85 + c * 0.15; sy = sy == null ? s2 : sy * 0.85 + s2 * 0.15;
     onHeading((Math.atan2(sy, sx) * 180 / Math.PI + 360) % 360);
   };
   let aktiv = false;
@@ -76,6 +76,16 @@ export function openNavigation(o) {
   const ecken = polys.length ? eckpunkte(polys) : [];
   let modus = o.ziel ? 'punkt' : 'grenze', gewaehlt = null, pos = null, genau = null, heading = null, kurs = null, watch = null, rot = 0;
   const fixes = [];
+  // Pfeil flüssig drehen: je Bild ein Stück auf den Zielwinkel zu (kein Ruckeln durch einzelne Sensorwerte)
+  let zielWinkel = 0, raf = 0, zuletzt = 0;
+  const drehen = (t) => {
+    const dt = zuletzt ? Math.min(100, t - zuletzt) : 16; zuletzt = t;
+    const diff = ((zielWinkel - rot) % 360 + 540) % 360 - 180; // kürzester Weg, kein Herumwirbeln bei 359° → 0°
+    if (Math.abs(diff) < 0.3) { rot += diff; pfeil.style.transform = `rotate(${rot}deg)`; raf = 0; zuletzt = 0; return; }
+    rot += diff * (1 - Math.exp(-dt / 140)); // Zeitkonstante ca. 0,14 s
+    pfeil.style.transform = `rotate(${rot}deg)`;
+    raf = requestAnimationFrame(drehen);
+  };
   const pfeil = h('div', { class: 'nav-pfeil', html: PFEIL });
   const entf = h('div', { class: 'nav-entf' }, '–');
   const info = h('p', { class: 'nav-info', 'aria-live': 'polite' }, 'Warte auf GPS …');
@@ -92,7 +102,7 @@ export function openNavigation(o) {
     o.blick != null ? h('p', { class: 'hint' }, `Blickrichtung für das Foto: ${o.blick}° (${compassLabel(o.blick)})`) : null,
     h('p', { class: 'hint' }, polys.length ? 'Grenzen und Eckpunkte aus ALKIS. Grenzsteine stehen meist an den Eckpunkten, können aber fehlen oder versetzt sein. Handy-GPS ist im Wald oft nur auf 5–15 m genau – für eine verbindliche Grenzfeststellung braucht es eine Vermessungsstelle.' : 'Handy-GPS ist im Wald oft nur auf 5–15 m genau.'));
   const k = kompass((hd) => { heading = hd; kompassBtn.hidden = true; aktualisiere(); });
-  const page = openPage(o.titel || 'Navigation', body, { onClose: () => { if (watch != null) navigator.geolocation.clearWatch(watch); k.stop(); karte?.remove(); } });
+  const page = openPage(o.titel || 'Navigation', body, { onClose: () => { cancelAnimationFrame(raf); if (watch != null) navigator.geolocation.clearWatch(watch); k.stop(); karte?.remove(); } });
   let karte = null, posM = null, zielM = null, linie = null;
   setTimeout(() => {
     karte = miniKarte(mapEl, o.parcel || null, { zoom: 18 });
@@ -120,9 +130,8 @@ export function openNavigation(o) {
     const d = distance(pos, z.ll), b = bearing(pos, z.ll);
     const blick = heading ?? kurs;
     const rel = blick != null ? (b - blick + 360) % 360 : b;
-    // fortlaufender Winkel: kein Herumwirbeln beim Sprung von 359° auf 0°
-    rot += ((rel - rot) % 360 + 540) % 360 - 180;
-    pfeil.style.transform = `rotate(${rot}deg)`;
+    zielWinkel = rel;
+    if (!raf) raf = requestAnimationFrame(drehen);
     pfeil.classList.toggle('ohne-kompass', blick == null);
     pfeil.classList.toggle('nah', d <= Math.max(3, genau || 0));
     entf.textContent = formatDist(Math.round(d));

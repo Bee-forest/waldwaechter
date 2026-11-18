@@ -1289,7 +1289,7 @@ li.fin-zeile { cursor: default; }
 /* Navigation / Grenzfinder */
 .nav-seite { display: grid; gap: 12px; }
 .nav-anzeige { display: grid; justify-items: center; gap: 4px; padding: 8px 0; }
-.nav-pfeil { width: 140px; height: 140px; color: var(--primary); transition: transform .25s ease-out; }
+.nav-pfeil { width: 140px; height: 140px; color: var(--primary); will-change: transform; }
 .nav-pfeil.nah { color: #2E7D32; }
 .nav-pfeil svg { width: 100%; height: 100%; }
 .nav-entf { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; }

@@ -1,6 +1,10 @@
 // Reiter 2: Maßnahmen – Übersicht, neue Maßnahme anlegen.
 import { h, fill, icon, openPage, confirmDialog, toast, fmtDate, dialog } from './ui.js';
-import { openFotos, fotoKnopfText, fotosLoeschen } from './fotos.js';
+import { openFotos, fotoAnzahl, fotosLoeschen } from './fotos.js';
+
+// Symbolknopf mit Zähler für die Maßnahmenkarte
+const knopf = (svg, n, label, onclick) => h('button', { type: 'button', class: 'icon-btn measure-icon', 'aria-label': n ? `${label} (${n})` : label, title: label, onclick },
+  h('span', { html: svg }), n ? h('span', { class: 'zaehler' }, String(n)) : null);
 import { inBrutzeit, nachBrutzeit, schutzzeitVon, schutzzeitText, datumText } from './schutzgebiete.js';
 import { openVertraeglichkeit, openVerlauf, anhangOeffnen, protokoll } from './vertraeglichkeit.js';
 import { store, uid } from './store.js';
@@ -253,10 +257,10 @@ function measureCard(m, byId) {
       h('div', { class: 'progress-bar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': pts.length, 'aria-valuenow': done }, h('span', { style: `width:${(done / pts.length) * 100}%` })),
       h('span', { class: 'progress-label' }, `${done} von ${pts.length} Rasterpunkten erledigt`),
     );
-    action = h('button', { class: `btn ${m.status === 'fertig' ? '' : 'btn-primary'}`, onclick: () => openThinningWizard({ measureId: m.id }) },
+    action = h('button', { class: `btn btn-voll ${m.status === 'fertig' ? '' : 'btn-primary'}`, onclick: () => openThinningWizard({ measureId: m.id }) },
       m.status === 'fertig' ? 'Ansehen' : m.status === 'geplant' ? 'Öffnen' : 'Im Bestand fortsetzen');
   } else if (m.type === 'durchforstung') {
-    action = h('button', { class: 'btn btn-primary', onclick: () => openThinningWizard({ measureId: m.id }) }, 'Planung fortsetzen');
+    action = h('button', { class: 'btn btn-voll btn-primary', onclick: () => openThinningWizard({ measureId: m.id }) }, 'Planung fortsetzen');
   }
   const details = Object.entries(m.details || {}).filter(([, v]) => v !== '' && v != null)
     .map(([k, v]) => {
@@ -283,19 +287,20 @@ function measureCard(m, byId) {
       ? h('p', { class: 'warn-line' }, `Termin in der Brut- und Setzzeit (${schutzzeitText(schutzzeitVon(m))}, Schutzgebiet) – verschieben oder Verträglichkeits-Vorprüfung ausfüllen.`) : null,
     h('div', { class: 'measure-actions' },
       action,
-      h('button', { class: 'btn', onclick: () => openFotos(`m:${m.id}`, `${MEASURE_TYPES[m.type]?.label || 'Maßnahme'} · ${where}`) }, fotoKnopfText(`m:${m.id}`)),
-      h('button', { class: 'btn', onclick: () => openVerlauf(m.id) }, m.anhaenge?.length ? `Verlauf · ${m.anhaenge.length} Anhang${m.anhaenge.length > 1 ? 'e' : ''}` : 'Verlauf'),
-      m.anhaenge?.some((a) => a.typ === 'pflanzplan') ? h('button', { class: 'btn', onclick: () => anhangOeffnen(m.id, [...m.anhaenge].reverse().find((a) => a.typ === 'pflanzplan')) }, 'Pflanzplan (PDF)') : null,
-      m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn', onclick: () => {
+      m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn btn-status', title: m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren', onclick: () => {
         store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = x.status === 'geplant' ? 'arbeit' : 'fertig'; if (x.status === 'fertig') x.finishedAt = Date.now(); });
-      } }, m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren') : null,
-      h('button', { class: 'icon-btn danger', 'aria-label': 'Maßnahme löschen', html: icon.trash, onclick: async () => {
+      } }, h('span', { html: m.status === 'geplant' ? icon.play : icon.checkmark }), m.status === 'geplant' ? 'Begonnen' : 'Erledigt') : null,
+      h('span', { class: 'measure-icons' },
+        knopf(icon.camera, fotoAnzahl(`m:${m.id}`), 'Fotos', () => openFotos(`m:${m.id}`, `${MEASURE_TYPES[m.type]?.label || 'Maßnahme'} · ${where}`)),
+        knopf(icon.history, m.anhaenge?.length || 0, 'Verlauf und Anhänge', () => openVerlauf(m.id)),
+        m.anhaenge?.some((a) => a.typ === 'pflanzplan') ? knopf(icon.doc, 0, 'Pflanzplan (PDF) öffnen', () => anhangOeffnen(m.id, [...m.anhaenge].reverse().find((a) => a.typ === 'pflanzplan'))) : null,
+      h('button', { class: 'icon-btn danger', 'aria-label': 'Maßnahme löschen', title: 'Löschen', html: icon.trash, onclick: async () => {
         if (await confirmDialog('Möchtest du diese Maßnahme wirklich löschen?', { ok: 'Löschen', danger: true })) {
           store.update((s) => { s.measures = s.measures.filter((x) => x.id !== m.id); });
           fotosLoeschen(`m:${m.id}`);
           toast('Maßnahme gelöscht');
         }
-      } }),
+      } })),
     ),
   );
 }

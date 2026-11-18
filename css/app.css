@@ -78,7 +78,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 #app {
   position: fixed; top: 0; bottom: 0; left: 50%; width: min(100%, var(--app-max)); transform: translateX(-50%);
   background: var(--bg);
-  display: grid; grid-template-rows: 1fr auto;
+  display: grid; grid-template-rows: 1fr auto; grid-template-columns: minmax(0, 1fr);
   height: 100dvh; overflow: hidden;
 }
 @media (min-width: 520px) { #app { box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 10px 50px rgba(0,0,0,.18); } }
@@ -139,8 +139,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tabbar button:not([aria-current='page']) .tab-label { color: var(--ink-2); }
 
 /* ---------- Views ---------- */
-.views { position: relative; overflow: hidden; }
-.view { position: absolute; inset: 0; overflow-y: auto; padding: calc(16px + var(--safe-t)) 16px 24px; }
+.views { position: relative; overflow: hidden; min-width: 0; }
+.view { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: calc(16px + var(--safe-t)) 16px 24px; }
 .view-home { padding: calc(12px + var(--safe-t)) 12px 20px; display: flex; flex-direction: column; gap: 14px; }
 .view-head { margin-bottom: 16px; }
 .view-head h1 { font-size: 30px; margin-bottom: 4px; }
@@ -1236,3 +1236,20 @@ li.fin-zeile { cursor: default; }
 .fv-label { position: absolute; top: 8px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; background: rgba(0,0,0,.55); pointer-events: none; }
 .fv-l { left: 8px; } .fv-r { right: 8px; }
 .fv-regler { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+/* Maßnahmenkarten: nichts breiter als der Bildschirm */
+.measure-list > li, .measure { min-width: 0; max-width: 100%; }
+.measure > * { min-width: 0; overflow-wrap: anywhere; }
+.measure input, .measure select { max-width: 100%; min-width: 0; }
+.measure-actions { flex-wrap: wrap; gap: 6px; }
+.measure-actions .btn { flex: 1 1 auto; min-width: 0; padding-left: 12px; padding-right: 12px; }
+.measure-actions .btn-voll { flex-basis: 100%; }
+.measure-actions .btn-status { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 110px; }
+.measure-actions .btn-status svg { width: 18px; height: 18px; }
+.measure-icons { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.measure-icon { position: relative; width: 44px; height: 44px; border: 1px solid var(--line); background: var(--surface-2); }
+.measure-icons .icon-btn.danger { width: 44px; height: 44px; }
+.measure-icon svg { width: 22px; height: 22px; }
+.measure-icon .zaehler { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: var(--primary-ink); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.measure .badge { white-space: nowrap; overflow-wrap: normal; flex: none; }
+.measure-top { gap: 8px; }
+.measure-top .measure-type { min-width: 0; }

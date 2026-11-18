@@ -16,7 +16,7 @@ const euroKurz = (v) => `${Math.round(Number(v || 0)).toLocaleString('de-DE')} �
 // ---------- Bereiche und Kategorien ----------
 export const BEREICHE = {
   Wald: { label: 'Wald', farbe: CATEGORIES.Wald.color },
-  Landwirtschaft: { label: 'Landwirtschaft', farbe: CATEGORIES.Landwirtschaft.color },
+  Landwirtschaft: { label: 'Land\u00ADwirtschaft', farbe: CATEGORIES.Landwirtschaft.color },
   Gewässer: { label: 'Gewässer', farbe: CATEGORIES.Gewässer.color },
   Gebäude: { label: 'Gebäude', farbe: CATEGORIES.Gebäude.color },
 };
@@ -228,7 +228,7 @@ function planungKachel() {
   return h('section', { class: 'kachel fin-plan' },
     h('div', { class: 'fin-plan-kopf' },
       h('h2', { class: 'kachel-titel' }, 'Finanzplanung Wald'),
-      h('button', { class: 'link-btn', onclick: quoteAendern }, `Rücklage ${Math.round(p.q * 100)} %`)),
+      h('button', { class: 'link-btn', onclick: quoteAendern }, `Rücklage ${Math.round(p.q * 100)}\u00A0%`)),
     ohneErloes.length ? h('div', { class: 'fin-alarm' },
       h('p', {}, h('strong', {}, `Holzernte abgeschlossen: ${ohneErloes.length === 1 ? 'eine Maßnahme' : `${ohneErloes.length} Maßnahmen`} ohne gebuchten Holzerlös.`), ' Trag den Erlös ein, sobald die Abrechnung da ist.'),
       ohneErloes.slice(0, 3).map((m) => h('button', { class: 'btn btn-small', onclick: () => openBuchung({ art: 'einnahme', bereich: 'Wald', kat: 'holzerloes', parcelId: m.parcelId, measureId: m.id, menge: zahl(m.details?.fm || m.details?.menge) || null, text: `${MEASURE_TYPES[m.type]?.label || 'Holzernte'}${m.details?.polterNr ? ` Polter ${m.details.polterNr}` : ''}` }) },
@@ -430,7 +430,7 @@ function exportCsv() {
   const kopf = ['Datum', 'Art', 'Bereich', 'Kategorie', 'Betrag (€)', 'Partner', 'Beschreibung', 'Beleg-Nr.', 'Flurstück', 'Holzmenge (Fm)'];
   const zeilen = buchungen().slice().sort((a, b) => String(a.datum).localeCompare(String(b.datum))).map((b) => {
     const p = b.parcelId ? flaecheVon(b.parcelId) : null;
-    return [datumText(b.datum), b.art === 'einnahme' ? 'Einnahme' : 'Ausgabe', BEREICHE[b.bereich]?.label || b.bereich, katLabel(b),
+    return [datumText(b.datum), b.art === 'einnahme' ? 'Einnahme' : 'Ausgabe', (BEREICHE[b.bereich]?.label || b.bereich).replace(/\u00AD/g, ''), katLabel(b),
       vorzeichen(b).toFixed(2).replace('.', ','), b.partner, b.text, b.nr, p ? parcelTitle(p) : '', b.menge ? String(b.menge).replace('.', ',') : ''];
   });
   const csv = '﻿' + [kopf, ...zeilen].map((z) => z.map(esc).join(';')).join('\r\n');

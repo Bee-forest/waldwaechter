@@ -4,6 +4,7 @@
 import { h, fill, dialog, confirmDialog, toast, openPage } from '../ui.js';
 import { store, uid } from '../store.js';
 import { createBaseMap } from './basemap.js';
+import { openFotos, fotoKnopfText, fotosLoeschen } from '../fotos.js';
 
 export const HABITAT_FARBE = '#2E7D32';
 export const JAGD_FARBE = '#5D4037';
@@ -107,7 +108,8 @@ function punktPopup(art, x, { schliessen, nurAnsehen }) {
     nurAnsehen ? h('p', { class: 'muted' }, art === 'habitat' ? 'Bearbeiten unter „Weitere Layer“ → Naturschutz → „Habitatbäume bearbeiten“.' : 'Bearbeiten unter „Weitere Layer“ → Jagd → „Jagdliche Einrichtungen bearbeiten“.') : null,
     h('div', { class: 'btn-row' },
       nurAnsehen ? null : h('button', { class: 'btn btn-small', onclick: () => { schliessen(); punktDialog(art, x); } }, 'Bearbeiten'),
-      nurAnsehen ? null : h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => { schliessen(); if (await confirmDialog(`${ARTEN[art].titel} löschen?`, { ok: 'Löschen', danger: true })) speichere((p) => { p[art] = p[art].filter((y) => y.id !== x.id); }); } }, 'Löschen'),
+      nurAnsehen ? null : h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => { schliessen(); if (await confirmDialog(`${ARTEN[art].titel} löschen?`, { ok: 'Löschen', danger: true })) { speichere((p) => { p[art] = p[art].filter((y) => y.id !== x.id); }); fotosLoeschen(`${art}:${x.id}`); } } }, 'Löschen'),
+      h('button', { class: 'btn btn-small', onclick: () => { schliessen(); openFotos(`${art}:${x.id}`, punktTitel(art, x)); } }, fotoKnopfText(`${art}:${x.id}`)),
       h('a', { class: 'btn btn-small', href: `https://www.google.com/maps/dir/?api=1&destination=${x.at[0]},${x.at[1]}`, target: '_blank', rel: 'noopener' }, 'Navigation')));
 }
 

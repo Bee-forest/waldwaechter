@@ -2,6 +2,7 @@
 // Gassen per Hand, per GPS ablaufen oder als Vorschlag aus dem Luftbild; Lagerplätze mit Befahrbarkeit und Beschreibung.
 import { h, fill, dialog, confirmDialog, toast, openPage } from '../ui.js';
 import { store, uid } from '../store.js';
+import { openFotos, fotoKnopfText, fotosLoeschen } from '../fotos.js';
 import { createBaseMap } from './basemap.js';
 import { distance, formatDist, polysOf } from '../geo.js';
 import { umlaufSteuerung, vereinfachen } from '../umlauf.js';
@@ -116,9 +117,10 @@ export async function gasseDialog(g, { neu = false, verlauf = false } = {}) {
         h('label', {}, 'Breite (m)', h('input', { type: 'number', min: 1, max: 10, step: 0.5, inputmode: 'decimal', value: w.breite, placeholder: '4', oninput: (e) => { w.breite = e.target.value; } })),
         h('label', {}, 'Gassenabstand (m)', h('input', { type: 'number', min: 10, max: 80, step: 1, inputmode: 'numeric', value: w.abstand, placeholder: '20', oninput: (e) => { w.abstand = e.target.value; } }))),
       h('label', {}, 'Notiz', h('textarea', { rows: 2, placeholder: 'z. B. Graben am Anfang, Bäume markiert, Steigung', oninput: (e) => { w.notiz = e.target.value; } }, w.notiz))),
-    actions: [{ label: 'Löschen', value: 'weg' }, ...(verlauf ? [{ label: 'Verlauf bearbeiten', value: 'verlauf' }] : []), { label: neu ? 'Später' : 'Abbrechen', value: null }, { label: 'Speichern', value: 'ok', primary: true }],
+    actions: [{ label: 'Löschen', value: 'weg' }, { label: fotoKnopfText(`gasse:${g.id}`), value: 'fotos' }, ...(verlauf ? [{ label: 'Verlauf bearbeiten', value: 'verlauf' }] : []), { label: neu ? 'Später' : 'Abbrechen', value: null }, { label: 'Speichern', value: 'ok', primary: true }],
   });
-  if (r === 'weg') { if (await confirmDialog('Rückegasse löschen?', { ok: 'Löschen', danger: true })) { speichere((e) => { e.gassen = e.gassen.filter((x) => x.id !== g.id); }); toast('Rückegasse gelöscht'); } return; }
+  if (r === 'weg') { if (await confirmDialog('Rückegasse löschen?', { ok: 'Löschen', danger: true })) { speichere((e) => { e.gassen = e.gassen.filter((x) => x.id !== g.id); }); fotosLoeschen(`gasse:${g.id}`); toast('Rückegasse gelöscht'); } return; }
+  if (r === 'fotos') { openFotos(`gasse:${g.id}`, `Rückegasse${g.name ? ` ${g.name}` : ''}`); return; }
   if (r === 'verlauf') return 'verlauf';
   if (r !== 'ok') return;
   const zahl = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -143,7 +145,8 @@ function lagerPopup(l, { aufBearbeiten, nurAnsehen = false } = {}) {
     l.text ? h('p', { class: 'muted' }, l.text) : null,
     h('div', { class: 'btn-row' },
       nurAnsehen ? null : h('button', { class: 'btn btn-small', onclick: () => { aufBearbeiten?.(); lagerDialog(l); } }, 'Bearbeiten'),
-      nurAnsehen ? null : h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => { aufBearbeiten?.(); if (await confirmDialog('Lagerplatz löschen?', { ok: 'Löschen', danger: true })) speichere((e) => { e.lager = e.lager.filter((x) => x.id !== l.id); }); } }, 'Löschen'),
+      nurAnsehen ? null : h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => { aufBearbeiten?.(); if (await confirmDialog('Lagerplatz löschen?', { ok: 'Löschen', danger: true })) { speichere((e) => { e.lager = e.lager.filter((x) => x.id !== l.id); }); fotosLoeschen(`lager:${l.id}`); } } }, 'Löschen'),
+      h('button', { class: 'btn btn-small', onclick: () => { aufBearbeiten?.(); openFotos(`lager:${l.id}`, `Lagerplatz${l.name ? ` ${l.name}` : ''}`); } }, fotoKnopfText(`lager:${l.id}`)),
       h('a', { class: 'btn btn-small', href: `https://www.google.com/maps/dir/?api=1&destination=${l.at[0]},${l.at[1]}`, target: '_blank', rel: 'noopener' }, 'Navigation')));
 }
 
@@ -160,7 +163,8 @@ export function createErschliessungLayers(map, { klickbar = () => true, aufGasse
       // breite, unsichtbare Linie zum Antippen (gestrichelte Linien sind sonst in den Lücken nicht antippbar)
       const pl = L.polyline(g.line, { color: '#000', weight: 24, opacity: 0, lineCap: 'round', className: 'gasse-treffer' });
       pl.bindTooltip(gasseText(g), { sticky: true });
-      if (nurAnsehen) pl.bindPopup(() => h('div', { class: 'lager-popup' }, h('strong', {}, g.name || 'Rückegasse'), h('p', {}, gasseText(g)), h('p', { class: 'muted' }, 'Bearbeiten unter „Weitere Layer“ → „Rückegassen und Lagerplätze bearbeiten“.')));
+      if (nurAnsehen) pl.bindPopup(() => h('div', { class: 'lager-popup' }, h('strong', {}, g.name || 'Rückegasse'), h('p', {}, gasseText(g)), h('p', { class: 'muted' }, 'Bearbeiten unter „Weitere Layer“ → „Rückegassen und Lagerplätze bearbeiten“.'),
+        h('div', { class: 'btn-row' }, h('button', { class: 'btn btn-small', onclick: () => { map.closePopup(); openFotos(`gasse:${g.id}`, `Rückegasse${g.name ? ` ${g.name}` : ''}`); } }, fotoKnopfText(`gasse:${g.id}`)))));
       else pl.on('click', (e) => { if (!klickbar()) return; L.DomEvent.stop(e); (aufGasse || gasseDialog)(g); });
       gassen.addLayer(pl);
     }

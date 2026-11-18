@@ -1,5 +1,6 @@
 // Reiter 2: Maßnahmen – Übersicht, neue Maßnahme anlegen.
 import { h, fill, icon, openPage, confirmDialog, toast, fmtDate, dialog } from './ui.js';
+import { openFotos, fotoKnopfText, fotosLoeschen } from './fotos.js';
 import { inBrutzeit, nachBrutzeit, schutzzeitVon, schutzzeitText, datumText } from './schutzgebiete.js';
 import { openVertraeglichkeit, openVerlauf, anhangOeffnen, protokoll } from './vertraeglichkeit.js';
 import { store, uid } from './store.js';
@@ -282,6 +283,7 @@ function measureCard(m, byId) {
       ? h('p', { class: 'warn-line' }, `Termin in der Brut- und Setzzeit (${schutzzeitText(schutzzeitVon(m))}, Schutzgebiet) – verschieben oder Verträglichkeits-Vorprüfung ausfüllen.`) : null,
     h('div', { class: 'measure-actions' },
       action,
+      h('button', { class: 'btn', onclick: () => openFotos(`m:${m.id}`, `${MEASURE_TYPES[m.type]?.label || 'Maßnahme'} · ${where}`) }, fotoKnopfText(`m:${m.id}`)),
       h('button', { class: 'btn', onclick: () => openVerlauf(m.id) }, m.anhaenge?.length ? `Verlauf · ${m.anhaenge.length} Anhang${m.anhaenge.length > 1 ? 'e' : ''}` : 'Verlauf'),
       m.anhaenge?.some((a) => a.typ === 'pflanzplan') ? h('button', { class: 'btn', onclick: () => anhangOeffnen(m.id, [...m.anhaenge].reverse().find((a) => a.typ === 'pflanzplan')) }, 'Pflanzplan (PDF)') : null,
       m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn', onclick: () => {
@@ -290,6 +292,7 @@ function measureCard(m, byId) {
       h('button', { class: 'icon-btn danger', 'aria-label': 'Maßnahme löschen', html: icon.trash, onclick: async () => {
         if (await confirmDialog('Möchtest du diese Maßnahme wirklich löschen?', { ok: 'Löschen', danger: true })) {
           store.update((s) => { s.measures = s.measures.filter((x) => x.id !== m.id); });
+          fotosLoeschen(`m:${m.id}`);
           toast('Maßnahme gelöscht');
         }
       } }),

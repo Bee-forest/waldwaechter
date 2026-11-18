@@ -65,12 +65,12 @@ function flaechenText(p, fl) {
 }
 
 // ---------- Schadensmeldung ----------
-export async function openSchadensmeldung({ parcelId = null, onSaved } = {}) {
+export async function openSchadensmeldung({ parcelId = null, onSaved, typ = 'kaefer', baeume = '' } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
   const id = uid();
-  const w = { typ: 'kaefer', parcelId: parcelId || mine[0]?.id || null, pos: null, genau: null, species: 'Fichte', menge: '', baeume: '', datum: new Date().toISOString().slice(0, 10), text: '' };
+  const w = { typ, parcelId: parcelId || mine[0]?.id || null, pos: null, genau: null, species: 'Fichte', menge: '', baeume: baeume ? String(baeume) : '', datum: new Date().toISOString().slice(0, 10), text: '' };
   let wahl = null;
   const body = h('div', { class: 'form schaden' });
   const page = openPage('Schaden melden', body, { onClose: () => wahl?.entferne() });

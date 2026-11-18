@@ -61,8 +61,8 @@ const woche = (d = new Date()) => { const t = new Date(Date.UTC(d.getFullYear(),
 const AUFGABEN = [
   { k: 'zaehlen', titel: 'Baumarten zählen', text: 'Geh 100 Schritte durch deinen Wald und zähle jeden Baum, an dem du vorbeikommst – nach Baumart. Wie gemischt ist dein Wald?', ziel: 20 },
   { k: 'habitat', titel: 'Habitatbäume finden', text: 'Finde Bäume mit Spechthöhlen, Pilzen oder Rissen und trage sie unter „Weitere Layer“ → Naturschutz ein.', ziel: 3 },
-  { k: 'verbiss', titel: 'Verbiss prüfen', text: 'Schau dir 20 junge Bäume an: Wie viele haben einen abgebissenen Leittrieb? Zähle sie mit dem Zähler (Baumart antippen).', ziel: 20 },
-  { k: 'kaefer', titel: 'Fichten kontrollieren', text: 'Prüfe 10 Fichten am Stammfuß auf braunes Bohrmehl und Harztropfen. Auffällig? Gleich „Schaden melden“.', ziel: 10 },
+  { k: 'verbiss', titel: 'Verbiss prüfen', text: 'Schau dir 20 junge Bäume an und tippe für jeden an, ob und wo er verbissen ist.', ziel: 20 },
+  { k: 'kaefer', titel: 'Fichten kontrollieren', text: 'Prüfe 10 Fichten am Stammfuß und in Rindenritzen auf braunes Bohrmehl und Harztropfen und schau in die Krone. Tippe für jede Fichte das Ergebnis an.', ziel: 10 },
   { k: 'zaehlen2', titel: 'Mischbaumarten entdecken', text: 'Zähle auf einer Fläche alle Bäume, die nicht Fichte oder Kiefer sind. Jede Mischbaumart macht deinen Wald stabiler.', ziel: 10 },
 ];
 export const aufgabeDerWoche = () => { const w = woche(); const n = Number(w.slice(-2)) + Number(w.slice(0, 4)); return { ...AUFGABEN[n % AUFGABEN.length], woche: w }; };
@@ -116,6 +116,54 @@ function openZaehler(aufgabe) {
   };
   const page = openPage(aufgabe ? aufgabe.titel : 'Baumartenzähler', body);
   zeichne();
+}
+
+// ---------- Kontrollen (Käfer, Verbiss) ----------
+const KONTROLLE = {
+  kaefer: { was: 'Fichten', stufen: [['ok', 'ohne Befund', 'Kein Bohrmehl, kein Harzfluss, Krone grün', '#2E7D32'], ['verdacht', 'Verdacht', 'Einzelne Harztropfen oder Bohrlöcher', '#F9A825'], ['befall', 'Befall', 'Braunes Bohrmehl, Rinde löst sich oder Krone wird rot', '#C62828']] },
+  verbiss: { was: 'junge Bäume', stufen: [['ok', 'nicht verbissen', 'Leittrieb und Seitentriebe unversehrt', '#2E7D32'], ['seite', 'Seitentrieb verbissen', 'Nur seitliche Triebe abgebissen', '#F9A825'], ['leit', 'Leittrieb verbissen', 'Der oberste Trieb ist abgebissen', '#C62828']] },
+};
+function openKontrolle(aufgabe) {
+  const K = KONTROLLE[aufgabe.k];
+  const n = Object.fromEntries(K.stufen.map(([k]) => [k, 0]));
+  const body = h('div', { class: 'wz-zaehler' });
+  const summe = () => Object.values(n).reduce((a, b) => a + b, 0);
+  const zeichne = () => fill(body,
+    h('p', { class: 'muted' }, aufgabe.text),
+    h('div', { class: 'wz-summe' }, h('strong', {}, String(summe())), ` ${K.was} geprüft${aufgabe.ziel ? ` von ${aufgabe.ziel}` : ''}`),
+    h('div', { class: 'q-cards' }, K.stufen.map(([k, l, t, farbe]) => h('button', { type: 'button', class: 'q-option wz-kontrolle', style: `--c:${farbe}`, onclick: () => { n[k]++; navigator.vibrate?.(10); zeichne(); } },
+      h('span', { class: 'ampel-punkt', style: `background:${farbe}` }), h('span', { class: 'q-text' }, h('strong', {}, l), h('small', {}, t)), h('b', { class: 'wz-kzahl' }, String(n[k]))))),
+    h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn btn-small', onclick: () => { const k = Object.keys(n).reverse().find((x) => n[x] > 0); if (k) { n[k]--; zeichne(); } } }, 'Letzte Eingabe zurück')),
+    h('div', { class: 'q-nav' }, h('button', { type: 'button', class: 'btn btn-primary btn-large', onclick: speichern }, 'Kontrolle speichern')));
+  const speichern = async () => {
+    if (!summe()) { toast('Noch nichts geprüft.'); return; }
+    store.update((s) => { const d = daten(); s.wanze = { ...d, kontrollen: [...(d.kontrollen || []), { id: uid(), ts: Date.now(), art: aufgabe.k, n: { ...n } }], erledigt: summe() >= (aufgabe.ziel || 1) ? [...d.erledigt, aufgabe.woche] : d.erledigt }; });
+    pruefeAbzeichen();
+    page.close();
+    if (aufgabe.k === 'kaefer' && (n.verdacht || n.befall)) {
+      const ja = await (await import('./ui.js')).confirmDialog(`${n.befall ? `${n.befall} befallene` : ''}${n.befall && n.verdacht ? ' und ' : ''}${n.verdacht ? `${n.verdacht} verdächtige` : ''} Fichte${n.befall + n.verdacht > 1 ? 'n' : ''} gefunden. Befallene Bäume müssen schnell aus dem Wald – jetzt Schaden melden?`, { ok: 'Schaden melden' });
+      if (ja) (await import('./schaden.js')).openSchadensmeldung({ typ: 'kaefer', baeume: n.befall + n.verdacht });
+    } else if (aufgabe.k === 'verbiss') {
+      const q = Math.round((n.leit / summe()) * 100);
+      toast(q >= 20 ? `${q} % mit verbissenem Leittrieb – das ist viel. Sprich mit dem Jagdpächter oder schütze die Pflanzen.` : `${q} % mit verbissenem Leittrieb – im Rahmen.`);
+    } else toast('Kontrolle gespeichert – keine Auffälligkeiten.');
+  };
+  const page = openPage(aufgabe.titel, body);
+  zeichne();
+}
+/** Wochenaufgabe öffnen: jede Aufgabe hat ihr eigenes Werkzeug */
+async function aufgabeStarten(a) {
+  if (KONTROLLE[a.k]) { openKontrolle(a); return; }
+  if (a.k === 'habitat') {
+    const p = store.get().parcels.find((x) => x.ring?.length);
+    const c = p ? p.ring.reduce((acc, q) => [acc[0] + q[0] / p.ring.length, acc[1] + q[1] / p.ring.length], [0, 0]) : [50.9, 11.0];
+    const { openPunktEditor } = await import('./map/punkte.js');
+    openPunktEditor({ center: c, zoom: 17, art: 'habitat' });
+    store.update((s) => { const d = daten(); s.wanze = { ...d, erledigt: [...d.erledigt, a.woche] }; });
+    toast('Tippe in die Karte, wo ein Habitatbaum steht.');
+    return;
+  }
+  openZaehler(a);
 }
 
 // ---------- Quiz ----------
@@ -193,7 +241,7 @@ export function openWanzenEcke() {
     fill(body,
       h('div', { class: 'wz-kopf' }, h('div', { class: 'wz-wanze', html: WANZE_SVG }), h('p', {}, 'Hallo! Hier gibt es jede Woche eine kleine Aufgabe für deinen Wald – und Abzeichen zum Sammeln.')),
       h('section', { class: 'kachel wz-aufgabe' }, h('p', { class: 'geo-kicker' }, `Aufgabe der Woche ${a.woche.slice(-2)}`), h('h3', {}, a.titel, erledigt ? ' ✓' : ''), h('p', {}, a.text),
-        h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn btn-primary', onclick: () => openZaehler(a) }, erledigt ? 'Noch einmal zählen' : 'Los geht’s'))),
+        h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn btn-primary', onclick: () => aufgabeStarten(a) }, erledigt ? 'Noch einmal' : 'Los geht’s'))),
       h('div', { class: 'wz-menue' },
         h('button', { type: 'button', class: 'kachel wz-knopf', onclick: () => openZaehler(null) }, h('strong', {}, 'Baumartenzähler'), h('small', {}, 'Bildkarten antippen und zählen')),
         h('button', { type: 'button', class: 'kachel wz-knopf', onclick: () => { bestimmen(null); store.update((s) => { s.wanze = { ...daten(), bestimmt: daten().bestimmt + 1 }; }); pruefeAbzeichen(); } }, h('strong', {}, 'Baum bestimmen'), h('small', {}, 'In wenigen Fragen zur Baumart')),

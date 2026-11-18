@@ -1354,3 +1354,7 @@ li.fin-zeile { cursor: default; }
   .wanzen-knopf .wanze-img { width: 30px; height: 30px; }
   .avatar { width: 44px; height: 44px; font-size: 15px; }
 }
+.ortsname-3 span { font-size: 14px; }
+.ortsname-0 span { font-size: 21px; }
+.wz-kontrolle { display: grid !important; grid-template-columns: 18px 1fr auto; align-items: center; gap: 10px; text-align: left; }
+.wz-kzahl { font-size: 22px; color: var(--primary); min-width: 2ch; text-align: right; }

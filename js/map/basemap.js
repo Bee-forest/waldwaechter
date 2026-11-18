@@ -35,7 +35,7 @@ export const BASEMAPS = {
 export const BESCHRIFTUNG_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png';
 function beschriftungLayer() {
   return L.tileLayer(BESCHRIFTUNG_URL, {
-    pane: 'beschriftung', subdomains: 'abcd', maxZoom: 21, maxNativeZoom: 20, detectRetina: false,
+    pane: 'beschriftung', subdomains: 'abcd', minZoom: 16, maxZoom: 21, maxNativeZoom: 20, detectRetina: false,
     attribution: '© <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   });
 }
@@ -68,6 +68,7 @@ export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = 
   map.getPane('beschriftung').style.pointerEvents = 'none';
   let labels = null, orte = null;
   const refreshLabels = () => {
+    // Ortsnamen kommen aus der eigenen Ortsliste (alle Zoomstufen); die CARTO-Beschriftung nur noch nah heran für Straßen
     if (current === 'dop' && !labels) { labels = beschriftungLayer().addTo(map); orte = createOrtsnamenLayer(map).addTo(map); }
     if (current !== 'dop' && labels) { map.removeLayer(labels); map.removeLayer(orte); labels = null; orte = null; }
   };

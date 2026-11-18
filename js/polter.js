@@ -45,6 +45,14 @@ export function umrechnung(laenge, entrindet) {
 }
 // Langholz-Sortimente: Einzelstamm-Vermessung, wahlweise auch Sektionsraummaß im Polter
 const LANG = new Set(['stamm_lang', 'stamm_abschnitt', 'ih_lang', 'eh_lang']);
+// Welche Sortimente sich mit welchem Verfahren messen lassen (RVR Tabelle 7 und übliche Praxis)
+export const SORTIMENTE_JE_VERFAHREN = {
+  einzelstamm: ['stamm_lang', 'stamm_abschnitt', 'ih_lang', 'eh_lang'],
+  sektion: ['ih_kurz', 'eh_kurz', 'stamm_abschnitt', 'ih_lang', 'eh_lang', 'stamm_lang'],
+  schicht: ['brennholz', 'ih_kurz', 'eh_kurz'],
+};
+export const sortimentLabel = (key, frei) => (key === 'sonstig' ? (frei || 'Sonstiges Sortiment') : SORTIMENTE.find((o) => o.key === key)?.label || '');
+const RINDENABZUG = [1, 2, 3, 4];
 const UEBERMASS = [0.05, 0.1, 0.2, 0.3];
 
 const zahl = (v) => { const s = String(v ?? '').trim().replace(',', '.'); const n = Number(s); return s !== '' && Number.isFinite(n) ? n : null; };
@@ -156,14 +164,14 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
-  const s = { i: 0, parcelId, polterNr: '', species: 'Fichte', sortiment: null, verfahren: null, pos: null,
+  const s = { i: 0, parcelId, polterNr: '', species: 'Fichte', sortiment: null, sortimentFrei: '', verfahren: null, pos: null, rinde: 'oR', rabzug: null, rabzugProzent: 0,
     lab: null, t: null, uebermass: null, hv: [], hr: [], rueck: true, c: 0, cLos: false, red: null, u: null, entrindet: false,
-    l: null, hs: [], staemme: [], einheit: leseEinheit(), neu: { l: null, d1: null, d2: null, rinde: 'oR', rabzug: null } };
+    l: null, hs: [], staemme: [], einheit: leseEinheit(), neu: { l: null, d1: null, d2: null } };
   const body = h('div', { class: 'polter' });
   const page = openPage('Poltervermessung', body);
 
   const schritte = () => {
-    const base = ['start', 'sortiment'];
+    const base = ['start', 'verfahren'];
     if (s.verfahren === 'sektion') {
       const n = s.lab ? Math.floor(s.lab / sektionsLaenge(s.lab) + 1e-9) : 0;
       const lb = s.lab ? r2(s.lab - n * sektionsLaenge(s.lab)) : 0;
@@ -171,7 +179,7 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       return [...base, 'skizze', 'lab', 'tiefe', ...seite('v'), 'rueckfrage', ...(s.rueck ? seite('r') : []), 'unterlage', 'reduktion', 'faktor', 'ergebnis'];
     }
     if (s.verfahren === 'schicht') return [...base, 'skizze', 'lab', 'tiefe', 'hoehen', 'faktor', 'ergebnis'];
-    if (s.verfahren === 'einzelstamm') return [...base, 'skizze', 'stamm', 'ergebnis'];
+    if (s.verfahren === 'einzelstamm') return [...base, 'skizze', 'zugaben', 'stamm', 'ergebnis'];
     return base;
   };
 
@@ -195,10 +203,10 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
     const v = s.verfahren && VERFAHREN[s.verfahren];
     // Übermaß zur Bestelllänge (wird mit angegeben, zählt aber nicht zum Volumen)
     const uebermassFeld = () => h('div', { class: 'uebermass' },
-      h('p', { class: 'sheet-label' }, 'Übermaß zur Bestelllänge'),
-      h('div', { class: 'q-chips' }, [0, ...UEBERMASS].map((o) => h('button', { type: 'button', class: `q-option ${s.uebermass === o ? 'on' : ''}`, onclick: () => { s.uebermass = o; render(); } }, o ? `+ ${zahlText(o)} m` : 'ohne'))),
-      zahlFeld('Anderes Übermaß', s.uebermass == null || [0, ...UEBERMASS].includes(s.uebermass) ? null : s.uebermass, (x) => { s.uebermass = x; }, { einheit: 'm', autofocus: false }),
-      h('small', { class: 'muted' }, s.t > 0 && s.uebermass > 0 ? `Die Stücke sind ${zahlText(s.t + s.uebermass)} m lang (Bestelllänge ${zahlText(s.t)} m + Übermaß ${zahlText(s.uebermass)} m). Abgerechnet wird die Bestelllänge.` : 'Das Übermaß wird im Protokoll mit angegeben; gerechnet wird mit der Bestelllänge.'));
+      h('p', { class: 'sheet-label' }, 'Zugabe für den Käufer (Übermaß zur Bestelllänge)'),
+      h('div', { class: 'q-chips' }, [0, ...UEBERMASS].map((o) => h('button', { type: 'button', class: `q-option ${s.uebermass === o ? 'on' : ''}`, onclick: () => { s.uebermass = o; render(); } }, o ? `+ ${zahlText(o)} m${o === 0.1 ? ' (üblich)' : ''}` : 'ohne'))),
+      zahlFeld('Andere Zugabe', s.uebermass == null || [0, ...UEBERMASS].includes(s.uebermass) ? null : s.uebermass, (x) => { s.uebermass = x; }, { einheit: 'm', autofocus: false }),
+      h('small', { class: 'muted' }, s.t > 0 && s.uebermass > 0 ? `Die Stücke sind ${zahlText(s.t + s.uebermass)} m lang (Bestelllänge ${zahlText(s.t)} m + Übermaß ${zahlText(s.uebermass)} m). Abgerechnet wird die Bestelllänge.` : 'Die Zugabe (z. B. 0,1 m) wird im Protokoll mit angegeben; gerechnet wird mit der Bestelllänge.'));
 
     if (q === 'start') {
       title = 'Welches Polter nimmst du auf?';
@@ -214,21 +222,38 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
               () => toast('Standort nicht verfügbar'), { enableHighAccuracy: true, timeout: 15000 });
           } }, s.pos ? 'Neu erfassen' : 'Standort erfassen')),
       ];
-    } else if (q === 'sortiment') {
-      title = 'Welches Sortiment liegt im Polter?';
-      help = 'Das Messverfahren wird nach der RVR (Tabelle 7) automatisch gewählt.';
+    } else if (q === 'verfahren') {
+      title = 'Wie wird vermessen?';
+      help = 'Wähle das Messverfahren. Danach wählst du direkt das Sortiment – mit einem Verfahren lassen sich verschiedene Sortimente messen.';
+      const sortWahl = (vk) => h('div', { class: 'verf-sortimente' },
+        h('p', { class: 'sheet-label' }, 'Sortiment'),
+        h('div', { class: 'q-chips' }, [...SORTIMENTE_JE_VERFAHREN[vk], 'sonstig'].map((k) => h('button', { type: 'button', class: `q-option ${s.sortiment === k ? 'on' : ''}`, 'aria-pressed': String(s.sortiment === k),
+          onclick: (e) => { e.stopPropagation(); s.sortiment = k; render(); } }, k === 'sonstig' ? 'Sonstiges …' : SORTIMENTE.find((o) => o.key === k).label))),
+        s.sortiment === 'sonstig' ? h('label', {}, 'Sortiment', h('input', { type: 'text', value: s.sortimentFrei, placeholder: 'z. B. Palettenholz 2,4 m', autofocus: true, onclick: (e) => e.stopPropagation(),
+          oninput: (e) => { s.sortimentFrei = e.target.value; nextBtn.disabled = !e.target.value.trim(); } })) : null,
+        vk === 'sektion' && LANG.has(s.sortiment) ? h('small', { class: 'hint' }, 'Sektionsraummaß bei Langholz: Poltertiefe ist die Bestelllänge. Reduktions- und Umrechnungsfaktor nennt die RVR nur bis 3 m – darüber gilt die Vereinbarung mit dem Holzkäufer.') : null,
+        vk === 'schicht' && s.sortiment && s.sortiment !== 'brennholz' ? h('small', { class: 'hint' }, 'Konventionelles Schichtraummaß nur für 1 m oder 2 m lange Stücke.') : null);
+      inhalt = [h('div', { class: 'q-cards' }, Object.entries(VERFAHREN).map(([k, o]) => h('div', { class: `q-option verf-karte ${s.verfahren === k ? 'on' : ''}`, role: 'button', tabindex: 0, 'aria-pressed': String(s.verfahren === k),
+        onclick: () => { if (s.verfahren === k) return; s.verfahren = k; if (!SORTIMENTE_JE_VERFAHREN[k].includes(s.sortiment) && s.sortiment !== 'sonstig') s.sortiment = null; s.t = null; s.red = null; s.u = null; render(); } },
+        h('span', { class: 'q-text' }, h('strong', {}, `${o.label} (${o.einheit})`), h('small', {}, `${o.text} Grundlage: ${o.anlage}.`)),
+        s.verfahren === k ? sortWahl(k) : null)))];
+      canNext = !!s.verfahren && !!s.sortiment && (s.sortiment !== 'sonstig' || !!s.sortimentFrei.trim());
+    } else if (q === 'zugaben') {
+      bild = stammSkizze('d');
+      title = 'Rinde und Zugabe';
+      help = 'Gilt für alle Stämme dieses Polters.';
       inhalt = [
-        h('div', { class: 'q-cards' }, SORTIMENTE.map((o) => h('button', { type: 'button', class: `q-option ${s.sortiment === o.key ? 'on' : ''}`, 'aria-pressed': String(s.sortiment === o.key),
-          onclick: () => { s.sortiment = o.key; s.verfahren = o.verfahren; render(); } },
-          h('span', { class: 'q-text' }, h('strong', {}, o.label), h('small', {}, `${o.text} → ${VERFAHREN[o.verfahren].label}`))))),
-        v ? h('div', { class: 'calc-box' }, h('strong', {}, `Verfahren: ${v.label} (${v.einheit})`), h('small', {}, `${v.text} Grundlage: ${v.anlage}.`),
-          s.sortiment === 'ih_kurz' || s.sortiment === 'eh_kurz' ? h('button', { type: 'button', class: 'link-btn', onclick: () => { s.verfahren = s.verfahren === 'sektion' ? 'schicht' : 'sektion'; render(); } },
-            s.verfahren === 'sektion' ? 'Stattdessen konventionelles Schichtraummaß (nur 1 m oder 2 m)' : 'Zurück zum Sektionsraummaß') : null,
-          LANG.has(s.sortiment) ? h('button', { type: 'button', class: 'link-btn', onclick: () => { s.verfahren = s.verfahren === 'sektion' ? 'einzelstamm' : 'sektion'; s.t = null; s.red = null; s.u = null; render(); } },
-            s.verfahren === 'sektion' ? 'Zurück zur Einzelstamm-Vermessung' : 'Stattdessen Sektionsraummaß (Langholz im Polter vermessen)') : null,
-          LANG.has(s.sortiment) && s.verfahren === 'sektion' ? h('small', { class: 'hint' }, 'Sektionsraummaß bei Langholz: Poltertiefe ist die Bestelllänge. Reduktions- und Umrechnungsfaktor nennt die RVR nur bis 3 m – darüber gilt die Vereinbarung mit dem Holzkäufer.') : null) : null,
-      ];
-      canNext = !!s.verfahren;
+        h('p', { class: 'sheet-label' }, 'Durchmesser gemessen'),
+        h('div', { class: 'segmented', role: 'radiogroup' }, [['oR', 'ohne Rinde'], ['mR', 'mit Rinde']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.rinde === k), onclick: () => { s.rinde = k; if (k === 'oR') s.rabzug = null; render(); } }, l))),
+        s.rinde === 'mR' ? h('div', { class: 'uebermass' },
+          h('p', { class: 'sheet-label' }, 'Rindenabzug (doppelte Rindenstärke)'),
+          h('div', { class: 'q-chips' }, RINDENABZUG.map((o) => h('button', { type: 'button', class: `q-option ${s.rabzug === o ? 'on' : ''}`, onclick: () => { s.rabzug = o; render(); } }, `− ${o} cm`))),
+          zahlFeld('Anderer Rindenabzug', s.rabzug == null || RINDENABZUG.includes(s.rabzug) ? null : s.rabzug, (x) => { s.rabzug = x; }, { einheit: 'cm', autofocus: false }),
+          h('small', { class: 'muted' }, 'Wird vom Mittendurchmesser jedes Stammes abgezogen (RVR Anlage VII oder Vereinbarung mit dem Käufer).')) : null,
+        uebermassFeld()];
+      canNext = s.uebermass != null && (s.rinde === 'oR' || s.rabzug > 0);
+      upd = () => { nextBtn.disabled = !(s.uebermass != null && (s.rinde === 'oR' || s.rabzug > 0)); };
+      if (s.uebermass == null) inhalt.push(h('p', { class: 'hint' }, 'Bitte die Zugabe zur Bestelllänge wählen (oder „ohne“).'));
     } else if (q === 'skizze') {
       title = 'Das wird gemessen';
       if (s.verfahren === 'einzelstamm') {
@@ -345,6 +370,11 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
           [[false, 'mit Rinde (m.R.)'], [true, 'entrindet (o.R.)']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.entrindet === k), onclick: () => { s.entrindet = k; s.u = umrechnung(len, k).faktor; render(); } }, l))),
         h('div', { class: 'q-chips' }, [0.80, 0.75, 0.70, 0.65, 0.60].map((o) => h('button', { type: 'button', class: `q-option ${s.u === o ? 'on' : ''}`, onclick: () => { s.u = o; render(); } }, `${zahlText(o)}${o === em.faktor ? ' (RVR)' : ''}`))),
         zahlFeld('Eigener Faktor', [0.8, 0.75, 0.7, 0.65, 0.6].includes(s.u) ? null : s.u, (x) => { s.u = x; }, { autofocus: false }),
+        h('div', { class: 'uebermass' },
+          h('p', { class: 'sheet-label' }, 'Zusätzlicher Rindenabzug (optional)'),
+          h('div', { class: 'q-chips' }, [0, 5, 8, 10, 12].map((o) => h('button', { type: 'button', class: `q-option ${s.rabzugProzent === o ? 'on' : ''}`, onclick: () => { s.rabzugProzent = o; render(); } }, o ? `− ${o} %` : 'keiner'))),
+          zahlFeld('Anderer Rindenabzug', [0, 5, 8, 10, 12].includes(s.rabzugProzent) ? null : s.rabzugProzent, (x) => { s.rabzugProzent = x || 0; }, { einheit: '%', autofocus: false }),
+          h('small', { class: 'muted' }, 'Nur wenn mit dem Käufer ein Rindenabzug vereinbart ist, der nicht schon im Umrechnungsfaktor steckt (die RVR-Faktoren m.R. → o.R. enthalten die Rinde bereits). Wird von der Festmeter-Menge abgezogen.')),
         h('p', { class: 'hint' }, 'Die RVR-Faktoren sind Durchschnittswerte für die interne Umrechnung, kein Verkaufsmaß. Abgerechnet wird nach der Vereinbarung mit dem Holzkäufer.')];
       upd = () => { nextBtn.disabled = !(s.u > 0); };
     } else if (q === 'stamm') {
@@ -355,17 +385,14 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       const feld = (label, key, einheit, af) => h('label', { class: 'polter-feld' }, label, h('span', { class: 'mit-einheit' },
         h('input', { type: 'text', inputmode: 'decimal', value: nw[key] != null ? String(nw[key]).replace('.', ',') : '', autofocus: af, oninput: (e) => { nw[key] = zahl(e.target.value); zeigeV(); } }), h('span', {}, einheit)));
       const vBox = h('p', { class: 'muted' });
-      const zeigeV = () => { const ok = nw.l > 0 && nw.d1 > 0 && (nw.d1 < 20 || nw.d2 > 0); vBox.textContent = ok ? `d = ${stammMitte(nw)} cm → V = π/4 × (${stammMitte(nw)} cm)² × ${zahlText(nw.l)} m = ${zahlText(stammVolumen(nw))} Fm o.R.` : 'Volumen nach der Huberschen Formel: V = π/4 × d² × L'; };
+      const zeigeV = () => { const st = { ...nw, rinde: s.rinde, rabzug: s.rabzug }; const ok = nw.l > 0 && nw.d1 > 0 && (nw.d1 < 20 || nw.d2 > 0); vBox.textContent = ok ? `d = ${stammMitte(st)} cm${s.rinde === 'mR' ? ` (nach ${zahlText(s.rabzug, 0)} cm Rindenabzug)` : ''} → V = π/4 × (${stammMitte(st)} cm)² × ${zahlText(nw.l)} m = ${zahlText(stammVolumen(st))} Fm o.R.` : 'Volumen nach der Huberschen Formel: V = π/4 × d² × L'; };
       const speichern = () => {
         if (!(nw.l > 0 && nw.d1 > 0 && (nw.d1 < 20 || nw.d2 > 0))) { toast(nw.d1 >= 20 ? 'Ab 20 cm bitte zweiten Durchmesser messen.' : 'Bitte Länge und Durchmesser eintragen.'); return; }
-        if (s.uebermass == null) { toast('Bitte das Übermaß zur Bestelllänge wählen (oder „ohne“).'); return; }
-        s.staemme.push({ ...nw, d2: nw.d1 >= 20 ? nw.d2 : null }); s.neu = { l: nw.l, d1: null, d2: null, rinde: nw.rinde, rabzug: nw.rabzug }; render();
+        s.staemme.push({ ...nw, d2: nw.d1 >= 20 ? nw.d2 : null, rinde: s.rinde, rabzug: s.rinde === 'mR' ? s.rabzug : null }); s.neu = { l: nw.l, d1: null, d2: null }; render();
       };
       inhalt = [feld('Bestelllänge L', 'l', 'm', nw.l == null),
-        s.staemme.length ? null : uebermassFeld(),
         feld('Durchmesser d1', 'd1', 'cm', nw.l != null), feld('Durchmesser d2 (ab 20 cm)', 'd2', 'cm', false),
-        h('div', { class: 'segmented', role: 'radiogroup' }, [['oR', 'ohne Rinde gemessen'], ['mR', 'mit Rinde gemessen']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(nw.rinde === k), onclick: () => { nw.rinde = k; render(); } }, l))),
-        nw.rinde === 'mR' ? feld('Rindenabzug (doppelte Rindenstärke)', 'rabzug', 'cm', false) : null,
+        h('p', { class: 'muted' }, `${s.rinde === 'mR' ? `Mit Rinde gemessen, Rindenabzug ${zahlText(s.rabzug, 0)} cm` : 'Ohne Rinde gemessen'} · Zugabe ${s.uebermass ? `+ ${zahlText(s.uebermass)} m` : 'ohne'} (änderbar mit „Zurück“)`),
         vBox, h('button', { type: 'button', class: 'btn', onclick: speichern }, 'Stamm speichern'),
         s.staemme.length ? h('ul', { class: 'mess-werte' }, s.staemme.map((x, k) => h('li', {}, `Nr. ${k + 1}: L ${zahlText(x.l)} m, d ${stammMitte(x)} cm → ${zahlText(stammVolumen(x))} Fm`,
           h('button', { type: 'button', class: 'link-btn', onclick: () => { s.staemme.splice(k, 1); render(); } }, 'entfernen')))) : null,
@@ -382,7 +409,7 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
     const nextBtn = h('button', { type: 'button', class: 'btn btn-primary btn-large', disabled: !canNext, onclick: () => weiter() }, nextLabel);
     fill(body,
       h('div', { class: 'q-progress', 'aria-label': `Schritt ${s.i + 1} von ${list.length}` }, list.map((_, k) => h('span', { class: k < s.i ? 'done' : k === s.i ? 'now' : '' }))),
-      v && s.i > 1 ? h('p', { class: 'sheet-label' }, `${v.label} · ${SORTIMENTE.find((o) => o.key === s.sortiment)?.label || ''}`) : null,
+      v && s.i > 1 ? h('p', { class: 'sheet-label' }, `${v.label} · ${sortimentLabel(s.sortiment, s.sortimentFrei)}`) : null,
       h('h2', { class: 'step-title' }, title), help ? h('p', { class: 'muted' }, help) : null,
       bild ? h('div', { class: 'polter-bild', html: bild }) : null,
       h('div', { class: 'polter-inhalt' }, inhalt),
@@ -400,8 +427,9 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
   }
 
   function rechnung() {
-    if (s.verfahren === 'sektion') return { art: 'sektion', ...sektionRechnung(s) };
-    if (s.verfahren === 'schicht') return { art: 'schicht', ...schichtRechnung(s) };
+    const mitAbzug = (r) => { if (!(s.rabzugProzent > 0)) return r; const fmVor = r.fm; return { ...r, fmVor, fm: r2(fmVor * (1 - s.rabzugProzent / 100)) }; };
+    if (s.verfahren === 'sektion') return mitAbzug({ art: 'sektion', ...sektionRechnung(s) });
+    if (s.verfahren === 'schicht') return mitAbzug({ art: 'schicht', ...schichtRechnung(s) });
     const fm = r2(s.staemme.reduce((a, x) => a + stammVolumen(x), 0));
     return { art: 'einzelstamm', fm, stueck: s.staemme.length };
   }
@@ -416,12 +444,15 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
         z('Unterlagen C =', r.C ? `${zahlText(r.C)} Rm (gehören zum Los)` : '0 Rm (nicht im Los)'),
         z('Bruttovolumen A + B + C =', `${zahlText(r.brutto)} Rm m.R.`),
         z(`Nettovolumen × Reduktionsfaktor ${zahlText(s.red, 3)} =`, `${zahlText(r.netto)} Rm m.R.`),
-        z(`Holzmenge × Umrechnungsfaktor ${zahlText(s.u)} =`, `${zahlText(r.fm)} Fm o.R.`)];
+        z(`Holzmenge × Umrechnungsfaktor ${zahlText(s.u)} =`, `${zahlText(r.fmVor ?? r.fm)} Fm o.R.`),
+        r.fmVor != null ? z(`abzüglich ${zahlText(s.rabzugProzent, 0)} % Rindenabzug =`, `${zahlText(r.fm)} Fm o.R.`) : null];
     } else if (r.art === 'schicht') {
       zeilen = [z('Mittlere Höhe H (abgerundet) =', `${zahlText(r.H)} m`), z('Länge L =', `${zahlText(r.L)} m`), z('Tiefe T =', `${zahlText(s.t)} m${s.uebermass ? ` (+ ${zahlText(s.uebermass)} m Übermaß)` : ''}`),
-        z('Raummaß = H × L × T × 0,96 =', `${zahlText(r.netto)} Rm m.R.`), z(`Holzmenge × Umrechnungsfaktor ${zahlText(s.u)} =`, `${zahlText(r.fm)} Fm o.R.`)];
+        z('Raummaß = H × L × T × 0,96 =', `${zahlText(r.netto)} Rm m.R.`), z(`Holzmenge × Umrechnungsfaktor ${zahlText(s.u)} =`, `${zahlText(r.fmVor ?? r.fm)} Fm o.R.`),
+        r.fmVor != null ? z(`abzüglich ${zahlText(s.rabzugProzent, 0)} % Rindenabzug =`, `${zahlText(r.fm)} Fm o.R.`) : null];
     } else {
-      zeilen = [z('Anzahl Stämme:', String(r.stueck)), s.uebermass != null ? z('Übermaß zur Bestelllänge:', s.uebermass ? `+ ${zahlText(s.uebermass)} m` : 'ohne') : null, z('Summe nach Huberscher Formel:', `${zahlText(r.fm)} Fm o.R.`)];
+      zeilen = [z('Anzahl Stämme:', String(r.stueck)), s.uebermass != null ? z('Zugabe zur Bestelllänge:', s.uebermass ? `+ ${zahlText(s.uebermass)} m` : 'ohne') : null,
+        z('Rinde:', s.rinde === 'mR' ? `mit Rinde gemessen, ${zahlText(s.rabzug, 0)} cm Rindenabzug je Durchmesser` : 'ohne Rinde gemessen'), z('Summe nach Huberscher Formel:', `${zahlText(r.fm)} Fm o.R.`)];
     }
     return h('div', { class: 'calc-box polter-ergebnis' },
       h('div', { class: 'preview' },
@@ -431,14 +462,14 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
   }
   function speichere() {
     const r = rechnung();
-    const sort = SORTIMENTE.find((o) => o.key === s.sortiment);
     const details = {
-      polterNr: s.polterNr, species: s.species, sortiment: sort?.label || '', verfahren: VERFAHREN[s.verfahren].label,
+      polterNr: s.polterNr, species: s.species, sortiment: sortimentLabel(s.sortiment, s.sortimentFrei.trim()), verfahren: VERFAHREN[s.verfahren].label,
       laenge: s.verfahren === 'einzelstamm' ? '' : zahlText(s.t), uebermass: s.uebermass != null ? zahlText(s.uebermass) : '', stueck: r.stueck != null ? String(r.stueck) : '',
       rm: r.netto != null ? zahlText(r.netto) : '', unterlagen: s.verfahren === 'sektion' ? (s.c ? zahlText(s.c) : '0') : '', red: s.red != null && s.verfahren === 'sektion' ? zahlText(s.red, 3) : '',
       faktor: s.u != null && s.verfahren !== 'einzelstamm' ? zahlText(s.u) : '', fm: zahlText(r.fm), pos: s.pos || '',
+      rindenabzug: s.verfahren === 'einzelstamm' ? (s.rinde === 'mR' ? `${zahlText(s.rabzug, 0)} cm` : 'ohne Rinde gemessen') : (s.rabzugProzent > 0 ? `${zahlText(s.rabzugProzent, 0)} %` : ''),
     };
-    const messung = { verfahren: s.verfahren, sortiment: s.sortiment, lab: s.lab, l: s.l, t: s.t, uebermass: s.uebermass, hv: s.hv, hr: s.rueck ? s.hr : [], rueck: s.rueck, c: s.c, red: s.red, u: s.u, entrindet: s.entrindet, hs: s.hs, staemme: s.staemme, ergebnis: r };
+    const messung = { verfahren: s.verfahren, sortiment: s.sortiment, sortimentFrei: s.sortimentFrei.trim(), rinde: s.rinde, rabzug: s.rabzug, rabzugProzent: s.rabzugProzent, lab: s.lab, l: s.l, t: s.t, uebermass: s.uebermass, hv: s.hv, hr: s.rueck ? s.hr : [], rueck: s.rueck, c: s.c, red: s.red, u: s.u, entrindet: s.entrindet, hs: s.hs, staemme: s.staemme, ergebnis: r };
     store.update((st) => st.measures.push({ id: uid(), type: 'polter', parcelId: s.parcelId, date: Date.now(), finishedAt: Date.now(), status: 'fertig', createdAt: Date.now(), note: '', details, messung }));
     toast(`Polter gespeichert: ${zahlText(r.fm)} Fm o.R.`);
     page.close();

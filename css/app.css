@@ -1214,3 +1214,8 @@ li.fin-zeile { cursor: default; }
 .layer-box { overflow: hidden; }
 .layer-box-titel { margin: -10px -12px 6px; padding: 10px 14px; background: var(--primary-soft); border-bottom: 1px solid var(--line); font-size: 17px; font-weight: 800; color: var(--primary); letter-spacing: .01em; }
 .layer-box .btn-block { margin-top: 6px; }
+
+/* Poltervermessung: Verfahren mit Sortimentswahl */
+.verf-karte { display: block; cursor: pointer; text-align: left; }
+.verf-sortimente { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 6px; cursor: default; }
+.verf-sortimente .q-chips { flex-wrap: wrap; }

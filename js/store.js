@@ -9,6 +9,7 @@ const defaults = () => ({
   foerderantraege: [],
   finanzen: { buchungen: [], quote: 25 }, // siehe finanzen.js – Rechnungen, Einnahmen, Rücklagenquote für den Wald
   termine: [],      // eigene Termine (Aktuelles → FBG-Termine)
+  bestandPhase: {}, // von Hand gewählte Entwicklungsphase je Flurstück
   fotos: {}, // Vorher-/Nachher-Fotos je Eintrag: { 'm:<id>' | 'lager:<id>' | 'gasse:<id>' | 'habitat:<id>' | 'jagd:<id>': [{ id, phase, datum, notiz, w, h }] }
   punkte: { habitat: [], jagd: [] }, // Habitatbäume { id, at, typ: stehend|liegend, … } und jagdliche Einrichtungen { id, at, typ: kanzel|bock|erdsitz, … }
   erschliessung: { gassen: [], lager: [] }, // Profimodus: Rückegassen { id, line, notiz } und Lagerplätze { id, at, name, befahrbar, lkw, menge, text }

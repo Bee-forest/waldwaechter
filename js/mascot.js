@@ -43,6 +43,7 @@ export function startTour(step = 0) {
   if (step >= TOUR.length) {
     hide();
     store.update((s) => { s.onboardingDone = true; });
+    if (!store.get().settings.zieleGefragt) setTimeout(() => import('./empfehlung.js').then((m) => m.zieleAbfrage({ erstmal: true })), 400);
     return;
   }
   const last = step === TOUR.length - 1;

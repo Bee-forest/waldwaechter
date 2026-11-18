@@ -13,7 +13,8 @@ import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
 import { zeigeVerordnung } from './schutzgebiete.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
-import { bestandAt, KORREKTUR_ARTEN, SCHICHTEN, korrAlter, pflanzungAm } from './map/bestand.js';
+import { bestandAt, bestandInFlaeche, oberhoeheFlaeche, KORREKTUR_ARTEN, SCHICHTEN, korrAlter, pflanzungAm } from './map/bestand.js';
+import { bestandsprofil, phaseVon, durchforstungStatus, PHASEN as ENTW_PHASEN } from './empfehlung.js';
 import { empfehlung, empfehlungMitErsatz, bztName, GRUPPEN, BAUMARTEN_KURZ, eichenHinweis } from './bzt.js';
 import { wanderwege } from './map/wanderwege.js';
 import { createFlurnummernLayer } from './map/flurnummern.js';
@@ -687,6 +688,8 @@ function geoInfoBlock(latlng, parcelId = null, polys = null) {
     zust: klapp('zust', 'Ansprechpartner', B.zust, 'Lädt …'),
     gelaende: gelaendeBlock(latlng, polys),
   };
+  let bztFertig; const bztP = new Promise((ok) => { bztFertig = ok; });
+  K.empfehlung = polys?.length && parcelId ? empfehlungBlock(parcelId, polys, latlng, bztP) : null;
   const bestandP = bestandAt([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]]).catch(() => null);
   queryPoint(latlng).then(async (info) => {
     if (info.failed) throw new Error('offline');
@@ -707,23 +710,56 @@ function geoInfoBlock(latlng, parcelId = null, polys = null) {
     if (!einheit && !gruppe) { fill(B.bzt, lade('Am Punkt ist keine Standortskartierung hinterlegt – suche den nächstgelegenen kartierten Standort …')); K.bzt.setKurz('suche nächsten Standort …'); }
     empfehlungMitErsatz(pt, { einheit, gruppe }).then(({ r, ersatz }) => {
       if (!ersatz) {
-        if (r.status === 'keinStandort') { fill(B.bzt, h('p', { class: 'muted' }, 'Weder am Punkt noch im Umkreis von 2,5 km gibt es einen kartierten Standort mit Eintrag im Tabellenwerk. Frag beim Forstamt nach einer Empfehlung.')); K.bzt.setKurz('keine Empfehlung'); return; }
-        fill(B.bzt, bztKarte(r)); K.bzt.setKurz(bztKurz(r)); return;
+        if (r.status === 'keinStandort') { bztFertig(null); fill(B.bzt, h('p', { class: 'muted' }, 'Weder am Punkt noch im Umkreis von 2,5 km gibt es einen kartierten Standort mit Eintrag im Tabellenwerk. Frag beim Forstamt nach einer Empfehlung.')); K.bzt.setKurz('keine Empfehlung'); return; }
+        fill(B.bzt, bztKarte(r)); K.bzt.setKurz(bztKurz(r)); bztFertig(r); return;
       }
       const st = explainStandort(ersatz.standort);
       const notiz = h('div', { class: 'lrt-hinweis brutzeit' }, h('strong', {}, 'Empfehlung vom nächstgelegenen Standort'),
         h('p', {}, `${ersatz.grund === 'keineKartierung' ? 'Am angetippten Punkt ist keine Standortskartierung hinterlegt.' : `Für die Standortseinheit ${einheit || gruppe} am Punkt enthält das Tabellenwerk keine Empfehlung.`} Verwendet wird der nächste kartierte Standort mit Empfehlung, ca. ${ersatz.abstand.toLocaleString('de-DE')} m in Richtung ${ersatz.richtung}: ${ersatz.einheit || ersatz.gruppe}${st?.desc ? ` (${st.desc})` : ''}. Klimabereich und Wuchseinheit gelten für den angetippten Punkt.`),
         h('p', { class: 'muted' }, 'Ob der Standort vor Ort passt, im Zweifel mit dem Forstamt abstimmen.'));
-      fill(B.bzt, notiz, bztKarte(r)); K.bzt.setKurz(`nächster Standort (${ersatz.abstand.toLocaleString('de-DE')} m): ${bztKurz(r)}`);
-    }).catch(() => { fill(B.bzt, h('p', { class: 'muted' }, 'Die Baumartenempfehlung konnte nicht geladen werden.')); K.bzt.setKurz('nicht verfügbar'); });
+      bztFertig(r); fill(B.bzt, notiz, bztKarte(r)); K.bzt.setKurz(`nächster Standort (${ersatz.abstand.toLocaleString('de-DE')} m): ${bztKurz(r)}`);
+    }).catch(() => { bztFertig(null); fill(B.bzt, h('p', { class: 'muted' }, 'Die Baumartenempfehlung konnte nicht geladen werden.')); K.bzt.setKurz('nicht verfügbar'); });
   }).catch(() => {
     fill(B.standort, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Forstliche Angaben am Punkt', INFO_SOURCES.forst(latlng), 220));
     fill(B.schutz, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160));
     fill(B.zust, h('p', { class: 'muted' }, 'Das Geoportal ist gerade nicht erreichbar.'));
     fill(B.bzt, h('p', { class: 'muted' }, 'Ohne Standortskarte (Geoportal nicht erreichbar) ist keine Baumartenempfehlung möglich.'));
     [K.standort, K.bzt, K.schutz, K.zust].forEach((k) => k.setKurz('nicht erreichbar'));
+    bztFertig(null);
   });
-  return [K.standort, K.gelaende, K.bzt, K.schutz, K.zust];
+  return [K.empfehlung, K.standort, K.gelaende, K.bzt, K.schutz, K.zust];
+}
+
+/** Bestandsprofil und Handlungsempfehlung für ein Flurstück */
+function empfehlungBlock(parcelId, polys, latlng, bztP) {
+  const inhalt = h('div', { 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Ermittle Entwicklungsphase und Empfehlungen …'));
+  const block = klapp('empfehlung', 'Bestandsprofil und Empfehlung', inhalt, 'Lädt …');
+  const pt = [latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]];
+  const ring = polys[0][0];
+  const daten = Promise.all([bestandInFlaeche(ring, polys).catch(() => null), oberhoeheFlaeche(ring, polys).catch(() => null), bztP]);
+  const zeichne = async () => {
+    const [b, oh, bzt] = await daten;
+    const k = store.get().bestandKorrektur?.[parcelId];
+    const pf = pflanzungAm(pt);
+    const art = pf?.arten?.[0]?.name || k?.haupt?.art || b?.art || b?.text || '';
+    const alter = pf?.alter ?? (k?.haupt ? korrAlter(k.haupt, k.jahr) : null) ?? b?.alter ?? null;
+    const einartig = pf ? pf.arten.length === 1 : k?.haupt?.art ? !(k.misch?.art || k.neben?.art)
+      : b ? b.anteil >= 0.8 && !(b.weitere || []).some((w) => w.anteil >= 0.1) && !/ mit | und |,/i.test(b.text || '') : false;
+    const gewaehlt = store.get().bestandPhase?.[parcelId];
+    const ph = gewaehlt ? { phase: gewaehlt, quelle: 'eigen' } : phaseVon({ oberhoehe: oh?.oberhoehe ?? null, alter });
+    const df = durchforstungStatus(parcelId, ph.phase, oh?.oberhoehe ?? null);
+    fill(inhalt, bestandsprofil({
+      phase: ph.phase, quelle: ph.quelle, oberhoehe: oh?.oberhoehe ?? null, alter, art, einartig, bzt, durchforstung: df,
+      onPhase: (key) => { store.update((s) => { s.bestandPhase ||= {}; if (key === ph.phase && gewaehlt) delete s.bestandPhase[parcelId]; else s.bestandPhase[parcelId] = key; }); zeichne(); },
+      onZiele: zeichne,
+      onDurchforstung: async () => { const { openThinningWizard } = await import('./thinning/wizard.js'); window.dispatchEvent(new CustomEvent('ww:navigate', { detail: 'massnahmen' })); openThinningWizard(df?.measureId ? { measureId: df.measureId } : { parcelId }); },
+      onMassnahme: (typ) => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId, typ } })),
+      onAktion: (a) => { const c = map.getCenter(); if (a === 'gassen') openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); else openPunktEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()), art: a }); },
+    }));
+    block.setKurz(ph.phase ? `${ENTW_PHASEN[ph.phase].name}${oh ? ` · Oberhöhe ${Math.round(oh.oberhoehe)} m` : ''}${df?.faellig ? ' · Durchforstung fällig' : ''}` : 'Phase wählen');
+  };
+  zeichne().catch(() => { fill(inhalt, h('p', { class: 'muted' }, 'Das Bestandsprofil konnte nicht ermittelt werden.')); block.setKurz('nicht verfügbar'); });
+  return block;
 }
 
 /** Das braune „i“: markiert die angetippte Stelle; Antippen springt zur Infobox */

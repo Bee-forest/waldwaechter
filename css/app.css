@@ -1253,3 +1253,18 @@ li.fin-zeile { cursor: default; }
 .measure .badge { white-space: nowrap; overflow-wrap: normal; flex: none; }
 .measure-top { gap: 8px; }
 .measure-top .measure-type { min-width: 0; }
+/* Bestandsprofil und Empfehlung */
+.empf { display: grid; gap: 10px; }
+.empf-skizzen { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
+.empf-skizzen figure { margin: 0; display: grid; gap: 4px; }
+.empf-skizzen svg { width: 100%; height: auto; display: block; border-radius: 10px; }
+.empf-skizzen figcaption { font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.empf-liste { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.empf-liste li p { margin: 2px 0 6px; }
+.empf-liste li.empf-top > strong { color: var(--primary); }
+.empf-faellig { font-weight: 700; color: var(--primary); }
+.empf-foerder-liste { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.empf-foerder-liste li { display: grid; gap: 2px; }
+.empf-phasen { flex-wrap: wrap; }
+.ziel-frage { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ziel-frage:last-child { border-bottom: 0; }

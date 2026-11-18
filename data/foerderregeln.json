@@ -1,0 +1,20 @@
+{
+  "stand": "2026-11-18",
+  "geprueft": false,
+  "hinweis": "Fördersätze ändern sich. Diese Tabelle bitte von der Forstbetriebsgemeinschaft (FBG) oder vom Forstamt prüfen lassen und bei Änderungen hier anpassen (geprueft auf true setzen, Stand aktualisieren).",
+  "programme": {
+    "GANW": { "name": "Thüringer Richtlinie zur Förderung forstwirtschaftlicher Maßnahmen 2025, Teil A – Naturnahe Waldbewirtschaftung", "link": "https://www.thueringenforst.de/angebote-produkte/forstamtsservice/forstfoerderung", "formulare": "https://www.thueringenforst.de/aktuelles-service/service/formularcenter/formulare-forstfoerderung" },
+    "LABE": { "name": "Thüringer Landesprogramm zur Bewältigung der Folgen von Extremwetterereignissen im Wald", "link": "https://www.thueringenforst.de/angebote-produkte/forstamtsservice/forstfoerderung", "formulare": "https://www.thueringenforst.de/aktuelles-service/service/formularcenter/formulare-forstfoerderung" },
+    "KWM": { "name": "Bundesförderprogramm „Klimaangepasstes Waldmanagement“ (KWM)", "link": "https://www.klimaanpassung-wald.de" }
+  },
+  "tatbestaende": [
+    { "id": "wiederaufforstung", "titel": "Wiederaufforstung / Voranbau (Waldumbau)", "programm": "GANW", "satz": "Pflanzgut 75 % der Rechnung (standortheimisch 85 %), Pflanzung 0,47 € je Pflanze, Flächenräumung 530 €/ha, Mulchen 1.300 €/ha", "bedingung": "mind. 40 % Laubbäume, überwiegend standortheimisch; auf Flächen über 1 ha höchstens 75 % je Baumart; Herkunftsempfehlungen bindend", "fuer": ["pflanzung", "voranbau", "mischung"], "massnahme": "pflanzung" },
+    { "id": "labe-wiederaufforstung", "titel": "Wiederaufforstung nach Sturm, Dürre oder Käfer (Landesprogramm)", "programm": "LABE", "satz": "Pflanzgut bis 100 %, Pflanzung 0,60 € je Pflanze, Räumung 700 €/ha, Mulchen 1.750 €/ha", "bedingung": "nur bis 20 ha Waldbesitz und nur für Kalamitätsflächen; mind. 30 % Laubbäume, Fichte höchstens 30 %", "fuer": ["pflanzung", "kalamitaet"], "massnahme": "pflanzung" },
+    { "id": "kultursicherung", "titel": "Sicherung der Kultur (Freischneiden, Pflege bis zur Sicherung)", "programm": "GANW", "satz": "550 €/ha (Landesprogramm 700 €/ha)", "bedingung": "für geförderte oder geeignete Kulturen bis zur gesicherten Kultur", "fuer": ["kulturpflege"], "massnahme": "pflege" },
+    { "id": "jungwaldpflege", "titel": "Jungwaldpflege (Jungbestandspflege, Läuterung)", "programm": "GANW", "satz": "475 €/ha", "bedingung": "in Jungbeständen (Dickung bis schwaches Stangenholz); nicht im Landesprogramm", "fuer": ["laeuterung", "jungbestandspflege"], "massnahme": "pflege" },
+    { "id": "zaun", "titel": "Schutz der Kultur: Wildschutzzaun", "programm": "GANW", "satz": "5,40 €/lfm gegen Reh, 7,70 €/lfm gegen Rotwild (Landesprogramm 7,00 / 10,00 €)", "bedingung": "zum Schutz einer Kultur; 1,60 m bzw. 2,00 m hoch", "fuer": ["wildschutz"], "massnahme": "zaunbau" },
+    { "id": "einzelschutz", "titel": "Schutz der Kultur: Einzelschutz", "programm": "GANW", "satz": "3,50 € (klein) bzw. 4,50 € (groß) je Stück (Landesprogramm 4,60 / 6,00 €)", "bedingung": "für Pflanzen einer Kultur", "fuer": ["wildschutz"], "massnahme": "einzelschutz" },
+    { "id": "bodenschonend", "titel": "Bodenschonende Holzernte mit Rückepferd oder Seilkran", "programm": "GANW", "satz": "Pferd 10,40 €/Fm (Vorliefern 5,60 €/Fm), Seilkran 0,65 €/lfm", "bedingung": "bei Durchforstungen in sensiblen Lagen; nicht im Landesprogramm", "fuer": ["durchforstung_steil", "durchforstung"], "massnahme": "einschlag" },
+    { "id": "kwm", "titel": "Klimaangepasstes Waldmanagement (Bund)", "programm": "KWM", "satz": "jährlicher Zuschuss je ha für 10 bzw. 20 Jahre", "bedingung": "Verpflichtung auf 11 bzw. 12 Kriterien (u. a. 5 Habitatbäume/ha, Naturverjüngung vorrangig, Totholz); Erstanträge laut Bundesumweltministerium ab 1. Oktober 2026 wieder möglich", "fuer": ["habitat", "naturschutz", "mischung"], "massnahme": null }
+  ]
+}

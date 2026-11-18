@@ -84,6 +84,7 @@ async function main() {
   show(legacy[start] || start || 'home');
 
   if (!store.get().onboardingDone) setTimeout(() => startTour(), 600);
+  else if (!store.get().settings.zieleGefragt) setTimeout(() => import('./empfehlung.js').then((m) => m.zieleAbfrage({ erstmal: true })), 1200);
   registerSW();
   initErinnerungen();
 }

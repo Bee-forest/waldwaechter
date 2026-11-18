@@ -87,7 +87,6 @@ export async function initHome(root) {
       h('div', { class: 'map-card-head' },
         h('h2', {}, 'Karte Thüringen'),
         baseSwitch,
-        h('p', { class: 'muted' }, 'ALKIS-Flurstücke, Standortkarte, Rettungspunkte, Schutzgebiete, Natura 2000 und Biotope/LRT'),
       ),
       h('div', { class: 'map-wrap' },
         mapEl,

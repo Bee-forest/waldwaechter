@@ -141,7 +141,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   let schritt = 0, letzterSchritt = -1, weitereOffen = false;
   const SCHRITTE = ['Pflanzfläche', 'Baumarten', 'Pflanzenzahl und Verband', 'Baumarten verteilen', 'Pflanzplan und Kosten'];
   const body = h('div', { class: 'pflanzung' });
-  let karte = null, umlauf = null, weiterBtn = null, griff = null, pinsel = null, malt = false, geplant = false, marker = [], warteschlange = [], pinselGroesse = 'einzeln', gasseNeu = null, zieht = null, weitereBtn = null;
+  let karte = null, umlauf = null, weiterBtn = null, griff = null, pinsel = null, malt = false, geplant = false, marker = [], warteschlange = [], pinselGroesse = 'einzeln', gasseNeu = null, zieht = null, weitereBtn = null, letzterBtn = null;
   // Zurück (Pfeil oben, Handy-Taste, Wischgeste): einen Schritt zurück; im ersten Schritt vor dem Verwerfen fragen
   let verwerfenOk = false;
   const page = openPage('Pflanzung planen', body, { onClose: () => { umlauf?.stop(); karte?.remove(); },
@@ -380,6 +380,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     // „Weiter“ freigeben, sobald die Fläche drei Punkte hat (ohne die Seite neu aufzubauen)
     if (schritt === 0 && weiterBtn) weiterBtn.disabled = !alle().length;
     if (schritt === 0 && weitereBtn) weitereBtn.disabled = s.ring.length < 3;
+    if (schritt === 0 && letzterBtn) { letzterBtn.disabled = !s.ring.length && !s.flaechen.length; letzterBtn.textContent = s.ring.length || !s.flaechen.length ? 'Letzten Punkt entfernen' : 'Letzte Einzelfläche bearbeiten'; }
     const anzahl = alle().length, mehr = s.flaechen.length > 0;
     if (schritt === 0) status.textContent = (anzahl ? `Pflanzfläche ${formatHa(flHa())}${anzahl > 1 ? ` aus ${anzahl} Einzelflächen` : ''}` : '')
       + (s.ring.length >= 3 ? `${anzahl ? ' · ' : ''}${mehr ? `Einzelfläche ${s.flaechen.length + 1}: ` : ''}${s.ring.length} Eckpunkte` : `${anzahl ? ' · ' : ''}${mehr ? `Einzelfläche ${s.flaechen.length + 1}: ` : ''}${s.ring.length} von mindestens 3 Eckpunkten – tippe die Ecken in die Karte oder lauf die Fläche mit dem GPS ab.`);
@@ -475,7 +476,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
         mapEl, status, umlaufHost,
         h('div', { class: 'btn-row' },
           (weitereBtn = h('button', { type: 'button', class: 'btn btn-small btn-primary', disabled: s.ring.length < 3, onclick: () => { s.flaechen.push(s.ring); s.ring = []; s.vert.mal = {}; s.bzt = null; zeichne(); render(); } }, '+ Weitere Einzelfläche')),
-          s.ring.length || s.flaechen.length ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => { if (s.ring.length) s.ring.pop(); else s.ring = s.flaechen.pop(); zeichne(); render(); } }, s.ring.length ? 'Letzten Punkt entfernen' : 'Letzte Einzelfläche bearbeiten') : null,
+          (letzterBtn = h('button', { type: 'button', class: 'btn btn-small', disabled: !s.ring.length && !s.flaechen.length, onclick: () => { if (s.ring.length) s.ring.pop(); else if (s.flaechen.length) s.ring = s.flaechen.pop(); zeichne(); render(); } }, s.ring.length || !s.flaechen.length ? 'Letzten Punkt entfernen' : 'Letzte Einzelfläche bearbeiten')),
           h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.ring = []; s.flaechen = []; zeichne(); render(); } }, 'Neu beginnen'),
           byId[s.parcelId] ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => { const r = polysOf(byId[s.parcelId]).map((poly) => [...poly[0]]); s.ring = r.pop() || []; s.flaechen = r; s.vert.mal = {}; zeichne(); render(); } }, 'Ganzes Flurstück') : null),
         alle().length > 1 || s.flaechen.length ? h('ul', { class: 'mat-kurz' }, [...s.flaechen, ...(s.ring.length >= 3 ? [s.ring] : [])].map((r, i) => h('li', {}, `Einzelfläche ${i + 1}: ${formatHa(areaHa(r))} `,

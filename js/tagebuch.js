@@ -25,6 +25,7 @@ export function fotopunkteAbschnitt(p) {
       h('div', { class: 'btn-row' },
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }) }, 'Hinführen'),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`fp:${f.id}`, `${f.name || 'Fotopunkt'} · ${titel}`, { verlauf: true, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit.` }) }, fotoKnopfText(`fp:${f.id}`)),
+        h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktHierSetzen(f) }, 'Standort hier neu setzen'),
         h('button', { type: 'button', class: 'link-btn', onclick: async () => { if (await confirmDialog('Fotopunkt mit allen Aufnahmen löschen?', { ok: 'Löschen', danger: true })) { store.update((st) => { st.fotopunkte = st.fotopunkte.filter((x) => x.id !== f.id); }); fotosLoeschen(`fp:${f.id}`); } } }, 'löschen'))))));
 }
 
@@ -63,7 +64,12 @@ export async function fotopunktAnlegen(parcelId, p) {
   const w = { name: '', blick: '', at: null, genau: null };
   const posText = h('span', {}, 'Standort wird bestimmt …');
   const blickFeld = h('input', { type: 'number', min: 0, max: 359, inputmode: 'numeric', placeholder: 'z. B. 135', oninput: (e) => { w.blick = e.target.value; } });
-  if (navigator.geolocation) navigator.geolocation.getCurrentPosition((pp) => { w.at = [pp.coords.latitude, pp.coords.longitude]; w.genau = Math.round(pp.coords.accuracy); posText.textContent = `GPS ± ${w.genau} m`; }, () => { posText.textContent = 'Kein GPS – die Flächenmitte wird verwendet.'; }, { enableHighAccuracy: true, timeout: 20000 });
+  // Standort laufend messen und die genaueste Messung behalten
+  const watch = navigator.geolocation?.watchPosition((pp) => {
+    const acc = Math.round(pp.coords.accuracy);
+    if (w.genau == null || acc <= w.genau) { w.at = [pp.coords.latitude, pp.coords.longitude]; w.genau = acc; }
+    posText.textContent = `Standort gemessen: ± ${w.genau} m${w.genau > 15 ? ' – kurz stehen bleiben, die Genauigkeit wird noch besser' : ''}`;
+  }, () => { posText.textContent = 'Kein GPS – bitte GPS einschalten und die Standortfreigabe erlauben.'; }, { enableHighAccuracy: true, maximumAge: 0, timeout: 60000 });
   const kompassKnopf = h('button', { type: 'button', class: 'btn btn-small', onclick: async () => {
     try {
       if (typeof DeviceOrientationEvent?.requestPermission === 'function' && (await DeviceOrientationEvent.requestPermission()) !== 'granted') throw new Error('Kompass nicht freigegeben');
@@ -86,9 +92,26 @@ export async function fotopunktAnlegen(parcelId, p) {
       h('label', {}, 'Blickrichtung (Grad)', blickFeld), kompassKnopf),
     actions: [{ label: 'Abbrechen', value: false }, { label: 'Anlegen', value: true, primary: true }],
   });
+  if (watch != null) navigator.geolocation.clearWatch(watch);
   if (!ok) return;
+  if (!w.at) { toast('Noch kein GPS-Standort – der Fotopunkt wurde nicht angelegt. Bitte am Fotopunkt mit GPS erneut versuchen.'); return; }
   const id = uid();
   const blick = ((Math.round(Number(w.blick) || 0) % 360) + 360) % 360;
-  store.update((s) => { s.fotopunkte ||= []; s.fotopunkte.push({ id, parcelId, at: w.at || centroid(p.ring), genau: w.genau, blick, name: w.name.trim() || `Fotopunkt ${(s.fotopunkte.filter((x) => x.parcelId === parcelId).length) + 1}`, erfasst: Date.now() }); });
+  store.update((s) => { s.fotopunkte ||= []; s.fotopunkte.push({ id, parcelId, at: w.at, genau: w.genau, blick, name: w.name.trim() || `Fotopunkt ${(s.fotopunkte.filter((x) => x.parcelId === parcelId).length) + 1}`, erfasst: Date.now() }); });
   openFotos(`fp:${id}`, w.name.trim() || 'Fotopunkt', { verlauf: true, hinweis: `Fotografiere von hier in Richtung ${blick}° (${compassLabel(blick)}).` });
+}
+
+/** Fotopunkt auf den aktuellen GPS-Standort verschieben (z. B. wenn er falsch erfasst wurde) */
+function fotopunktHierSetzen(f) {
+  if (!navigator.geolocation) { toast('Kein GPS verfügbar'); return; }
+  toast('Standort wird gemessen …');
+  let best = null;
+  const watch = navigator.geolocation.watchPosition((pp) => { if (!best || pp.coords.accuracy < best.acc) best = { at: [pp.coords.latitude, pp.coords.longitude], acc: Math.round(pp.coords.accuracy) }; }, () => {}, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+  setTimeout(async () => {
+    navigator.geolocation.clearWatch(watch);
+    if (!best) { toast('Kein GPS-Standort erhalten.'); return; }
+    if (!(await confirmDialog(`Fotopunkt „${f.name}“ hierher verschieben (± ${best.acc} m)?`, { ok: 'Verschieben' }))) return;
+    store.update((s) => { const x = s.fotopunkte.find((y) => y.id === f.id); if (x) { x.at = best.at; x.genau = best.acc; } });
+    toast('Fotopunkt verschoben');
+  }, 8000);
 }

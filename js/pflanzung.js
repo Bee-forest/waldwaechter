@@ -165,8 +165,15 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
   const nHaVon = (x) => { if (x.nHa == null) { const V = verbandVon(x.name); x.nHa = Math.round((V[0] + V[1]) / 2 / 100) * 100; } return x.nHa; };
   const verbandVon = (name) => VERBAND[artInfo(name)?.verband || 'elb'][s.art === 'voranbau' ? 'voranbau' : 'frei'];
   // Übermalte Pflanzen gehören zu festen Pflanzplätzen; ändern sich Fläche, Baumarten, Verband, Gassen oder Mischung, gilt die Übermalung nicht mehr
-  const basis = () => JSON.stringify([alle(), s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed, s.reihe, s.vert.form === 'muster' ? musterListe() : null]);
-  const musterListe = () => { const namen = s.arten.map((x) => x.name); const m = (s.vert.muster || []).filter((n) => namen.includes(n)); return m.length ? m : namen; };
+  const basis = () => JSON.stringify([alle(), s.art, s.arten.map((x) => [x.name, x.anteil, x.nHa]), s.gassen, s.vert.form, s.vert.seed, s.reihe, s.vert.form === 'reihen' ? musterListe() : null]);
+  // Reihenmuster: eigenes Muster oder aus den Anteilen (z. B. 60 / 40 % → 3 Reihen BU, 2 Reihen EI)
+  const musterListe = () => {
+    const namen = s.arten.map((x) => x.name);
+    const m = (s.vert.muster || []).filter((n) => namen.includes(n));
+    if (m.length) return m;
+    const summe = s.arten.reduce((a, x) => a + (Number(x.anteil) || 0), 0) || 1;
+    return s.arten.flatMap((x) => Array(Math.max(1, Math.round(((Number(x.anteil) || 0) / summe) * 5))).fill(x.name));
+  };
   const layoutArten = () => s.arten.map((x) => ({ name: x.name, anteil: Number(x.anteil) || 0, nHa: nHaVon(x), gruppeHa: artInfo(x.name)?.gruppeHa || 0 }));
   function layout(mitPunkten = false) {
     if (s.gassen.winkel == null && alle().length) s.gassen.winkel = Math.round(hauptRichtung(groesste()));
@@ -605,7 +612,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
           onclick: () => { if (s.vert.form === k) return; s.vert.form = k; s.vert.mal = {}; render(); } }, f.label))),
         h('p', { class: 'hint' }, `${F.text}${s.vert.form !== 'einzeln' && s.vert.form !== 'reihen' ? ' Baumarten mit Mindestgruppengröße (z. B. Eiche ab 0,3 ha) werden automatisch zu größeren Gruppen zusammengefasst.' : ''}`),
         mapEl,
-        s.vert.form === 'muster' ? musterEditor() : null,
+        s.vert.form === 'reihen' ? musterEditor() : null,
         ...(s.vert.form === 'frei' ? freiWerkzeuge(pinselChip) : [
         h('p', { class: 'sheet-label' }, 'Übermalen'),
         h('div', { class: 'art-chips pinsel' }, pinselChip(null, 'Karte verschieben', '#2E7D32'), s.arten.map((x) => pinselChip(x.name, x.name, farbe(x.name))), pinselChip('__auto', 'Radierer (automatisch)', '#9E9E9E')),
@@ -777,12 +784,11 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     const K = await pdfKarte(doc, { x: L0, y, w: R - L0, h: BH, ringe: alle(), basemap });
     alle().forEach((r) => { doc.polygon([r.map(K.tr)], K.hg ? { stroke: [255, 255, 255], w: 3 } : { fill: [236, 242, 232], stroke: [46, 125, 50], w: 1.5 }); if (K.hg) doc.polygon([r.map(K.tr)], { stroke: [46, 125, 50], w: 1.5 }); });
     const lay = layout(true);
-    // Pflanzplätze so klein und durchscheinend, dass das Luftbild darunter sichtbar bleibt
-    if (K.hg) doc.transparenz(0.75);
+    // Pflanzplätze in kräftiger Farbe mit weißem Rand – auf Luftbild und Karte gut sichtbar
     if (lay.punkte.length <= 20000) {
       for (const [px, py, art, dReihe] of lay.punkte) {
-        const d = s.vert.form === 'frei' ? Math.max(4, Math.min(8, K.sk * 2)) : Math.max(0.5, Math.min(2.4, 0.45 * Math.min(dReihe || 1, s.reihe) * K.sk));
-        const [u, v] = K.tr(lay.R.toLL([px, py])); doc.rechteck(u - d / 2, v - d / 2, d, d, { fill: rgb(farbe(art)) });
+        const d = s.vert.form === 'frei' ? Math.max(4, Math.min(8, K.sk * 2)) : Math.max(1.1, Math.min(3, 0.55 * Math.min(dReihe || 1, s.reihe) * K.sk));
+        const [u, v] = K.tr(lay.R.toLL([px, py])); doc.rechteck(u - d / 2, v - d / 2, d, d, { fill: rgb(kraeftig(farbe(art))), stroke: [255, 255, 255], w: Math.max(0.25, d * 0.22) });
       }
     } else {
       // sehr viele Pflanzen: Reihen als schmale Streifen statt Fläche, damit Lücken bleiben
@@ -858,7 +864,7 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
       details: { species: haupt?.name || '', count: String(b.stueck), area: dez(b.ha, 2), verband: b.zeilen.map((z) => `${z.name} ${z.verband}`).join('; ') },
       flaeche: { ring: [...groesste()], ringe: alle().map((r) => [...r]), ha: b.ha },
       pflanzplan: { art: s.art, reihe: s.reihe, gassen: JSON.parse(JSON.stringify(s.gassen)), netto: b.ha ? b.nettoHa / b.ha : 1, grund: s.grund, zonen: [],
-        vert: { form: s.vert.form, seed: s.vert.seed, mal: { ...s.vert.mal }, frei: s.vert.form === 'frei' ? s.vert.frei.map((q) => [...q]) : undefined },
+        vert: { form: s.vert.form, seed: s.vert.seed, mal: { ...s.vert.mal }, frei: s.vert.form === 'frei' ? s.vert.frei.map((q) => [...q]) : undefined, muster: s.vert.form === 'reihen' ? musterListe() : undefined },
         vorgabe: s.arten.map((x) => ({ name: x.name, anteil: Number(x.anteil) || 0, nHa: x.nHa, gruppeHa: artInfo(x.name)?.gruppeHa || 0 })),
         arten: b.zeilen.map((z) => ({ name: z.name, code: z.info.code, anteil: Math.round(z.anteilEcht * 1000) / 10, flaecheHa: Math.round(z.flaecheHa * 10000) / 10000, nHa: z.nHa, stueck: z.stueck, verband: z.verband, sortiment: z.sortiment || '', wbsNr: z.wbsNr ?? null, preis: z.preis, kosten: z.kosten })),
         standort: s.bzt?.status === 'ok' ? { einheit: s.standort?.einheit, code: s.bzt.code, wuchseinheit: s.bzt.wuchseinheit, klimabereich: s.bzt.klimabereichTabelle } : null },

@@ -7,11 +7,10 @@ export const REIHE = 2.5;
 const RAND = 1; // Abstand der ersten/letzten Pflanze zur Flächengrenze (m)
 export const FORMEN = {
   einzeln: { label: 'Einzeln gemischt', zelle: 5, text: 'Die Baumarten stehen einzeln gemischt in den Reihen.' },
-  reihen: { label: 'Reihenweise', zelle: 5, reihen: 3, text: 'Je drei Reihen eine Baumart.' },
+  reihen: { label: 'Reihenweise', zelle: 5, reihen: 3, text: 'Jede Reihe bekommt eine Baumart nach deinem Reihenmuster, z. B. BU – BU – EI, das sich wiederholt.' },
   trupp: { label: 'Truppweise', zelle: 10, text: 'Trupps von etwa 10 × 10 m.' },
   gruppe: { label: 'Gruppenweise', zelle: 20, text: 'Gruppen von etwa 20 × 20 m.' },
   horst: { label: 'Horstweise', zelle: 40, text: 'Horste von etwa 40 × 40 m.' },
-  muster: { label: 'Reihenmuster', zelle: 5, text: 'Jede Reihe bekommt eine Baumart nach deinem Muster, z. B. BU – BU – EI wiederholt.' },
   frei: { label: 'Einzeln setzen', zelle: 5, text: 'Du setzt jede Pflanze selbst: Baumart wählen und auf die Fläche tippen.' },
 };
 const mod = (a, n) => ((a % n) + n) % n;
@@ -113,11 +112,11 @@ const memo = { key: '' };
  * @param {boolean} mitPunkten  Pflanzplätze erzeugen (für Karte und PDF)
  */
 export function pflanzLayout(p, mitPunkten = false) {
-  const key = JSON.stringify([p.ring, p.arten.map((a) => [a.name, a.anteil, a.nHa, a.gruppeHa]), p.gassen, p.form, p.seed, p.mal, p.reihe, p.form === 'frei' ? p.frei : null, p.form === 'muster' ? p.muster : null]);
+  const key = JSON.stringify([p.ring, p.arten.map((a) => [a.name, a.anteil, a.nHa, a.gruppeHa]), p.gassen, p.form, p.seed, p.mal, p.reihe, p.form === 'frei' ? p.frei : null, p.form === 'reihen' || p.form === 'muster' ? p.muster : null]);
   const M = memo;
   if (M.key === key) return M.wert;
   const RA = Number(p.reihe) > 0 ? Number(p.reihe) : REIHE;
-  const form = FORMEN[p.form] ? p.form : 'einzeln';
+  const form = p.form === 'muster' ? 'reihen' : FORMEN[p.form] ? p.form : 'einzeln'; // „Reihenmuster“ ist jetzt Teil von „Reihenweise“
   const F = FORMEN[form];
   const R = rahmen(p.ring, p.gassen?.winkel || 0);
   const r = rng(p.seed || 1);
@@ -139,7 +138,7 @@ export function pflanzLayout(p, mitPunkten = false) {
         if (!(x2 > x + 1e-9)) x2 = Math.min(b, x + c); // Rundung: nie auf der Stelle treten
         const ix = Math.floor((x + 1e-6) / c), iy = Math.floor(row.y / c);
         const pk = `${ix},${iy}`;
-        const gk = form === 'einzeln' ? 'mix' : form === 'reihen' ? `r${Math.floor(row.i / F.reihen)}` : form === 'muster' ? `r${row.i}` : pk;
+        const gk = form === 'einzeln' ? 'mix' : form === 'reihen' ? `r${row.i}` : pk;
         pieces.push({ y: row.y, row: row.i, x1: x, x2, len: x2 - x, pk, gk, ix, iy, art: null });
         x = x2;
       }
@@ -148,7 +147,7 @@ export function pflanzLayout(p, mitPunkten = false) {
   // Übermalte Abschnitte
   for (const pc of pieces) if (mal[pc.pk] && !pc.pk.startsWith('p:') && namen.includes(mal[pc.pk])) { pc.art = mal[pc.pk]; pc.gemalt = true; }
   // Reihenmuster: Reihe i bekommt muster[i mod Länge]
-  const muster = form === 'muster' ? (p.muster || []).filter((n) => namen.includes(n)) : [];
+  const muster = form === 'reihen' ? (p.muster || []).filter((n) => namen.includes(n)) : [];
   if (muster.length) for (const pc of pieces) if (!pc.art) pc.art = muster[pc.row % muster.length];
   // Gruppen der übrigen Abschnitte
   const gruppen = new Map();
@@ -159,7 +158,7 @@ export function pflanzLayout(p, mitPunkten = false) {
   const defizit = () => namen.filter((n) => T[n] > 0).sort((x, y) => (T[y] - A[y]) / T[y] - (T[x] - A[x]) / T[x])[0];
   const setze = (g, n) => { g.art = n; A[n] += g.len; g.pieces.forEach((pc) => { pc.art = n; }); };
   if (form === 'einzeln') gruppen.forEach((g) => g.pieces.forEach((pc) => { pc.art = 'mix'; }));
-  else if (form === 'reihen' || form === 'muster') [...gruppen.values()].sort((a, b) => a.band - b.band).forEach((g) => { const n = defizit(); if (n) setze(g, n); });
+  else if (form === 'reihen') [...gruppen.values()].sort((a, b) => a.band - b.band).forEach((g) => { const n = defizit(); if (n) setze(g, n); });
   else {
     // Zellen zu Gruppen in Mindestgröße der Baumart wachsen lassen (z. B. Eiche ab 0,3 ha)
     const offen = new Set(gruppen.keys());
@@ -282,5 +281,5 @@ export function gruppenGroessen(lay) {
 export function gespeichertesLayout(m) {
   const pp = m?.pflanzplan;
   if (!pp?.vert || !pp.vorgabe?.length || !flaechenRinge(m.flaeche).length) return null;
-  return pflanzLayout({ ring: flaechenRinge(m.flaeche), arten: pp.vorgabe, gassen: pp.gassen, form: pp.vert.form, seed: pp.vert.seed, mal: pp.vert.mal, reihe: pp.reihe, frei: pp.vert.frei });
+  return pflanzLayout({ ring: flaechenRinge(m.flaeche), arten: pp.vorgabe, gassen: pp.gassen, form: pp.vert.form, seed: pp.vert.seed, mal: pp.vert.mal, reihe: pp.reihe, frei: pp.vert.frei, muster: pp.vert.muster });
 }

@@ -643,6 +643,28 @@ function bztKarte(r) {
     h('p', { class: 'info-quellen' }, 'Quelle: ThüringenForst, Standortgerechte Baumarten- und Bestandeszieltypenwahl, Tabellenwerk (Anlage 6 DO Waldbau, Juni 2015). Klimabereiche aus der Karte im Anhang A, auf ca. 150 m genau verortet; Wuchseinheiten: Open Data ThüringenForst.'));
 }
 
+let standortP = Promise.resolve(null);
+/** Wann ist die Fläche befahrbar? Hangneigung × Wasserhaushalt (Standortskarte) × Regen der letzten 30 Tage */
+async function wannBefahrbar(a, latlng) {
+  const st = await Promise.race([standortP, new Promise((ok) => setTimeout(() => ok(null), 8000))]);
+  const e = st ? explainStandort(st) : null;
+  const w = e?.d?.wasser ?? null, wechsel = !!e?.d?.wechsel;
+  let regen = null;
+  try { const { ladeRisiko, bewerte } = await import('./risiko.js'); regen = bewerte(await ladeRisiko([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]])).regen30; } catch { /* ohne Regen */ }
+  const steil = a.anteile[2] + a.anteile[3] + a.anteile[4];
+  const nass = w != null && (w >= 4 || wechsel);
+  const zeilen = [];
+  if (w == null) zeilen.push('Wasserhaushalt unbekannt (keine Standortskartierung erreichbar).');
+  else zeilen.push(`Wasserhaushalt laut Standortskarte: ${WASSER_SKALA[Math.max(0, Math.min(5, w))]}${wechsel ? ', wechselfeucht' : ''}.`);
+  if (regen != null) zeilen.push(`Regen der letzten 30 Tage: ${Math.round(regen)} mm.`);
+  let urteil;
+  if (nass) urteil = 'Nur bei Frost oder nach längerer Trockenheit befahren – und nur auf Rückegassen.';
+  else if (regen != null && regen > 80) urteil = 'Gerade sehr nass: Befahren möglichst verschieben, bis der Boden abgetrocknet ist.';
+  else if (steil > 0.3) urteil = 'Bei trockenem Boden befahrbar; steile Teile nur mit Traktionshilfswinde oder Seil.';
+  else urteil = regen != null && regen < 40 ? 'Jetzt gut befahrbar (trocken) – Rückegassen nutzen.' : 'Bei normaler Witterung befahrbar – Rückegassen nutzen, nach Starkregen warten.';
+  return h('div', { class: 'geo-card' }, h('p', { class: 'geo-kicker' }, 'Wann befahren?'), h('h4', {}, urteil), zeilen.map((z) => h('p', { class: 'muted' }, z)));
+}
+
 /** Hangneigung der Fläche (oder ca. 80 × 80 m um den Punkt) mit Einschätzung der Befahrbarkeit */
 function gelaendeBlock(latlng, polys) {
   const lat = latlng.lat ?? latlng[0], lng = latlng.lng ?? latlng[1];
@@ -672,6 +694,7 @@ function gelaendeBlock(latlng, polys) {
       h('details', { class: 'bzt-nachbar' }, h('summary', {}, 'Was bedeuten die Klassen?'),
         h('ul', { class: 'neig-erkl' }, NEIGUNG.map((k) => h('li', {}, h('strong', {}, `${k.name}: `), k.text)))),
       h('p', { class: 'hint' }, 'Berechnet aus einem Geländemodell mit ca. 30 m Auflösung (Terrain Tiles, SRTM/EU-DEM). Kleine Böschungen, Gräben und Felsen erfasst es nicht. Die Klassen sind Faustwerte: Ob und womit befahren werden kann, hängt auch von Boden, Nässe, Hindernissen und der Maschine ab – vor Ort prüfen.')));
+    wannBefahrbar(a, latlng).then((el) => inhalt.firstChild?.after(el)).catch(() => {});
     block.setKurz(`${kurzWert(a)} · ${b.titel}${a.exposition ? ` · ${a.exposition}hang` : ''}`);
   }).catch(() => { fill(inhalt, h('p', { class: 'muted' }, 'Die Höhendaten sind gerade nicht erreichbar.')); block.setKurz('nicht erreichbar'); });
   return block;
@@ -692,6 +715,7 @@ function geoInfoBlock(latlng, parcelId = null, polys = null) {
     gelaende: gelaendeBlock(latlng, polys),
   };
   let bztFertig; const bztP = new Promise((ok) => { bztFertig = ok; });
+  let standortFertig; standortP = new Promise((ok) => { standortFertig = ok; });
   K.empfehlung = polys?.length && parcelId ? empfehlungBlock(parcelId, polys, latlng, bztP) : null;
   const bestandP = bestandAt([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]]).catch(() => null);
   queryPoint(latlng).then(async (info) => {
@@ -708,6 +732,7 @@ function geoInfoBlock(latlng, parcelId = null, polys = null) {
     K.schutz.setKurz(g.vorschau.schutz);
     K.zust.setKurz(g.vorschau.zust);
     const sp = info.standort || {};
+    standortFertig(info.standort || null);
     const einheit = String(sp.Standortseinheiten || '').trim(), gruppe = String(sp.Standortsguppe || sp.Standortsgruppe || '').trim();
     const pt = [latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]];
     if (!einheit && !gruppe) { fill(B.bzt, lade('Am Punkt ist keine Standortskartierung hinterlegt – suche den nächstgelegenen kartierten Standort …')); K.bzt.setKurz('suche nächsten Standort …'); }
@@ -728,7 +753,7 @@ function geoInfoBlock(latlng, parcelId = null, polys = null) {
     fill(B.zust, h('p', { class: 'muted' }, 'Das Geoportal ist gerade nicht erreichbar.'));
     fill(B.bzt, h('p', { class: 'muted' }, 'Ohne Standortskarte (Geoportal nicht erreichbar) ist keine Baumartenempfehlung möglich.'));
     [K.standort, K.bzt, K.schutz, K.zust].forEach((k) => k.setKurz('nicht erreichbar'));
-    bztFertig(null);
+    bztFertig(null); standortFertig(null);
   });
   return [K.empfehlung, K.standort, K.gelaende, K.bzt, K.schutz, K.zust];
 }

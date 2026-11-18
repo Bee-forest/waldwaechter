@@ -893,8 +893,11 @@ async function renderInfo() {
     ),
     m ? h('div', { class: 'info-actions' },
       h('button', { class: 'btn btn-primary', onclick: () => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId: p.id } })) }, 'Maßnahme planen'),
-      h('button', { class: 'btn', onclick: () => import('./schaden.js').then((x) => x.openSchadensmeldung({ parcelId: p.id })) }, 'Schaden melden'),
-      h('button', { class: 'btn', onclick: () => import('./schaden.js').then((x) => x.openHolzVerkaufen({ parcelId: p.id })) }, 'Holz verkaufen'),
+      h('div', { class: 'info-mehr' },
+        h('button', { class: 'btn btn-small', onclick: () => import('./tagebuch.js').then((x) => x.openWaldtagebuch(p.id)) }, 'Waldtagebuch'),
+        h('button', { class: 'btn btn-small', onclick: () => import('./grenzfinder.js').then((x) => x.openNavigation({ titel: `Grenzfinder · Flst. ${p.nr}`, parcel: p })) }, 'Grenze finden'),
+        h('button', { class: 'btn btn-small', onclick: () => import('./schaden.js').then((x) => x.openSchadensmeldung({ parcelId: p.id })) }, 'Schaden melden'),
+        h('button', { class: 'btn btn-small', onclick: () => import('./schaden.js').then((x) => x.openHolzVerkaufen({ parcelId: p.id })) }, 'Holz verkaufen')),
       h('button', { class: 'btn btn-danger-ghost', onclick: () => removeParcel(p.id) }, h('span', { html: icon.trash }), 'Entfernen'),
     ) : null,
     h('p', { class: 'info-quellen' }, isAlkis

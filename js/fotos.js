@@ -114,13 +114,14 @@ async function fotoAnsehen(key, f) {
  * @param {string} key    z. B. `m:<id>` (Maßnahme), `lager:<id>`, `gasse:<id>`, `habitat:<id>`, `jagd:<id>`
  * @param {string} titel  Überschrift, z. B. „Pflanzung, Flurstück 45/1“
  */
-export function openFotos(key, titel) {
+export function openFotos(key, titel, { verlauf = false, hinweis = null } = {}) {
   const body = h('div', { class: 'fotos' });
   let wahl = { vorher: null, nachher: null };
   const zeichne = () => {
     const liste = [...fotoListe(key)].sort((a, b) => a.datum - b.datum);
-    const vor = liste.filter((f) => f.phase === 'vorher'), nach = liste.filter((f) => f.phase === 'nachher');
-    const vSel = vor.find((f) => f.id === wahl.vorher) || vor[vor.length - 1];
+    // Fotopunkt: alle Aufnahmen als Zeitreihe, verglichen werden die älteste und die neueste (wählbar)
+    const vor = verlauf ? liste : liste.filter((f) => f.phase === 'vorher'), nach = verlauf ? liste : liste.filter((f) => f.phase === 'nachher');
+    const vSel = vor.find((f) => f.id === wahl.vorher) || (verlauf ? vor[0] : vor[vor.length - 1]);
     const nSel = nach.find((f) => f.id === wahl.nachher) || nach[nach.length - 1];
     const auswahl = (arr, phase, sel) => (arr.length > 1 ? h('label', {}, phase === 'vorher' ? 'Vorher-Bild' : 'Nachher-Bild',
       h('select', { onchange: (e) => { wahl[phase] = e.target.value; zeichne(); } }, arr.map((f, i) => h('option', { value: f.id, selected: f === sel }, `${datumText(f.datum)}${f.notiz ? ` – ${f.notiz}` : ''} (${i + 1})`)))) : null);
@@ -133,6 +134,21 @@ export function openFotos(key, titel) {
           h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: (e) => { hinzufuegen(key, [...e.target.files], phase); e.target.value = ''; } })),
         h('label', { class: 'btn btn-small' }, 'Aus Galerie',
           h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: (e) => { hinzufuegen(key, [...e.target.files], phase); e.target.value = ''; } }))));
+    if (verlauf) {
+      const jahre = [...new Set(liste.map((f) => new Date(f.datum).getFullYear()))];
+      fill(body,
+        h('p', { class: 'muted' }, titel), hinweis ? h('p', { class: 'hint' }, hinweis) : null,
+        vSel && nSel && vSel !== nSel ? h('section', { class: 'foto-abschnitt' }, h('h3', {}, 'Vergleich'), vergleich(vSel, nSel),
+          h('div', { class: 'form-row' }, auswahl(vor, 'vorher', vSel), auswahl(nach, 'nachher', nSel)), h('small', { class: 'muted' }, 'Regler nach links und rechts schieben.')) : null,
+        h('section', { class: 'foto-abschnitt' }, h('h3', {}, 'Aufnahmen', h('span', { class: 'muted' }, ` ${liste.length}${jahre.length > 1 ? ` aus ${jahre.length} Jahren` : ''}`)),
+          liste.length ? h('div', { class: 'foto-raster' }, liste.map((f) => h('button', { type: 'button', class: 'foto-kachel', onclick: () => fotoAnsehen(key, f), 'aria-label': `Foto vom ${datumText(f.datum)} öffnen` },
+            bildEl(`${f.id}-v`, '', 'foto-vorschau'), h('span', { class: 'foto-datum' }, datumText(f.datum))))) : h('p', { class: 'muted' }, 'Noch keine Aufnahme. Stell dich an den Fotopunkt, schau in die angegebene Richtung und fotografiere – jedes Jahr zur gleichen Jahreszeit.'),
+          h('div', { class: 'btn-row' },
+            h('label', { class: 'btn btn-small' }, h('span', { html: icon.plus }), 'Foto aufnehmen', h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: (e) => { hinzufuegen(key, [...e.target.files], 'nachher'); e.target.value = ''; } })),
+            h('label', { class: 'btn btn-small' }, 'Aus Galerie', h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: (e) => { hinzufuegen(key, [...e.target.files], 'nachher'); e.target.value = ''; } })))),
+        h('p', { class: 'hint' }, 'Die Fotos werden verkleinert nur auf diesem Gerät gespeichert.'));
+      return;
+    }
     fill(body,
       h('p', { class: 'muted' }, titel),
       vSel && nSel ? h('section', { class: 'foto-abschnitt' }, h('h3', {}, 'Vergleich'), vergleich(vSel, nSel),

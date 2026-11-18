@@ -1358,3 +1358,8 @@ li.fin-zeile { cursor: default; }
 .ortsname-0 span { font-size: 21px; }
 .wz-kontrolle { display: grid !important; grid-template-columns: 18px 1fr auto; align-items: center; gap: 10px; text-align: left; }
 .wz-kzahl { font-size: 22px; color: var(--primary); min-width: 2ch; text-align: right; }
+
+.nav-gps { padding: 8px 12px; border-radius: 12px; font-size: 14px; font-weight: 600; border-left: 5px solid #9E9E9E; background: var(--surface-2); }
+.nav-gps-gut { border-left-color: #2E7D32; }
+.nav-gps-mittel { border-left-color: #F9A825; background: #FFF8E1; color: #5D4300; }
+.nav-gps-schlecht { border-left-color: #C62828; background: #FDECEA; color: #7A1B14; }

@@ -97,7 +97,8 @@ export function openNavigation(o) {
   } }, 'Kompass einschalten');
   setTimeout(() => { if (heading == null) kompassBtn.hidden = false; }, 2000);
   const posInfo = h('p', { class: 'hint nav-koord' });
-  const body = h('div', { class: 'nav-seite' }, polys.length && !o.ziel ? modusEl : null, h('div', { class: 'nav-anzeige' }, pfeil, entf, kompassBtn), info, mapEl,
+  const gpsHinweis = h('div', { class: 'nav-gps', role: 'status' }, 'GPS wird gesucht …');
+  const body = h('div', { class: 'nav-seite' }, polys.length && !o.ziel ? modusEl : null, h('div', { class: 'nav-anzeige' }, pfeil, entf, kompassBtn), gpsHinweis, info, mapEl,
     posInfo,
     o.blick != null ? h('p', { class: 'hint' }, `Blickrichtung für das Foto: ${o.blick}° (${compassLabel(o.blick)})`) : null,
     h('p', { class: 'hint' }, polys.length ? 'Grenzen und Eckpunkte aus ALKIS. Grenzsteine stehen meist an den Eckpunkten, können aber fehlen oder versetzt sein. Handy-GPS ist im Wald oft nur auf 5–15 m genau – für eine verbindliche Grenzfeststellung braucht es eine Vermessungsstelle.' : 'Handy-GPS ist im Wald oft nur auf 5–15 m genau.'));
@@ -138,7 +139,10 @@ export function openNavigation(o) {
     const drin = polys.length ? innen(pos, polys) : null;
     fill(info, d <= Math.max(3, genau || 0)
       ? `Du bist am Ziel (${z.name}) – im Rahmen der GPS-Genauigkeit von ± ${genau || '?'} m.`
-      : `${z.name}: ${formatDist(Math.round(d))} Richtung ${compassLabel(b)} (${Math.round(b)}°)${drin == null ? '' : drin ? ' · du bist im Flurstück' : ' · du bist außerhalb des Flurstücks'}${genau ? ` · GPS ± ${genau} m` : ''}${heading == null ? (kurs != null ? ' · Pfeil nach Gehrichtung (GPS)' : ' · ohne Kompass: Pfeil zeigt von Norden aus – Handy nach Norden drehen oder ein paar Schritte gehen') : ''}`);
+      : `${z.name}: ${formatDist(Math.round(d))} Richtung ${compassLabel(b)} (${Math.round(b)}°)${drin == null ? '' : drin ? ' · du bist im Flurstück' : ' · du bist außerhalb des Flurstücks'}${heading == null ? (kurs != null ? ' · Pfeil nach Gehrichtung (GPS)' : ' · ohne Kompass: Pfeil zeigt von Norden aus – Handy nach Norden drehen oder ein paar Schritte gehen') : ''}`);
+    const stufe = genau <= 5 ? 'gut' : genau <= 15 ? 'mittel' : 'schlecht';
+    gpsHinweis.className = `nav-gps nav-gps-${stufe}`;
+    gpsHinweis.textContent = `Abweichung des Handy-GPS: ± ${genau} m – ${stufe === 'gut' ? 'sehr genau.' : stufe === 'mittel' ? `das Ziel kann bis zu ${genau} m daneben liegen. Kurz stehen bleiben verbessert den Wert.` : `ungenau, das Ziel kann bis zu ${genau} m daneben liegen. Unter dichtem Kronendach ist das normal – an einer lichten Stelle kurz warten.`}`;
     posInfo.textContent = `Dein Standort: ${pos[0].toFixed(6)}, ${pos[1].toFixed(6)} (± ${genau} m) · Ziel: ${z.ll[0].toFixed(6)}, ${z.ll[1].toFixed(6)}`;
     if (karte) {
       posM ? posM.setLatLng(pos) : (posM = L.circleMarker(pos, { radius: 8, color: '#fff', weight: 3, fillColor: '#1A73E8', fillOpacity: 1 }).addTo(karte.map));

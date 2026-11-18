@@ -9,6 +9,7 @@ import { openVerlauf, anhangOeffnen } from './vertraeglichkeit.js';
 import { openThinningWizard } from './thinning/wizard.js';
 import { fmt, bLabel, HOEHENKLASSEN } from './thinning/methode.js';
 import { passtFlurstueck } from './profi.js';
+import { notizDialog, fotopunktAnlegen, fotopunkteAbschnitt, notizZeile } from './tagebuch.js';
 
 const STATUS = { geplant: 'Geplant', arbeit: 'In Arbeit', fertig: 'Abgeschlossen' };
 const euro = (v) => `${Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -25,20 +26,30 @@ export async function openFlurstueckHistorie() {
   openPage('Flurstückhistorie', body);
   const ms = store.get().measures;
   fill(body,
-    h('p', { class: 'muted' }, 'Alle Flurstücke, die du zu deinen Flächen hinzugefügt hast – mit allen Maßnahmen, die darauf geplant oder erledigt wurden.'),
+    h('p', { class: 'muted' }, 'Alle deine Flurstücke mit ihrer Geschichte: Maßnahmen, Tagebuch-Einträge mit Fotos und Fotopunkte – auch für Erben oder einen Verkauf.'),
     mine.length
       ? h('ul', { class: 'parcel-list historie-list' }, mine.map((p) => {
           const eig = ms.filter((m) => betrifftFlurstueck(m, p));
+          const notizen = (store.get().tagebuch || []).filter((e) => e.parcelId === p.id).length;
           const fertig = eig.filter((m) => m.status === 'fertig').length;
           const letzte = eig.map(datumVon).filter(Boolean).sort((a, b) => b - a)[0];
           return h('li', {}, h('button', { class: 'historie-item', onclick: () => openDetail(p, T) },
             h('span', { class: 'hi-main' }, h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur} · ${formatHa(amtlicheFlaecheHa(p))}`)),
             h('span', { class: 'hi-side' }, h('b', {}, eig.length), h('small', {}, eig.length === 1 ? 'Maßnahme' : 'Maßnahmen'),
-              eig.length ? h('small', {}, `${fertig} erledigt${letzte ? ` · zuletzt ${fmtDate(letzte)}` : ''}`) : null),
+              eig.length ? h('small', {}, `${fertig} erledigt${letzte ? ` · zuletzt ${fmtDate(letzte)}` : ''}`) : null,
+              notizen ? h('small', {}, `${notizen} Tagebuch-Eintr${notizen === 1 ? 'ag' : 'äge'}`) : null),
             h('span', { class: 'hi-arrow', html: icon.chevron || '›' })));
         }))
       : h('div', { class: 'empty' }, h('p', {}, 'Du hast noch keine Flurstücke zu deinen Flächen hinzugefügt. Füge sie auf der Startseite über die Karte oder die Suche hinzu.')),
   );
+}
+
+/** Flurstückhistorie eines Flurstücks direkt öffnen (z. B. aus der Infobox) */
+export async function openHistorieFlurstueck(parcelId) {
+  const [all, T] = await Promise.all([source.allParcels(), measureTypes()]);
+  const p = all.find((x) => x.id === parcelId) || store.get().parcels.find((x) => x.id === parcelId);
+  if (!p?.ring) { toast('Flurstück nicht gefunden'); return; }
+  openDetail(p, T);
 }
 
 function openDetail(p, T) {
@@ -61,11 +72,20 @@ function openDetail(p, T) {
   function render() {
     const eig = store.get().measures.filter((m) => betrifftFlurstueck(m, p)).sort((a, b) => (datumVon(b) || 0) - (datumVon(a) || 0));
     const summeKosten = eig.reduce((s, m) => s + (Number(m.kosten) || 0), 0);
+    const notizen = (store.get().tagebuch || []).filter((e) => e.parcelId === p.id);
+    const titel = `Flurstück ${p.nr}, ${p.gemarkung}`;
+    // Maßnahmen und Tagebuch zusammen nach Datum
+    const chronik = [...eig.map((m) => ({ ts: datumVon(m) || 0, m })), ...notizen.map((e) => ({ ts: e.datum, e }))].sort((a, b) => b.ts - a.ts);
     fill(listHost,
-      h('h2', { class: 'section-title' }, 'Maßnahmen nach Datum'),
+      h('div', { class: 'btn-row historie-aktionen' },
+        h('button', { type: 'button', class: 'btn btn-primary', onclick: () => notizDialog(p.id) }, 'Tagebuch-Eintrag schreiben'),
+        h('button', { type: 'button', class: 'btn', onclick: () => fotopunktAnlegen(p.id, p) }, 'Fotopunkt anlegen')),
+      fotopunkteAbschnitt(p),
+      h('h2', { class: 'section-title' }, 'Chronik: Maßnahmen und Tagebuch'),
       summeKosten ? h('p', { class: 'muted' }, `Kosten aller Maßnahmen: ${euro(summeKosten)}`) : null,
-      eig.length
-        ? h('ul', { class: 'measure-list historie-massnahmen' }, eig.map((m) => {
+      chronik.length
+        ? h('ul', { class: 'measure-list historie-massnahmen' }, chronik.map(({ m, e }) => {
+            if (e) return notizZeile(e, titel);
             const auf = offen === m.id;
             return h('li', { class: `measure measure-${m.status} ${auf ? 'offen' : ''}` },
               h('button', { class: 'hm-kopf', 'aria-expanded': String(auf), onclick: () => { offen = auf ? null : m.id; karte.zeige(auf ? null : flaecheVon(m, p)); render(); } },
@@ -74,7 +94,7 @@ function openDetail(p, T) {
                 h('span', { class: `badge badge-${m.status}` }, STATUS[m.status])),
               auf ? details(m, p, T) : null);
           }))
-        : h('div', { class: 'empty' }, h('p', {}, 'Auf diesem Flurstück gibt es noch keine Maßnahmen.')),
+        : h('div', { class: 'empty' }, h('p', {}, 'Noch keine Maßnahmen und keine Tagebuch-Einträge. Schreib auf, was du im Wald beobachtet oder gemacht hast – mit Fotos.')),
     );
   }
   render();

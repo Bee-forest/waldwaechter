@@ -3,68 +3,43 @@
 // Blickrichtung, an dem jedes Jahr fotografiert wird.
 import { h, fill, openPage, dialog, confirmDialog, toast, fmtDate } from './ui.js';
 import { store, uid } from './store.js';
-import { source } from './data/source.js';
 import { centroid, compassLabel } from './geo.js';
 import { openFotos, fotoListe, fotosLoeschen, fotoKnopfText } from './fotos.js';
 import { openNavigation } from './grenzfinder.js';
 
-const STATUS = { geplant: 'geplant', arbeit: 'in Arbeit', fertig: 'erledigt' };
 
+/** Tagebuch und Flurstückhistorie sind eins: die Seite ist die Detailansicht der Flurstückhistorie */
 export async function openWaldtagebuch(parcelId) {
-  const all = await source.allParcels();
-  const p = all.find((x) => x.id === parcelId);
-  if (!p) { toast('Flurstück nicht gefunden'); return; }
-  const { MEASURE_TYPES } = await import('./measures.js');
-  const body = h('div', { class: 'tagebuch' });
-  const titel = `Flurstück ${p.nr}, ${p.gemarkung}`;
-  function zeichne() {
-    const s = store.get();
-    const eintraege = [
-      ...(s.tagebuch || []).filter((e) => e.parcelId === parcelId).map((e) => ({ ts: e.datum, art: 'notiz', e })),
-      ...s.measures.filter((m) => m.parcelId === parcelId).flatMap((m) => {
-        const label = MEASURE_TYPES[m.type]?.label || m.type;
-        const out = [{ ts: m.createdAt || m.date, art: 'massnahme', m, text: `${label} ${m.status === 'fertig' ? 'angelegt' : STATUS[m.status] || ''}`.trim() }];
-        if (m.finishedAt) out.push({ ts: m.finishedAt, art: 'massnahme', m, text: `${label} erledigt` });
-        return out;
-      }),
-      ...(s.fotopunkte || []).filter((f) => f.parcelId === parcelId).flatMap((f) => fotoListe(`fp:${f.id}`).map((x) => ({ ts: x.datum, art: 'fotopunkt', f, x }))),
-    ].filter((x) => x.ts).sort((a, b) => b.ts - a.ts);
-    const jahre = [...new Set(eintraege.map((x) => new Date(x.ts).getFullYear()))];
-    const fps = (s.fotopunkte || []).filter((f) => f.parcelId === parcelId);
-    fill(body,
-      h('p', { class: 'muted' }, `${titel} – alles, was auf dieser Fläche passiert ist. Daraus entsteht die Geschichte deines Bestands.`),
-      h('div', { class: 'btn-row' },
-        h('button', { type: 'button', class: 'btn btn-primary', onclick: () => notizDialog(parcelId) }, 'Eintrag schreiben'),
-        h('button', { type: 'button', class: 'btn', onclick: () => fotopunktAnlegen(parcelId, p) }, 'Fotopunkt anlegen')),
-      fps.length ? h('section', { class: 'foto-abschnitt' }, h('h3', {}, 'Fotopunkte'),
-        h('ul', { class: 'fp-liste' }, fps.map((f) => h('li', {},
-          h('div', {}, h('strong', {}, f.name || 'Fotopunkt'), h('small', { class: 'muted' }, `Blick ${f.blick}° (${compassLabel(f.blick)}) · ${fotoListe(`fp:${f.id}`).length} Aufnahmen`)),
-          h('div', { class: 'btn-row' },
-            h('button', { type: 'button', class: 'btn btn-small', onclick: () => openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }) }, 'Hinführen'),
-            h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`fp:${f.id}`, `${f.name || 'Fotopunkt'} · ${titel}`, { verlauf: true, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit.` }) }, fotoKnopfText(`fp:${f.id}`)),
-            h('button', { type: 'button', class: 'link-btn', onclick: async () => { if (await confirmDialog('Fotopunkt mit allen Aufnahmen löschen?', { ok: 'Löschen', danger: true })) { store.update((st) => { st.fotopunkte = st.fotopunkte.filter((x) => x.id !== f.id); }); fotosLoeschen(`fp:${f.id}`); } } }, 'löschen')))))) : null,
-      eintraege.length ? jahre.map((j) => h('section', { class: 'tb-jahr' }, h('h3', {}, String(j)),
-        h('ul', { class: 'tb-liste' }, eintraege.filter((x) => new Date(x.ts).getFullYear() === j).map((x) => eintragEl(x, titel)))))
-        : h('p', { class: 'muted' }, 'Noch keine Einträge. Schreib auf, was du im Wald beobachtet oder gemacht hast – mit Fotos.'),
-      h('p', { class: 'hint' }, 'Das Tagebuch liegt nur auf diesem Gerät. Für Erben oder einen Verkauf lässt es sich im Profil unter „Daten sichern“ oder als Waldbericht weitergeben.'));
-  }
-  const eintragEl = (x, t) => {
-    const d = fmtDate(x.ts);
-    if (x.art === 'notiz') return h('li', { class: 'tb-notiz' }, h('span', { class: 'tb-datum' }, d),
-      h('div', {}, h('p', {}, x.e.text || '(ohne Text)'),
-        h('div', { class: 'btn-row' },
-          h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`tb:${x.e.id}`, `Tagebuch ${d} · ${t}`) }, fotoKnopfText(`tb:${x.e.id}`)),
-          h('button', { type: 'button', class: 'link-btn', onclick: () => notizDialog(x.e.parcelId, x.e) }, 'bearbeiten'))));
-    if (x.art === 'fotopunkt') return h('li', {}, h('span', { class: 'tb-datum' }, d), h('div', {}, h('p', {}, `Foto am ${x.f.name || 'Fotopunkt'}`)));
-    return h('li', {}, h('span', { class: 'tb-datum' }, d), h('div', {}, h('p', {}, x.text), x.m.note ? h('small', { class: 'muted' }, x.m.note) : null,
-      fotoListe(`m:${x.m.id}`).length ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`m:${x.m.id}`, `${x.text} · ${t}`) }, fotoKnopfText(`m:${x.m.id}`)) : null));
-  };
-  zeichne();
-  const ab = store.subscribe(zeichne);
-  openPage('Waldtagebuch', body, { onClose: ab });
+  const { openHistorieFlurstueck } = await import('./historie.js');
+  return openHistorieFlurstueck(parcelId);
 }
 
-async function notizDialog(parcelId, alt = null) {
+/** Abschnitt „Fotopunkte“ eines Flurstücks (für die Flurstückhistorie) */
+export function fotopunkteAbschnitt(p) {
+  const fps = (store.get().fotopunkte || []).filter((f) => f.parcelId === p.id);
+  const titel = `Flurstück ${p.nr}, ${p.gemarkung}`;
+  if (!fps.length) return null;
+  return h('section', { class: 'foto-abschnitt' }, h('h3', {}, 'Fotopunkte'),
+    h('ul', { class: 'fp-liste' }, fps.map((f) => h('li', {},
+      h('div', {}, h('strong', {}, f.name || 'Fotopunkt'), h('small', { class: 'muted' }, `Blick ${f.blick}° (${compassLabel(f.blick)}) · ${fotoListe(`fp:${f.id}`).length} Aufnahmen`)),
+      h('div', { class: 'btn-row' },
+        h('button', { type: 'button', class: 'btn btn-small', onclick: () => openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }) }, 'Hinführen'),
+        h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`fp:${f.id}`, `${f.name || 'Fotopunkt'} · ${titel}`, { verlauf: true, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit.` }) }, fotoKnopfText(`fp:${f.id}`)),
+        h('button', { type: 'button', class: 'link-btn', onclick: async () => { if (await confirmDialog('Fotopunkt mit allen Aufnahmen löschen?', { ok: 'Löschen', danger: true })) { store.update((st) => { st.fotopunkte = st.fotopunkte.filter((x) => x.id !== f.id); }); fotosLoeschen(`fp:${f.id}`); } } }, 'löschen'))))));
+}
+
+/** Ein Tagebucheintrag als Zeile der Flurstückhistorie */
+export function notizZeile(e, titel) {
+  const d = fmtDate(e.datum);
+  return h('li', { class: 'measure tb-eintrag' },
+    h('div', { class: 'hm-kopf tb-kopf' }, h('span', { class: 'hm-datum' }, d), h('strong', {}, 'Tagebuch'), h('span', { class: 'badge' }, 'Notiz')),
+    h('div', { class: 'hm-details' }, h('p', {}, e.text || '(ohne Text)'),
+      h('div', { class: 'btn-row' },
+        h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`tb:${e.id}`, `Tagebuch ${d} · ${titel}`) }, fotoKnopfText(`tb:${e.id}`)),
+        h('button', { type: 'button', class: 'link-btn', onclick: () => notizDialog(e.parcelId, e) }, 'bearbeiten'))));
+}
+
+export async function notizDialog(parcelId, alt = null) {
   const w = { text: alt?.text || '', datum: new Date(alt?.datum || Date.now()).toISOString().slice(0, 10) };
   const r = await dialog({
     title: alt ? 'Eintrag bearbeiten' : 'Neuer Tagebucheintrag',
@@ -84,7 +59,7 @@ async function notizDialog(parcelId, alt = null) {
   });
 }
 
-async function fotopunktAnlegen(parcelId, p) {
+export async function fotopunktAnlegen(parcelId, p) {
   const w = { name: '', blick: '', at: null, genau: null };
   const posText = h('span', {}, 'Standort wird bestimmt …');
   const blickFeld = h('input', { type: 'number', min: 0, max: 359, inputmode: 'numeric', placeholder: 'z. B. 135', oninput: (e) => { w.blick = e.target.value; } });

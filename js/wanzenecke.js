@@ -173,7 +173,7 @@ export const SAISON = [
   ['September', ['Auszeichnen für die Durchforstung', 'Saatgut / Eicheln sammeln', 'Unternehmer für den Winter beauftragen']],
   ['Oktober', ['Herbstpflanzung (Laubholz)', 'Zäune und Einzelschutz prüfen', 'Rückegassen markieren']],
   ['November', ['Herbstpflanzung abschließen', 'Fichten auf rote Kronen und abfallende Rinde prüfen', 'Durchforstung und Holzernte beginnen', 'Verkehrssicherung unbelaubt kontrollieren']],
-  ['Dezember', ['Holzernte bei Frost', 'Holz über die FBG vermarkten', 'Waldtagebuch und Waldbericht aktualisieren']],
+  ['Dezember', ['Holzernte bei Frost', 'Holz über die FBG vermarkten', 'Flurstückhistorie (Tagebuch) und Waldbericht aktualisieren']],
 ];
 function openSaison() {
   const m = new Date().getMonth();

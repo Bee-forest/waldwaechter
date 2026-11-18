@@ -37,18 +37,29 @@ const inRing = ([y, x], ring) => { let r = false; for (let i = 0, j = ring.lengt
 const innen = (pt, polys) => polys.some((rings) => inRing(pt, rings[0]) && !rings.slice(1).some((r) => inRing(pt, r)));
 
 // ---------- Kompass ----------
+export const KOMPASS_FRAGEN = typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function';
 function kompass(onHeading) {
+  let sx = null, sy = null, absolutGesehen = false;
   const lesen = (e) => {
+    // iOS: webkitCompassHeading; Android/Chrome: deviceorientationabsolute (alpha gegen den Uhrzeigersinn)
+    if (e.type === 'deviceorientationabsolute') absolutGesehen = true;
+    else if (absolutGesehen && e.webkitCompassHeading == null) return;
     let hd = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null);
     if (hd == null) return;
-    onHeading((hd + (screen.orientation?.angle ?? 0) + 360) % 360);
+    hd = (hd + (screen.orientation?.angle ?? window.orientation ?? 0) + 360) % 360;
+    // Glätten über den Einheitskreis, damit der Pfeil nicht zittert
+    const c = Math.cos((hd * Math.PI) / 180), s2 = Math.sin((hd * Math.PI) / 180);
+    sx = sx == null ? c : sx * 0.75 + c * 0.25; sy = sy == null ? s2 : sy * 0.75 + s2 * 0.25;
+    onHeading((Math.atan2(sy, sx) * 180 / Math.PI + 360) % 360);
   };
-  const start = async () => {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+  const an = () => { window.addEventListener('deviceorientationabsolute', lesen); window.addEventListener('deviceorientation', lesen); };
+  const start = async (ausKlick = false) => {
+    if (KOMPASS_FRAGEN) {
+      if (!ausKlick) return false; // iOS fragt nur nach einem Antippen
       const r = await DeviceOrientationEvent.requestPermission().catch(() => 'denied');
-      if (r !== 'granted') { toast('Kompass nicht freigegeben – der Pfeil zeigt dann nach Norden ausgerichtet.'); return; }
+      if (r !== 'granted') { toast('Kompass nicht freigegeben.'); return false; }
     }
-    window.addEventListener('deviceorientationabsolute', lesen); window.addEventListener('deviceorientation', lesen);
+    an(); return true;
   };
   return { start, stop: () => { window.removeEventListener('deviceorientationabsolute', lesen); window.removeEventListener('deviceorientation', lesen); } };
 }
@@ -62,13 +73,15 @@ const PFEIL = '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 6 L80 
 export function openNavigation(o) {
   const polys = o.parcel ? polysOf(o.parcel) : [];
   const ecken = polys.length ? eckpunkte(polys) : [];
-  let modus = o.ziel ? 'punkt' : 'grenze', gewaehlt = null, pos = null, genau = null, heading = null, watch = null;
+  let modus = o.ziel ? 'punkt' : 'grenze', gewaehlt = null, pos = null, genau = null, heading = null, kurs = null, watch = null, rot = 0;
+  const fixes = [];
   const pfeil = h('div', { class: 'nav-pfeil', html: PFEIL });
   const entf = h('div', { class: 'nav-entf' }, '–');
   const info = h('p', { class: 'nav-info', 'aria-live': 'polite' }, 'Warte auf GPS …');
   const modusEl = h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Ziel' });
   const mapEl = h('div', { class: 'mini-map nav-karte' });
-  const body = h('div', { class: 'nav-seite' }, polys.length && !o.ziel ? modusEl : null, h('div', { class: 'nav-anzeige' }, pfeil, entf), info, mapEl,
+  const kompassBtn = h('button', { type: 'button', class: 'btn btn-small', hidden: !KOMPASS_FRAGEN, onclick: async () => { if (await k.start(true)) kompassBtn.hidden = true; } }, 'Kompass einschalten');
+  const body = h('div', { class: 'nav-seite' }, polys.length && !o.ziel ? modusEl : null, h('div', { class: 'nav-anzeige' }, pfeil, entf, kompassBtn), info, mapEl,
     o.blick != null ? h('p', { class: 'hint' }, `Blickrichtung für das Foto: ${o.blick}° (${compassLabel(o.blick)})`) : null,
     h('p', { class: 'hint' }, polys.length ? 'Grenzen und Eckpunkte aus ALKIS. Grenzsteine stehen meist an den Eckpunkten, können aber fehlen oder versetzt sein. Handy-GPS ist im Wald oft nur auf 5–15 m genau – für eine verbindliche Grenzfeststellung braucht es eine Vermessungsstelle.' : 'Handy-GPS ist im Wald oft nur auf 5–15 m genau.'));
   const k = kompass((hd) => { heading = hd; aktualisiere(); });
@@ -98,14 +111,18 @@ export function openNavigation(o) {
     const z = ziel();
     if (!z) return;
     const d = distance(pos, z.ll), b = bearing(pos, z.ll);
-    const rel = heading != null ? (b - heading + 360) % 360 : b;
-    pfeil.style.transform = `rotate(${rel}deg)`;
+    const blick = heading ?? kurs;
+    const rel = blick != null ? (b - blick + 360) % 360 : b;
+    // fortlaufender Winkel: kein Herumwirbeln beim Sprung von 359° auf 0°
+    rot += ((rel - rot) % 360 + 540) % 360 - 180;
+    pfeil.style.transform = `rotate(${rot}deg)`;
+    pfeil.classList.toggle('ohne-kompass', blick == null);
     pfeil.classList.toggle('nah', d <= Math.max(3, genau || 0));
     entf.textContent = formatDist(Math.round(d));
     const drin = polys.length ? innen(pos, polys) : null;
     fill(info, d <= Math.max(3, genau || 0)
       ? `Du bist am Ziel (${z.name}) – im Rahmen der GPS-Genauigkeit von ± ${genau || '?'} m.`
-      : `${z.name}: ${formatDist(Math.round(d))} Richtung ${compassLabel(b)} (${Math.round(b)}°)${drin == null ? '' : drin ? ' · du bist im Flurstück' : ' · du bist außerhalb des Flurstücks'}${genau ? ` · GPS ± ${genau} m` : ''}${heading == null ? ' · Pfeil nach Norden ausgerichtet (kein Kompass)' : ''}`);
+      : `${z.name}: ${formatDist(Math.round(d))} Richtung ${compassLabel(b)} (${Math.round(b)}°)${drin == null ? '' : drin ? ' · du bist im Flurstück' : ' · du bist außerhalb des Flurstücks'}${genau ? ` · GPS ± ${genau} m` : ''}${heading == null ? (kurs != null ? ' · Pfeil nach Gehrichtung (GPS)' : ' · ohne Kompass: Pfeil zeigt von Norden aus – Handy nach Norden drehen oder ein paar Schritte gehen') : ''}`);
     if (karte) {
       posM ? posM.setLatLng(pos) : (posM = L.circleMarker(pos, { radius: 8, color: '#fff', weight: 3, fillColor: '#1A73E8', fillOpacity: 1 }).addTo(karte.map));
       zielM ? zielM.setLatLng(z.ll) : (zielM = L.circleMarker(z.ll, { radius: 6, color: '#F26B1D', weight: 3, fill: false }).addTo(karte.map));
@@ -116,11 +133,22 @@ export function openNavigation(o) {
   else {
     watch = navigator.geolocation.watchPosition((p) => {
       const erst = !pos;
-      pos = [p.coords.latitude, p.coords.longitude]; genau = Math.round(p.coords.accuracy);
+      const acc = p.coords.accuracy || 50;
+      const best = fixes.length ? Math.min(...fixes.map((f) => f.acc)) : Infinity;
+      // grobe Netzwerkpositionen verwerfen, sobald es eine gute GPS-Position gab
+      if (acc > 60 && best < 30) return;
+      fixes.push({ ll: [p.coords.latitude, p.coords.longitude], acc, t: Date.now() });
+      while (fixes.length > 4 || (fixes.length && Date.now() - fixes[0].t > 12000)) fixes.shift();
+      // gewichtetes Mittel der letzten Positionen (1/Genauigkeit²) – ruhigere, genauere Entfernung
+      const gw = fixes.map((f) => 1 / (f.acc * f.acc)), sw = gw.reduce((a, v) => a + v, 0);
+      pos = [fixes.reduce((a, f, i) => a + f.ll[0] * gw[i], 0) / sw, fixes.reduce((a, f, i) => a + f.ll[1] * gw[i], 0) / sw];
+      genau = Math.round(Math.min(...fixes.map((f) => f.acc)));
+      if (p.coords.heading != null && !Number.isNaN(p.coords.heading) && (p.coords.speed || 0) > 0.6) kurs = p.coords.heading;
       aktualisiere();
+      if (karte && !erst) karte.map.panTo(pos, { animate: true });
       if (erst && karte) { const z = ziel(); if (z) karte.map.fitBounds(L.latLngBounds([pos, z.ll]).pad(0.3), { maxZoom: 19 }); }
-    }, () => fill(info, 'Standort nicht verfügbar – GPS einschalten und Freigabe erlauben.'), { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 });
+    }, () => fill(info, 'Standort nicht verfügbar – GPS einschalten und Freigabe erlauben.'), { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
   }
-  k.start();
+  k.start(false);
   return page;
 }

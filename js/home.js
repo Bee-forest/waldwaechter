@@ -14,12 +14,13 @@ import { zeigeVerordnung } from './schutzgebiete.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
 import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
 import { bestandAt, bestandInFlaeche, oberhoeheFlaeche, KORREKTUR_ARTEN, SCHICHTEN, korrAlter, pflanzungAm } from './map/bestand.js';
-import { bestandsprofil, phaseVon, durchforstungStatus, PHASEN as ENTW_PHASEN } from './empfehlung.js';
+import { bestandsprofil, phaseVon, durchforstungStatus, PHASEN as ENTW_PHASEN, AMPEL } from './empfehlung.js';
 import { empfehlung, empfehlungMitErsatz, bztName, GRUPPEN, BAUMARTEN_KURZ, eichenHinweis } from './bzt.js';
 import { wanderwege } from './map/wanderwege.js';
 import { createFlurnummernLayer } from './map/flurnummern.js';
 import { createErschliessungLayers, openErschliessungEditor } from './map/erschliessung.js';
 import { createHangneigungLayer, analysiereFlaeche, befahrbarkeit, KLASSEN as NEIGUNG, grad as neigGrad } from './map/hangneigung.js';
+import { createStandortAmpelLayer } from './map/standortampel.js';
 import { createPunktLayers, openPunktEditor, HABITAT_FARBE, JAGD_FARBE } from './map/punkte.js';
 import { ordnerEigentuemerAnwenden, ordnerLeiste, passtFlurstueck, ordnerAuswahl, ordnerFuerNeu, ordnerListe, ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
 import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
@@ -138,6 +139,7 @@ export async function initHome(root) {
   const punkte = createPunktLayers(map, { nurAnsehen: true });
   overlays.habitat = punkte.habitat; overlays.jagd = punkte.jagd;
   overlays.hangneigung = createHangneigungLayer();
+  overlays.ampel = createStandortAmpelLayer();
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
   // Verschiebt man die Karte von Hand, läuft sie nicht mehr mit (Verfolgung bleibt an)
   map.on('dragstart', () => { if (ortung === 'folgen') { ortung = 'an'; ortBtn(); } });
@@ -651,6 +653,7 @@ function gelaendeBlock(latlng, polys) {
     if (!a) { fill(inhalt, h('p', { class: 'muted' }, 'Die Fläche ist zu klein für eine Auswertung der Hangneigung.')); block.setKurz('Fläche zu klein'); return; }
     const b = befahrbarkeit(a);
     const pct = (x) => `${Math.round(x)} %`;
+  const kurzWert = (a) => `Ø ${pct(a.mittel)}, max. ${pct(a.p98)}`;
     fill(inhalt, h('div', { class: 'geo-card' },
       h('p', { class: 'geo-kicker' }, polys?.length ? 'Neigung im Flurstück' : 'Neigung um den angetippten Punkt'),
       h('h4', {}, h('span', { class: `neig-ampel neig-${b.stufe}` }), b.titel),
@@ -665,11 +668,11 @@ function gelaendeBlock(latlng, polys) {
           h('span', {}, h('strong', {}, `${k.name} (${gradText})`), ` – ${k.kurz}`),
           h('strong', { class: 'neig-anteil' }, `${Math.round(a.anteile[i] * 100)} %`));
       })),
-      h('p', { class: 'geo-facts' }, [`Mittel ${pct(a.mittel)} (${neigGrad(a.mittel)}°)`, `90 % der Fläche flacher als ${pct(a.p90)}`, `steilste Stelle ca. ${pct(a.max)}`, a.exposition ? `Hang nach ${a.exposition}` : 'keine deutliche Hangrichtung'].join(' · ')),
+      h('p', { class: 'geo-facts' }, [`Ø ${pct(a.mittel)} (${neigGrad(a.mittel)}°)`, `max. ${pct(a.p98)} (${neigGrad(a.p98)}°)`, `90 % der Fläche flacher als ${pct(a.p90)}`, a.exposition ? `Hang nach ${a.exposition}` : 'keine deutliche Hangrichtung'].join(' · ')),
       h('details', { class: 'bzt-nachbar' }, h('summary', {}, 'Was bedeuten die Klassen?'),
         h('ul', { class: 'neig-erkl' }, NEIGUNG.map((k) => h('li', {}, h('strong', {}, `${k.name}: `), k.text)))),
       h('p', { class: 'hint' }, 'Berechnet aus einem Geländemodell mit ca. 30 m Auflösung (Terrain Tiles, SRTM/EU-DEM). Kleine Böschungen, Gräben und Felsen erfasst es nicht. Die Klassen sind Faustwerte: Ob und womit befahren werden kann, hängt auch von Boden, Nässe, Hindernissen und der Maschine ab – vor Ort prüfen.')));
-    block.setKurz(`${b.titel} · Mittel ${pct(a.mittel)}${a.exposition ? ` · ${a.exposition}hang` : ''}`);
+    block.setKurz(`${kurzWert(a)} · ${b.titel}${a.exposition ? ` · ${a.exposition}hang` : ''}`);
   }).catch(() => { fill(inhalt, h('p', { class: 'muted' }, 'Die Höhendaten sind gerade nicht erreichbar.')); block.setKurz('nicht erreichbar'); });
   return block;
 }
@@ -995,6 +998,7 @@ function openLegend(key) {
     body: h('div', { class: 'legend-box' },
       h('p', {}, info.text),
       legends.length ? h('p', { class: 'sheet-label' }, 'Legende') : null,
+      info.ampel ? h('ul', { class: 'legend-swatches' }, Object.values(AMPEL).map((a) => h('li', {}, h('span', { class: 'swatch', style: `background:${a.farbe}` }), h('span', {}, a.name)))) : null,
       info.neigung ? h('ul', { class: 'legend-swatches neig-legende' }, NEIGUNG.map((k) => h('li', {}, h('span', { class: 'swatch', style: `background:${k.hex}` }), h('span', {}, h('strong', {}, `${k.name} (${k.bis === Infinity ? `über ${neigGrad(70)}°` : `bis ${neigGrad(k.bis)}°`}) – ${k.kurz}`), h('br'), h('small', {}, k.text))))) : null,
       info.farben ? h('ul', { class: 'legend-swatches' }, Object.entries(BAUMARTEN_FARBEN).map(([t, c]) => h('li', {}, h('span', { class: 'swatch', style: `background:${c}` }), t))) : null,
       info.farben ? h('p', { class: 'hint' }, 'Farben nach dem QGIS-Stil von ThüringenForst. Quelle: Thüringer Waldverzeichnis, © GDI-Th, dl-de/by-2-0.') : null,
@@ -1038,6 +1042,7 @@ function openLayerSheet() {
         sw('hangneigung', 'Hangneigung und Befahrbarkeit', { note: 'ab Zoomstufe 12' })),
       groups.filter((g) => g !== 'Flurstücke').map((g) => box(g,
         OVERLAYS.filter((o) => o.group === g).map((o) => sw(o.key, o.label, { disabled: o.pending, note: o.pending ? 'wird gerade angebunden' : null })),
+        g === 'Wald' ? sw('ampel', 'Standort × Baumart (Ampel)', { note: 'deine Waldflächen: geeignet / Risiko / ungeeignet' }) : null,
         g === 'Naturschutz' ? [
           sw('habitat', 'Habitatbäume (stehend / liegend)', { color: HABITAT_FARBE }),
           punktBearbeiten('habitat', 'Habitatbäume bearbeiten'),

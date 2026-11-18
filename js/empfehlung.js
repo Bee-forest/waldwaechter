@@ -190,6 +190,7 @@ export function bestandsprofil(o) {
       h('p', { class: 'geo-kicker' }, 'Entwicklungsphase'),
       h('h4', {}, P.name), h('p', {}, P.text), h('p', { class: 'muted' }, herkunft),
       h('details', { class: 'bzt-nachbar' }, h('summary', {}, 'Phase stimmt nicht?'), phaseWahl)),
+    o.art ? ampelKarte(o.art, o.bzt) : null,
     h('div', { class: 'geo-card' },
       h('p', { class: 'geo-kicker' }, 'Das steht jetzt an'),
       h('div', { class: 'empf-skizzen' },
@@ -231,4 +232,36 @@ export function durchforstungStatus(parcelId, phase, oberhoehe) {
   }
   if (oberhoehe != null && oberhoehe < 12) return { faellig: false, text: 'Mit unter 12 m Oberhöhe ist es für eine Durchforstung meist noch zu früh – erst Z-Bäume auswählen.' };
   return { faellig: true, text: 'In der App ist hier noch keine Durchforstung erfasst – wahrscheinlich ist eine fällig.' };
+}
+
+// ---------- Standort × Baumart (Ampel) ----------
+const ART_CODES = [
+  [/fichte/i, ['FI']], [/kiefer/i, ['KI']], [/lärche|laerche/i, ['LA']], [/douglasie/i, ['DGL']], [/tanne/i, ['WTA', 'TA', 'NB']],
+  [/roteiche/i, ['REI', 'LB']], [/eiche/i, ['EI']], [/hainbuche/i, ['HBU', 'LB']], [/buche/i, ['BU']], [/ahorn|esche|ulme/i, ['ELB']],
+  [/birke/i, ['BI', 'WLB']], [/erle/i, ['ER', 'WLB']], [/linde/i, ['LI', 'WLI', 'WLB']], [/kirsche/i, ['KB', 'ELB']], [/aspe|pappel|weide|eberesche/i, ['AS', 'EB', 'WLB']],
+];
+export const AMPEL = {
+  gruen: { farbe: '#2E7D32', name: 'geeignet' },
+  gelb: { farbe: '#F9A825', name: 'Risiko' },
+  rot: { farbe: '#C62828', name: 'ungeeignet' },
+  grau: { farbe: '#9E9E9E', name: 'unbekannt' },
+};
+/** Wie gut passt die Baumart zum Standort laut Tabellenwerk? */
+export function standortAmpel(art, bzt) {
+  if (!art) return { stufe: 'grau', text: 'Keine Baumart bekannt.' };
+  if (!bzt || bzt.status !== 'ok') return { stufe: 'grau', text: 'Für den Standort gibt es keinen Eintrag im Tabellenwerk.' };
+  const codes = ART_CODES.find(([re]) => re.test(art))?.[1] || [];
+  const e = bzt.eintrag, in_ = (liste) => codes.some((c) => liste.includes(c));
+  if (in_(e.B)) return { stufe: 'gruen', text: `${art} ist hier als Hauptbaumart empfohlen.` };
+  if (in_(e.C)) return { stufe: 'gruen', text: `${art} ist hier als Mischbaumart (2/10 bis 5/10) geeignet – nicht als Reinbestand.` };
+  if (in_(e.D)) return { stufe: 'gelb', text: `${art} ist hier nur als Nebenbaumart (bis 2/10) vorgesehen. Größere Anteile sind ein Risiko – langfristig mit standortgerechten Arten mischen.` };
+  return { stufe: 'rot', text: `${art} wird für diesen Standort im künftigen Klima nicht empfohlen. Langfristig umbauen, z. B. mit ${[...e.B, ...e.C].slice(0, 4).map((k) => BAUMARTEN_KURZ[k] || k).join(', ') || 'standortgerechten Arten'}.` };
+}
+export function ampelKarte(art, bzt) {
+  const a = standortAmpel(art, bzt);
+  return h('div', { class: `geo-card ampel-karte ampel-${a.stufe}` },
+    h('p', { class: 'geo-kicker' }, 'Standort × Baumart'),
+    h('h4', {}, h('span', { class: 'ampel-punkt', style: `background:${AMPEL[a.stufe].farbe}` }), `${art || 'Baumart'}: ${AMPEL[a.stufe].name}`),
+    h('p', {}, a.text),
+    h('p', { class: 'hint' }, 'Grundlage: Tabellenwerk von ThüringenForst zur standortgerechten Baumartenwahl (Klimabereich 2041–2070).'));
 }

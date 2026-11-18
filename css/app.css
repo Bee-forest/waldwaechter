@@ -1268,3 +1268,7 @@ li.fin-zeile { cursor: default; }
 .empf-phasen { flex-wrap: wrap; }
 .ziel-frage { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .ziel-frage:last-child { border-bottom: 0; }
+.ampel-punkt { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: middle; box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0,0,0,.15); }
+.ampel-karte.ampel-rot { border-left: 5px solid #C62828; }
+.ampel-karte.ampel-gelb { border-left: 5px solid #F9A825; }
+.ampel-karte.ampel-gruen { border-left: 5px solid #2E7D32; }

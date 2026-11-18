@@ -161,6 +161,7 @@ export async function analysiereFlaeche(polys) {
     anteile: anteile.map((a) => a / werte.length),
     mittel: werte.reduce((s, v) => s + v, 0) / werte.length,
     p90: werte[Math.floor(werte.length * 0.9)],
+    p98: werte[Math.min(werte.length - 1, Math.floor(werte.length * 0.98))], // „max.“ ohne einzelne Ausreißer
     max: werte[werte.length - 1],
     exposition: exStaerke > 0.3 ? HIMMEL[Math.round(((Math.atan2(ex[0], ex[1]) * 180 / Math.PI + 360) % 360) / 45) % 8] : null,
     n: werte.length,

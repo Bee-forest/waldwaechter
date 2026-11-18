@@ -216,7 +216,7 @@ function termineKachel() {
   const heute = new Date().toISOString().slice(0, 10);
   const alle = [...vonFbg, ...eigene].filter((t) => (t.datum || '') >= heute).sort((x, y) => `${x.datum}${x.zeit || ''}`.localeCompare(`${y.datum}${y.zeit || ''}`));
   return h('section', { class: 'kachel' },
-    h('div', { class: 'akt-titelzeile' }, h('h2', { class: 'kachel-titel' }, 'FBG-Termine'), fbg ? h('span', { class: 'akt-stand' }, fbg) : null),
+    h('div', { class: 'akt-titelzeile' }, h('h2', { class: 'kachel-titel' }, 'Termine und Waldbesitzer-Treffen'), fbg ? h('span', { class: 'akt-stand' }, fbg) : null),
     !fbg ? h('p', { class: 'muted' }, 'Trag im Profil deine Forstbetriebsgemeinschaft ein, dann siehst du hier ihre Termine.') : null,
     termineFbg === null ? h('p', { class: 'muted' }, 'Wird geladen …')
       : alle.length ? h('ul', { class: 'akt-termine' }, alle.slice(0, 8).map(terminZeile))

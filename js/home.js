@@ -60,6 +60,8 @@ export function kopfInhalt() {
       h('h1', {}, 'WaldWächter'),
       h('p', {}, 'Digitale Wald- und Flächenbewirtschaftung für morgen.'),
     ),
+    h('button', { class: 'wanzen-knopf', 'aria-label': 'Wanzen-Ecke: Aufgabe der Woche, Quiz, Saisonkalender', title: 'Wanzen-Ecke', onclick: () => import('./wanzenecke.js').then((x) => x.openWanzenEcke()) },
+      h('span', { html: WANZE_SVG }), (store.get().wanze?.abzeichen?.length || 0) ? h('span', { class: 'zaehler' }, String(store.get().wanze.abzeichen.length)) : null),
     h('button', { class: 'profile-chip', 'aria-label': 'Mein Profil öffnen', onclick: () => openProfile() },
       h('span', { class: 'avatar' }, initials),
       h('span', { class: 'who' },

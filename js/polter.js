@@ -401,7 +401,9 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       canNext = s.staemme.length > 0; nextLabel = 'Fertig – zur Auswertung';
     } else if (q === 'ergebnis') {
       title = 'Ergebnis';
-      inhalt = [ergebnisBox()];
+      inhalt = [ergebnisBox(),
+        h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn', onclick: () => import('./stirnzaehlung.js').then((x) => x.openStirnZaehlung({ onFertig: (n, blob) => { s.stirn = { n, blob }; render(); } })) }, s.stirn ? `Stämme gezählt: ${s.stirn.n} – neu zählen` : 'Stämme auf Foto zählen (Stirnflächen)')),
+        s.stirn ? h('p', { class: 'muted' }, `${s.stirn.n} Stirnflächen auf dem Foto markiert. Das Foto wird mit der Maßnahme gespeichert.`) : null];
       nextLabel = 'Polter speichern';
     }
 
@@ -465,12 +467,14 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
     const details = {
       polterNr: s.polterNr, species: s.species, sortiment: sortimentLabel(s.sortiment, s.sortimentFrei.trim()), verfahren: VERFAHREN[s.verfahren].label,
       laenge: s.verfahren === 'einzelstamm' ? '' : zahlText(s.t), uebermass: s.uebermass != null ? zahlText(s.uebermass) : '', stueck: r.stueck != null ? String(r.stueck) : '',
-      rm: r.netto != null ? zahlText(r.netto) : '', unterlagen: s.verfahren === 'sektion' ? (s.c ? zahlText(s.c) : '0') : '', red: s.red != null && s.verfahren === 'sektion' ? zahlText(s.red, 3) : '',
+      rm: r.netto != null ? zahlText(r.netto) : '', stirnflaechen: s.stirn ? String(s.stirn.n) : '', unterlagen: s.verfahren === 'sektion' ? (s.c ? zahlText(s.c) : '0') : '', red: s.red != null && s.verfahren === 'sektion' ? zahlText(s.red, 3) : '',
       faktor: s.u != null && s.verfahren !== 'einzelstamm' ? zahlText(s.u) : '', fm: zahlText(r.fm), pos: s.pos || '',
       rindenabzug: s.verfahren === 'einzelstamm' ? (s.rinde === 'mR' ? `${zahlText(s.rabzug, 0)} cm` : 'ohne Rinde gemessen') : (s.rabzugProzent > 0 ? `${zahlText(s.rabzugProzent, 0)} %` : ''),
     };
     const messung = { verfahren: s.verfahren, sortiment: s.sortiment, sortimentFrei: s.sortimentFrei.trim(), rinde: s.rinde, rabzug: s.rabzug, rabzugProzent: s.rabzugProzent, lab: s.lab, l: s.l, t: s.t, uebermass: s.uebermass, hv: s.hv, hr: s.rueck ? s.hr : [], rueck: s.rueck, c: s.c, red: s.red, u: s.u, entrindet: s.entrindet, hs: s.hs, staemme: s.staemme, ergebnis: r };
-    store.update((st) => st.measures.push({ id: uid(), type: 'polter', parcelId: s.parcelId, date: Date.now(), finishedAt: Date.now(), status: 'fertig', createdAt: Date.now(), note: '', details, messung }));
+    const mid = uid();
+    if (s.stirn?.blob) import('./fotos.js').then((f) => f.fotoHinzufuegen(`m:${mid}`, s.stirn.blob, 'vorher', 'polter-zaehlung.jpg'));
+    store.update((st) => st.measures.push({ id: mid, type: 'polter', parcelId: s.parcelId, date: Date.now(), finishedAt: Date.now(), status: 'fertig', createdAt: Date.now(), note: '', details, messung }));
     toast(`Polter gespeichert: ${zahlText(r.fm)} Fm o.R.`);
     page.close();
     onSaved?.();

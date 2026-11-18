@@ -4,10 +4,11 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v2.67.0';
+const VERSION = 'v2.68.0';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
+const OFFLINE = 'ww-offline-v1'; // ausdrücklich gespeicherte Gebiete – wird nicht gekürzt
 const MAX_TILES = 3000;
 
 const SHELL_FILES = [
@@ -21,7 +22,7 @@ const SHELL_FILES = [
   './js/home.js', './js/profile.js', './js/measures.js', './js/placeholders.js',
   './js/map/basemap.js', './js/map/thueringen.js', './js/data/source.js', './js/data/demo-data.js',
   './js/thinning/wizard.js', './js/thinning/plan.js', './js/thinning/wald.js', './js/thinning/gps.js', './js/thinning/feedback.js', './js/thinning/methode.js', './js/thinning/ertragstafeln.js', './js/map/geoinfo.js', './js/map/bestand.js', './js/map/besonderheiten.js', './js/map/baumartenkarte.js', './js/map/lrt.js', './js/schutzgebiete.js', './js/vertraeglichkeit.js', './js/flaeche.js', './js/historie.js', './js/polter.js', './js/zaun.js', './js/pflanzung.js', './js/umlauf.js', './js/foerderung.js', './js/foerder-formular.js', './js/bzt.js', './js/formfill.js', './js/pdf.js', './js/pflanzlayout.js', './js/pflanzpreise.js', './js/erinnerung.js', './js/einzelschutz.js', './js/kartenbild.js', './js/dateien.js', './js/thinning/f4.js', './js/thinning/bhdkamera.js', './js/thinning/kamerafeld.js', './js/thinning/speicher.js', './data/durchforstung_parameter_f4.json', './js/finanzen.js', './js/aktuelles.js', './js/profi.js', './js/xlsx.js', './js/map/wanderwege.js', './js/map/flurnummern.js', './js/map/erschliessung.js',
-  './js/map/punkte.js', './js/map/hangneigung.js', './js/fotos.js', './js/empfehlung.js', './js/map/standortampel.js', './js/schaden.js', './js/risiko.js', './js/grenzfinder.js', './js/tagebuch.js', './data/foerderregeln.json', './js/map/gassenerkennung.js', './js/map/ortsnamen.js', './data/revierleiter.json', './data/holzpreise.json', './data/fbg-termine.json',
+  './js/map/punkte.js', './js/map/hangneigung.js', './js/fotos.js', './js/empfehlung.js', './js/map/standortampel.js', './js/schaden.js', './js/risiko.js', './js/grenzfinder.js', './js/tagebuch.js', './js/berichte.js', './js/stirnzaehlung.js', './data/foerderregeln.json', './js/map/gassenerkennung.js', './js/map/ortsnamen.js', './data/revierleiter.json', './data/holzpreise.json', './data/fbg-termine.json',
 ];
 
 const TILE_HOSTS = ['tile.openstreetmap.org', 'sgx.geodatenzentrum.de', 'basemaps.cartocdn.com'];
@@ -46,13 +47,42 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
-    const keep = [SHELL, TILES, DATA];
+    const keep = [SHELL, TILES, DATA, OFFLINE];
     for (const k of await caches.keys()) if (!keep.includes(k)) await caches.delete(k);
     await self.clients.claim();
   })());
 });
 
-self.addEventListener('message', (e) => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') { self.skipWaiting(); return; }
+  const port = e.ports?.[0];
+  if (!port || !e.data?.typ) return;
+  if (e.data.typ === 'OFFLINE_SAVE') e.waitUntil(offlineSpeichern(e.data.urls || [], port));
+  else if (e.data.typ === 'OFFLINE_INFO') e.waitUntil(caches.open(OFFLINE).then((c) => c.keys()).then((k) => port.postMessage({ anzahl: k.length, mb: Math.round(k.length * 0.025) })));
+  else if (e.data.typ === 'OFFLINE_CLEAR') e.waitUntil(caches.delete(OFFLINE).then(() => port.postMessage({ ok: true })));
+});
+async function offlineSpeichern(urls, port) {
+  const cache = await caches.open(OFFLINE);
+  const liste = [...urls];
+  let fertig = 0, fehler = 0;
+  const arbeiter = async () => {
+    while (liste.length) {
+      const u = liste.shift();
+      const key = tileKey(new URL(u));
+      try {
+        if (!(await cache.match(key))) {
+          let res = await fetch(u, { mode: 'cors' }).catch(() => null);
+          if (!res || !res.ok) res = await fetch(u, { mode: 'no-cors' }).catch(() => null);
+          if (res && (res.ok || res.type === 'opaque')) await cache.put(key, res); else fehler++;
+        }
+      } catch { fehler++; }
+      fertig++;
+      if (fertig % 20 === 0) port.postMessage({ fortschritt: fertig, gesamt: urls.length });
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, arbeiter));
+  port.postMessage({ ok: true, fehler, gesamt: urls.length });
+}
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
@@ -92,7 +122,7 @@ self.addEventListener('fetch', (e) => {
 
 async function tileFirst(req, key) {
   const cache = await caches.open(TILES);
-  const hit = await cache.match(key);
+  const hit = (await cache.match(key)) || (await (await caches.open(OFFLINE)).match(key));
   // Die Karte lädt Kacheln ohne CORS (Antwort „opaque“). Das PDF-Kartenbild braucht dieselbe Kachel mit CORS –
   // eine gespeicherte opaque-Antwort darf es nicht bekommen, sonst bleibt der Hintergrund leer.
   const cors = req.mode === 'cors';

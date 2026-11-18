@@ -1,6 +1,7 @@
 // Profil: Flächenübersicht, persönliche Flurstücksliste, Konto, FBG, Einstellungen.
 import { h, fill, icon, openPage, confirmDialog, toast } from './ui.js';
 import { zieleAbfrage, zieleText } from './empfehlung.js';
+import { exportKarte } from './berichte.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { CATEGORIES } from './map/basemap.js';
@@ -95,6 +96,7 @@ export async function openProfile() {
         h('h2', {}, 'Meine Ziele'),
         h('p', {}, s.settings.ziele ? `Besonders wichtig: ${zieleText(s.settings.ziele)}` : 'Noch nicht festgelegt. Deine Ziele gewichten die Empfehlungen zu deinen Flächen.'),
         h('button', { class: 'btn', onclick: () => zieleAbfrage() }, s.settings.ziele ? 'Ziele ändern' : 'Ziele festlegen')),
+      exportKarte(),
       h('section', { class: 'card' },
         h('h2', {}, 'Einstellungen'),
         h('div', { class: 'form' },

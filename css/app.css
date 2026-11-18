@@ -1305,3 +1305,9 @@ li.fin-zeile { cursor: default; }
 .fp-liste { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .fp-liste li { display: grid; gap: 6px; }
 .fp-liste small { display: block; }
+/* Stirnflächen zählen */
+.stirn { display: grid; gap: 10px; }
+.stirn-kopf { font-size: 18px; }
+.stirn-zahl { font-size: 28px; color: var(--primary); }
+.stirn-rahmen { overflow: auto; border-radius: 12px; background: #000; touch-action: pinch-zoom; }
+.stirn-leinwand { width: 100%; height: auto; display: block; cursor: crosshair; }

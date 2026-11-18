@@ -44,6 +44,9 @@ async function hinzufuegen(key, dateien, phase) {
   if (n) toast(n === 1 ? 'Foto gespeichert' : `${n} Fotos gespeichert`);
 }
 
+/** Fertiges Bild (z. B. Polterfoto mit Zählmarken) zu einem Eintrag speichern */
+export const fotoHinzufuegen = (key, blob, phase = 'vorher', name = 'foto.jpg') => hinzufuegen(key, [new File([blob], name, { type: 'image/jpeg', lastModified: Date.now() })], phase);
+
 /** Alle Fotos zu einem Eintrag entfernen (beim Löschen des Eintrags) */
 export async function fotosLoeschen(key) {
   const liste = fotoListe(key);

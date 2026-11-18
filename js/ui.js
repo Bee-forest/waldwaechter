@@ -47,6 +47,8 @@ export const icon = {
   history: svg('<path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3 4v4.5h4.5"/><path d="M12 7.5V12l3 2"/>'),
   doc: svg('<path d="M7 3h7l4 4v14H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'),
   play: svg('<path d="M7 5l12 7-12 7z"/>'),
+  auftrag: svg('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8.5 10h7M8.5 14h7M8.5 18h4"/>'),
+  zaehlen: svg('<circle cx="7.5" cy="8" r="3"/><circle cx="16.5" cy="8" r="3"/><circle cx="12" cy="16" r="3"/><path d="M19 15v6M16 18h6"/>'),
   nav: svg('<path d="m3 11 18-8-8 18-2-8-8-2Z"/>'),
   check: svg('<path d="m5 12 5 5 9-10"/>'),
   draw: svg('<path d="M4 19 9 5l6 9 5-6"/><circle cx="4" cy="19" r="1.5"/><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="14" r="1.5"/><circle cx="20" cy="8" r="1.5"/>'),

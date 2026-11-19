@@ -54,30 +54,53 @@ export function gebietsCode(props = {}) {
   return null;
 }
 
-/** Info-Dialog zur Schutzgebietsverordnung */
-export function zeigeVerordnung(x) {
+// Direkte Links zu den Verordnungen (data/schutzgebiet-verordnungen.json, wird vierteljährlich per GitHub Action
+// aus den Einzelnachweisen der Wikipedia-Artikel gesammelt)
+let voDaten = null;
+const ladeVoDaten = () => (voDaten ||= fetch('data/schutzgebiet-verordnungen.json').then((r) => (r.ok ? r.json() : null)).catch(() => null));
+const voNorm = (t) => String(t || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+  .replace(/\(.*?\)/g, '').replace(/^(naturschutzgebiet|landschaftsschutzgebiet|naturpark|ffh-gebiet|vogelschutzgebiet)\s+/, '').replace(/[^a-z0-9]+/g, '');
+export async function verordnungsLinks(layer, name) {
+  const d = await ladeVoDaten();
+  const g = d?.gebiete?.[layer === 'nationalpark' || layer === 'biosreserv' ? 'nsg' : layer];
+  if (!g || !name) return null;
+  const n = voNorm(name);
+  if (g[n]) return g[n];
+  // Schreibweisen weichen ab (z. B. „Kernberge - Wöllmisse“ / „Kernberge und Wöllmisse bei Jena“)
+  const kandidaten = Object.entries(g).filter(([k]) => k.length >= 6 && n.length >= 6 && (k.includes(n) || n.includes(k)));
+  return kandidaten.length === 1 ? kandidaten[0][1] : null;
+}
+const domain = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+
+/** Info-Dialog zur Schutzgebietsverordnung – mit direkten Links, die im Standardbrowser öffnen */
+export async function zeigeVerordnung(x) {
   const name = x.props?.siteName ? umlaut(x.props.siteName) : x.label;
   const vo = x.props?.legalFoundationDocument ? umlaut(x.props.legalFoundationDocument) : null;
   const datum = x.props?.legalFoundationDate || null;
   const natura = x.layer === 'ffh_geb' || x.layer === 'spa';
   const code = gebietsCode(x.props);
-  const suche = (q) => `https://duckduckgo.com/?q=${encodeURIComponent(q)}`;
+  const treffer = await verordnungsLinks(x.layer, name);
   const links = [];
+  if (treffer?.tlubn) links.push([`Steckbrief NSG ${treffer.nr} mit Verordnung (Lesefassung)`, treffer.tlubn, 'TLUBN']);
+  for (const v of treffer?.vo || []) links.push([v.text && v.text.length > 8 ? v.text : `Verordnung (${domain(v.url)})`, v.url, domain(v.url)]);
   if (natura) {
-    links.push(['Thüringer Natura 2000-Erhaltungsziele-Verordnung (ThürNat2000ErhZVO)', 'https://umwelt-online.de/recht/natursch/laender/th/natura.htm']);
-    if (code) links.push([`Standarddatenbogen ${code} (Europäische Umweltagentur)`, `https://natura2000.eea.europa.eu/Natura2000/SDF.aspx?site=${code}`]);
-    links.push(['Managementplan (Fachbeitrag Wald) suchen', suche(`${name} FFH Managementplan Fachbeitrag Wald Thüringen`)]);
-  } else {
-    links.push(['Verordnung im Internet suchen', suche(`${vo || ''} ${x.label} ${name} Verordnung Thüringen`.trim())]);
+    links.push(['Thüringer Natura 2000-Erhaltungsziele-Verordnung (ThürNat2000ErhZVO)', 'https://umwelt-online.de/recht/natursch/laender/th/natura.htm', 'umwelt-online.de']);
+    if (code) links.push([`Standarddatenbogen ${code} – Lebensräume und Arten`, `https://natura2000.eea.europa.eu/Natura2000/SDF.aspx?site=${code}`, 'Europäische Umweltagentur']);
   }
+  if (treffer?.wiki) links.push([`Gebietsbeschreibung „${treffer.name}“`, treffer.wiki, 'Wikipedia']);
+  const direkt = !!treffer?.tlubn || (treffer?.vo || []).length > 0;
+  if (x.layer === 'nsg') links.push(['Alle Naturschutzgebiete Thüringens mit Verordnungen', 'https://tlubn.thueringen.de/naturschutz/schutzgebiete/naturschutzgebiet', 'TLUBN']);
+  const suche = `https://www.google.com/search?q=${encodeURIComponent(`${natura ? `${name} Managementplan Thüringen` : `"${name}" ${x.label} Verordnung Thüringen`}`)}`;
   dialog({
     title: `${x.label}: ${name}`,
     body: h('div', { class: 'legend-box' },
       h('p', {}, x.text),
       vo ? h('p', {}, h('strong', {}, 'Rechtsgrundlage: '), vo, datum ? ` (${datum})` : '') : null,
       natura ? h('p', {}, 'Für Natura 2000-Gebiete gelten die Erhaltungsziele der ThürNat2000ErhZVO und der Managementplan. Maßnahmen, die das Gebiet erheblich beeinträchtigen könnten, brauchen eine Verträglichkeitsprüfung (§ 34 BNatSchG).') : null,
-      h('ul', { class: 'link-list' }, links.map(([t, u]) => h('li', {}, h('a', { href: u, target: '_blank', rel: 'noopener' }, t)))),
-      h('p', { class: 'hint' }, 'Verbindlich ist der Text der Verordnung. Im Zweifel bei der Unteren Naturschutzbehörde des Landkreises oder beim Forstamt nachfragen.'),
+      links.length ? h('ul', { class: 'link-list' }, links.map(([t, u, q]) => h('li', {}, h('a', { href: u, target: '_blank', rel: 'noopener' }, t), q ? h('small', { class: 'muted' }, ` · ${q}`) : null))) : null,
+      !direkt && !natura ? h('p', { class: 'hint' }, 'Für dieses Gebiet ist noch kein direkter Link zum Verordnungstext hinterlegt. Die Untere Naturschutzbehörde des Landkreises schickt dir die Verordnung auf Anfrage.') : null,
+      h('p', { class: 'muted small' }, h('a', { href: suche, target: '_blank', rel: 'noopener' }, natura ? 'Managementplan im Internet suchen' : 'Weitere Fundstellen im Internet suchen')),
+      h('p', { class: 'hint' }, 'Verbindlich ist der amtlich veröffentlichte Text der Verordnung. Im Zweifel bei der Unteren Naturschutzbehörde des Landkreises oder beim Forstamt nachfragen.'),
     ),
     actions: [{ label: 'Schließen', value: true, primary: true }],
   });

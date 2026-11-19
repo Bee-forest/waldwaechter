@@ -208,7 +208,9 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
     h('div', { class: 'segmented compact einheit-wahl', role: 'radiogroup', 'aria-label': 'Einheit der Holzmenge' },
       [['rm', 'Rm'], ['fm', 'Fm']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-label': k === 'rm' ? 'Raummeter' : 'Festmeter', 'aria-checked': String(s.menge === k),
         onclick: () => { s.menge = k; merkeMengenEinheit(k); render(); } }, l))));
+  let letzterSchritt = null;
   function render() {
+    const scrollVorher = body.closest('.page-body')?.scrollTop || 0;
     const list = schritte();
     s.i = Math.min(s.i, list.length - 1);
     const q = list[s.i];
@@ -449,8 +451,13 @@ export async function openPolterVermessung({ parcelId = null, onSaved } = {}) {
       h('div', { class: 'polter-inhalt' }, inhalt),
       h('div', { class: 'q-nav' }, zurueck, nextBtn));
     upd();
-    body.querySelector('[autofocus]')?.focus();
-    body.closest('.page-body')?.scrollTo?.(0, 0);
+    // Nur bei einem neuen Schritt nach oben springen; beim Tippen oder Antippen im selben Schritt bleibt die Position
+    const pb = body.closest('.page-body');
+    if (q !== letzterSchritt) {
+      letzterSchritt = q;
+      pb?.scrollTo?.(0, 0);
+      body.querySelector('[autofocus]')?.focus({ preventScroll: true });
+    } else if (pb) pb.scrollTop = scrollVorher;
   }
   function weiter() {
     const list = schritte();

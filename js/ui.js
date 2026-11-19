@@ -81,7 +81,9 @@ export function dialog({ title, body, actions = [{ label: 'OK', value: true, pri
     const wrap = h('div', { class: 'scrim', onclick: (e) => { if (e.target === wrap) close(null); } }, box);
     (document.getElementById('app') || document.body).append(wrap);
     document.addEventListener('keydown', onKey);
-    (box.querySelector('input, select') || box.querySelector('.btn-primary, .btn'))?.focus();
+    // Fokus setzen, ohne zu scrollen – das Fenster beginnt immer oben
+    (box.querySelector('input, select') || box.querySelector('.btn-primary, .btn'))?.focus({ preventScroll: true });
+    box.scrollTop = 0;
   });
 }
 

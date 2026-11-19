@@ -1,6 +1,7 @@
 // Reiter 1: Startseite mit Karte, Flurstücksauswahl und Infobox.
 /* global L */
-import { h, fill, icon, dialog, confirmDialog, toast } from './ui.js';
+import { h, fill, icon, dialog, confirmDialog, toast, alleSeitenSchliessen } from './ui.js';
+import { createFotopunktLayer, FOTOPUNKT_FARBE } from './map/fotopunkte.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
@@ -139,6 +140,18 @@ export async function initHome(root) {
   const punkte = createPunktLayers(map, { nurAnsehen: true });
   overlays.habitat = punkte.habitat; overlays.jagd = punkte.jagd;
   overlays.hangneigung = createHangneigungLayer();
+  overlays.fotopunkte = createFotopunktLayer(map, {
+    fotos: async (f) => { const { fotopunktFotos } = await import('./tagebuch.js'); fotopunktFotos(f); },
+    hinfuehren: async (f) => { const { openNavigation } = await import('./grenzfinder.js'); const p = (await source.allParcels()).find((x) => x.id === f.parcelId); openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }); },
+    verschieben: async (f) => { const { fotopunktAufKarteVerschieben } = await import('./tagebuch.js'); fotopunktAufKarteVerschieben(f); },
+  });
+  window.addEventListener('ww:karte-punkt', (e) => {
+    alleSeitenSchliessen();
+    window.dispatchEvent(new CustomEvent('ww:navigate', { detail: 'home' }));
+    const { at, ebene } = e.detail || {};
+    if (ebene && !store.get().settings.layers[ebene]) store.update((st) => { st.settings.layers[ebene] = true; });
+    setTimeout(() => { map.invalidateSize(); if (at) map.flyTo(at, Math.max(map.getZoom(), 18), { duration: 0.8 }); }, 300);
+  });
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
   // Verschiebt man die Karte von Hand, läuft sie nicht mehr mit (Verfolgung bleibt an)
   map.on('dragstart', () => { if (ortung === 'folgen') { ortung = 'an'; ortBtn(); } });
@@ -1071,6 +1084,8 @@ function openLayerSheet() {
         sw('gassen', 'Rückegassen', { color: '#8D5A2B' }),
         sw('lager', 'Lagerplätze (Polterplätze)', { color: '#B5651D' }),
         h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten')),
+      box('Fotopunkte',
+        sw('fotopunkte', 'Fotopunkte (aus der Flurstückhistorie)', { color: FOTOPUNKT_FARBE, note: 'mit Blickrichtung' })),
       box('Gelände',
         sw('hangneigung', 'Hangneigung und Befahrbarkeit', { note: 'ab Zoomstufe 12' })),
       groups.filter((g) => g !== 'Flurstücke').map((g) => box(g,

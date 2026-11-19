@@ -112,6 +112,11 @@ window.addEventListener('popstate', () => {
   if (top.onBack?.()) { history.pushState({ ww: top.id }, ''); return; }
   top.close(true);
 });
+/** alle offenen Vollbild-Seiten schließen (z. B. um zur Karte zu springen) */
+export function alleSeitenSchliessen() {
+  document.querySelectorAll('.scrim:not(.closing)').forEach((x) => x.click());
+  for (const x of [...SEITEN].reverse()) x.close();
+}
 export function openPage(title, content, { onClose, onBack } = {}) {
   const id = ++seitenNr;
   const zurueck = () => { if (!onBack?.()) close(); };

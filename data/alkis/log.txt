@@ -1,46 +1,7 @@
-2026-11-17 20:10 UTC
+2026-11-19 08:32 UTC
 Region Landkreis Greiz: bereits vorhanden, übersprungen
 Region Saale-Orla-Kreis: bereits vorhanden, übersprungen
-Region Ilm-Kreis: 756 Kacheln
-  Felder: identifier=DETHL56P00007JT2FL, oid=DETHL56P00007JT2FL, aktualit=2020-12-08, idflurst=DETHL56P00007JT2, flaeche=2515, flstkennz=16145100500675______, land=Thüringen, gemarkung=Neuroda, flur=Flur 5, flurstnr=675, gmdschl=16070004, regbezirk=unbesetzt, kreis=Ilm-Kreis, gemeinde=Arnstadt, lagebeztxt=Über dem kleinen Eichelsee, tntxt=Landwirtschaft; 2515
-  Verwende adv_alkis_wfs mit Variante utm (358 Flurstücke in der Probe)
-  25/756 Kacheln, 15243 Flurstücke
-  50/756 Kacheln, 25476 Flurstücke
-  75/756 Kacheln, 38692 Flurstücke
-  100/756 Kacheln, 50135 Flurstücke
-  125/756 Kacheln, 62363 Flurstücke
-  150/756 Kacheln, 70743 Flurstücke
-  175/756 Kacheln, 84487 Flurstücke
-  200/756 Kacheln, 99273 Flurstücke
-  225/756 Kacheln, 114685 Flurstücke
-  250/756 Kacheln, 130993 Flurstücke
-  275/756 Kacheln, 144887 Flurstücke
-  300/756 Kacheln, 158127 Flurstücke
-  325/756 Kacheln, 169929 Flurstücke
-  350/756 Kacheln, 184335 Flurstücke
-  375/756 Kacheln, 198436 Flurstücke
-  400/756 Kacheln, 211397 Flurstücke
-  425/756 Kacheln, 229171 Flurstücke
-  450/756 Kacheln, 247041 Flurstücke
-  475/756 Kacheln, 262446 Flurstücke
-  500/756 Kacheln, 277939 Flurstücke
-  525/756 Kacheln, 290580 Flurstücke
-  550/756 Kacheln, 302370 Flurstücke
-  575/756 Kacheln, 315928 Flurstücke
-  600/756 Kacheln, 332398 Flurstücke
-  625/756 Kacheln, 349667 Flurstücke
-  650/756 Kacheln, 361128 Flurstücke
-  675/756 Kacheln, 371232 Flurstücke
-  700/756 Kacheln, 383695 Flurstücke
-  725/756 Kacheln, 396185 Flurstücke
-  750/756 Kacheln, 409324 Flurstücke
+Region Ilm-Kreis: bereits vorhanden, übersprungen
 Region Landkreis Gotha: bereits vorhanden, übersprungen
-Region Stadt Suhl: 182 Kacheln
-  25/182 Kacheln, 437370 Flurstücke
-  50/182 Kacheln, 450686 Flurstücke
-  75/182 Kacheln, 462108 Flurstücke
-  100/182 Kacheln, 475873 Flurstücke
-  125/182 Kacheln, 486407 Flurstücke
-  150/182 Kacheln, 496145 Flurstücke
-  175/182 Kacheln, 511710 Flurstücke
-Fertig: 938 Kacheln, 513473 Flurstücke, 0 Fehler
+Region Stadt Suhl: bereits vorhanden, übersprungen
+Fertig: 0 Kacheln, 0 Flurstücke, 0 Fehler

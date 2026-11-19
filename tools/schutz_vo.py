@@ -38,7 +38,8 @@ def mitglieder(kat, tiefe=0):
         weiter = d['continue']
 
 GUT = re.compile(r'verordnung|[-_/]vo[-_.]|vo_|nsg[-_]?vo|staatsanzeiger|thuerstanz|thürstanz|landesrecht|bsth|jportal|amtsblatt', re.I)
-SCHLECHT = re.compile(r'wikipedia|wikidata|wikimedia|openstreetmap|geohack|protectedplanet|google\.|bing\.|duckduckgo|archive\.org/web/\d+/?$|youtube|facebook', re.I)
+PDF_OK = re.compile(r'verordnung|rechtsgrundlage|lesefass|nsg[_-]\d|lsg[_-]|schutzgebiets?vo|naturschutzgebiet', re.I)
+SCHLECHT = re.compile(r'wikipedia|wikidata|wikimedia|openstreetmap|geohack|protectedplanet|google\.|bing\.|duckduckgo|archive\.org/web/\d+/?$|youtube|facebook|rote[_-]?liste|klima|witterung', re.I)
 
 def links_von(titel):
     d = api(action='parse', page=titel, prop='externallinks|wikitext', redirects='1')
@@ -51,7 +52,7 @@ def links_von(titel):
     for u in links:
         if SCHLECHT.search(u): continue
         t = texte.get(u, '')
-        if GUT.search(u) or GUT.search(t) or (u.lower().endswith('.pdf') and re.search(r'naturschutz|schutzgebiet|nsg|lsg|naturpark', u + t, re.I)):
+        if GUT.search(u) or GUT.search(t) or (u.lower().endswith('.pdf') and PDF_OK.search(u + ' ' + t)):
             treffer.append({'url': u, 'text': re.sub(r"''+|<[^>]+>", '', t).strip()[:160]})
     return treffer
 
@@ -90,7 +91,7 @@ def zeilen_links(titel):
                 titel_r = re.search(r'titel\s*=\s*([^|}]+)', r)
                 t = t or (titel_r.group(1) if titel_r else '')
                 if SCHLECHT.search(u): continue
-                if GUT.search(u) or GUT.search(t) or u.lower().endswith('.pdf'):
+                if GUT.search(u) or GUT.search(t) or (u.lower().endswith('.pdf') and PDF_OK.search(u + ' ' + t)):
                     treffer.append({'url': u, 'text': re.sub(r"''+|<[^>]+>|\{\{.*?\}\}", '', t).strip()[:160]})
         nr = re.search(r'\|\s*(?:NSG[- ]?)?(\d{1,3})\s*(?:\n|\|\|)', zeile)
         if treffer: out.append((name, treffer, nr.group(1) if nr else None))

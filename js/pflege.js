@@ -69,14 +69,6 @@ const AESTUNG = [
   ['6', 'Bis 6 m', 'zweite Stufe mit Stangensäge oder Leiter'],
   ['10', 'Bis 8–10 m', 'dritte Stufe, Steiggerät oder Hubarbeitsbühne'],
 ];
-// Grobe Richtwerte Unternehmer, netto; immer durch ein Angebot ersetzen
-const AST_PREIS = { '2,5': 5, 6: 9, 10: 15 };
-const RICHT = {
-  sicherung: { wert: 500, einheit: 'ha', text: 'Richtwert ca. 350–700 €/ha je Durchgang, je nach Bewuchs und Gelände' },
-  jungwuchs: { wert: 600, einheit: 'ha', text: 'Richtwert ca. 500–800 €/ha' },
-  dickung: { wert: 700, einheit: 'ha', text: 'Richtwert ca. 600–800 €/ha (15–20 Arbeitsstunden je ha)' },
-  wertastung: { wert: 5, einheit: 'Baum', text: 'Richtwert je Baum: ca. 3–6 € bis 2,5 m, 6–12 € bis 6 m, 12–20 € bis 10 m' },
-};
 // Empfohlene Zahl der Z-Bäume je ha (Wertästung)
 const Z_BAEUME = { Fichte: '150–200', Kiefer: '150–200', Lärche: '100–150', Douglasie: '100–150', Tanne: '150–200', Buche: '60–80', Eiche: '60–80', Bergahorn: '50–70', Esche: '50–70', Birke: '50–70', Erle: '50–70' };
 
@@ -149,7 +141,7 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
     fill(artHost,
       h('h2', { class: 'step-title' }, 'Welche Pflege?'),
       h('div', { class: 'q-cards' }, Object.entries(PFLEGE_ARTEN).map(([k, a]) => h('button', { type: 'button', class: `q-option ${s.art === k ? 'on' : ''}`, 'aria-pressed': String(s.art === k),
-        onclick: () => { s.art = k; s.preis = null; ruhig(() => { artWahl(); renderRest(); }); } },
+        onclick: () => { if (s.art !== k && (k === 'wertastung' || s.art === 'wertastung')) s.preis = null; s.art = k; ruhig(() => { artWahl(); renderRest(); }); } },
         h('span', { class: 'q-text' }, h('strong', {}, a.label), h('small', {}, a.text), h('small', { class: k === 'wertastung' ? 'muted' : 'pos' }, a.foerder))))));
   }
 
@@ -219,14 +211,14 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
 
   function kosten() {
     if (s.ausfuehrung !== 'unternehmer' || !s.art) return null;
-    const r = RICHT[s.art];
+    // Kein vorgegebener Preis – den trägt man selbst ein (Angebot von FBG oder Unternehmer)
+    const preis = s.preis;
     if (s.art === 'wertastung') {
-      const n = zahl(s.zBaeume) || 0, preis = s.preis ?? AST_PREIS[s.hoehe];
-      return { preis, menge: n, summe: n * preis, einheit: 'Baum' };
+      const n = zahl(s.zBaeume) || 0;
+      return { preis, menge: n, summe: preis != null ? n * preis : null, einheit: 'Baum' };
     }
-    const preis = s.preis ?? r.wert;
     const d = s.art === 'sicherung' ? Number(s.durchgaenge) || 1 : 1;
-    return { preis, menge: ha(), summe: ha() * preis * d, durchgaenge: d, einheit: 'ha' };
+    return { preis, menge: ha(), summe: preis != null ? ha() * preis * d : null, durchgaenge: d, einheit: 'ha' };
   }
 
   function renderRest() {
@@ -266,7 +258,7 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
         h('label', {}, 'Baumart', h('select', { onchange: (e) => { s.species = e.target.value; ruhig(renderRest); } }, SPECIES.map((o) => h('option', { selected: o === s.species }, o)))),
         feld('Anzahl Z-Bäume', 'zBaeume', { inputmode: 'numeric', placeholder: ha() ? `z. B. ${Math.round(ha() * (parseInt(Z_BAEUME[s.species], 10) || 100))}` : 'Stück' }),
         h('p', { class: 'sheet-label' }, 'Ästungshöhe'),
-        h('div', { class: 'q-cards' }, AESTUNG.map(([kk, l, t]) => h('button', { type: 'button', class: `q-option ${s.hoehe === kk ? 'on' : ''}`, onclick: () => { s.hoehe = kk; s.preis = null; ruhig(renderRest); } },
+        h('div', { class: 'q-cards' }, AESTUNG.map(([kk, l, t]) => h('button', { type: 'button', class: `q-option ${s.hoehe === kk ? 'on' : ''}`, onclick: () => { s.hoehe = kk; ruhig(renderRest); } },
           h('span', { class: 'q-text' }, h('strong', {}, l), h('small', {}, t))))),
         chips([['trocken', 'Trockenästung (tote Äste)'], ['gruen', 'Grünästung (lebende Äste)']], s.aestungArt, (x) => { s.aestungArt = x; }, false),
       ] : null,
@@ -277,10 +269,10 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
       chips([['eigen', 'Ich selbst (Eigenleistung)'], ['unternehmer', 'Forstunternehmer / FBG']], s.ausfuehrung, (x) => { s.ausfuehrung = x; }, false),
       s.ausfuehrung === 'eigen' ? h('p', { class: 'hint' }, `Eigenleistung ist förderfähig – der Festbetrag je ha wird auch gezahlt, wenn du selbst arbeitest. ${s.art === 'dickung' || s.art === 'jungwuchs' ? 'Rechne mit etwa 15–20 Arbeitsstunden je ha. ' : ''}Arbeite nie allein mit Motorsäge oder Freischneider; Schutzausrüstung tragen.`) : null,
       k ? h('div', { class: 'calc-box' },
-        h('label', {}, `Preis je ${k.einheit} (netto)`, h('span', { class: 'mit-einheit' }, h('input', { type: 'text', inputmode: 'decimal', value: String(k.preis).replace('.', ','),
+        h('label', {}, `Preis je ${k.einheit === 'ha' ? `ha${k.durchgaenge > 1 ? ' und Durchgang' : ''}` : 'Baum'} (netto)`, h('span', { class: 'mit-einheit' }, h('input', { type: 'text', inputmode: 'decimal', value: k.preis != null ? String(k.preis).replace('.', ',') : '', placeholder: 'Preis laut Angebot',
           onchange: (e) => { const v = zahl(e.target.value); s.preis = v; ruhig(renderRest); } }), h('span', {}, '€'))),
-        h('small', { class: 'muted' }, `${RICHT[s.art].text}. Besser: Angebot bei der FBG oder einem Unternehmer einholen.`),
-        k.einheit === 'ha'
+        h('small', { class: 'muted' }, 'Trag den Preis aus dem Angebot deiner FBG oder des Unternehmers ein.'),
+        k.preis == null ? null : k.einheit === 'ha'
           ? h('small', {}, `${formatHa(k.menge)} × ${euro(k.preis)}${k.durchgaenge > 1 ? ` × ${k.durchgaenge} Durchgänge` : ''} = `, h('b', {}, euro(k.summe)))
           : h('small', {}, `${zt(k.menge, 0)} Bäume × ${euro(k.preis)} = `, h('b', {}, euro(k.summe)))) : null,
 
@@ -293,7 +285,7 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
           f.satzL ? h('small', {}, `Landesprogramm (bis 20 ha Waldbesitz, Schadfläche): ${euro(f.satzL)} je ha → `, h('b', {}, ha() ? euro(f.l) : '–')) : h('small', { class: 'muted' }, 'Im Landesprogramm wird keine Jungwaldpflege gefördert.'),
           ha() && f.g < f.bagatelle && !(f.l >= 700) ? h('small', { class: 'warn-line' }, `Unter der Bagatellgrenze von ${euro(f.bagatelle)} – mit weiteren Maßnahmen (z. B. Pflanzung, Zaun) in einem Antrag kombinieren.`) : null,
           f.gruende.map((t) => h('small', { class: 'warn-line' }, t)),
-          k ? h('small', {}, 'Eigenanteil nach Förderung (Richtlinie): ', h('b', {}, euro(Math.max(0, k.summe - f.g)))) : null,
+          k?.summe != null ? h('small', {}, 'Eigenanteil nach Förderung (Richtlinie): ', h('b', {}, euro(Math.max(0, k.summe - f.g)))) : null,
           h('small', { class: 'hint' }, `${s.art === 'sicherung' ? 'Jedes Jahr ein eigener Antrag, höchstens fünf Mal je Kultur. ' : 'Nur über die Richtlinie Teil A. '}Erst nach dem Bewilligungsbescheid beginnen. Fördersätze bitte bei FBG oder Forstamt prüfen.`)),
 
       // Termin
@@ -319,7 +311,7 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
       ...(s.teil ? { flaeche: { ring: [...s.pts], ha: f } } : {}),
       pflege: { art: s.art, kulturId: s.kulturId, pflanzjahr: s.pflanzjahr, vegetation: s.vegetation, verfahren: s.verfahren, umfang: s.umfang, durchgaenge: s.durchgaenge,
         mittelhoehe: s.mittelhoehe, bhd: s.bhd, eingriffe: s.eingriffe, stammzahl: s.stammzahl, zBaeume: s.zBaeume, hoehe: s.hoehe, aestungArt: s.aestungArt, vorgehen },
-      kosten: k ? Math.round(k.summe * 100) / 100 : null,
+      kosten: k?.summe != null ? Math.round(k.summe * 100) / 100 : null,
     }));
     toast(`${A.kurz} gebucht${f ? `: ${formatHa(f)}` : ''}`);
     gespeichert = true;

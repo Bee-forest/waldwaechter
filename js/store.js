@@ -51,9 +51,18 @@ function load() {
   }
 }
 
+let speicherWarnung = 0;
 function persist() {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* Speicher voll oder gesperrt */ }
+  try { localStorage.setItem(KEY, JSON.stringify(state)); return true; } catch {
+    // Speicher voll oder gesperrt: deutlich melden, sonst sind Änderungen nach dem Neuladen weg
+    if (Date.now() - speicherWarnung > 15000) {
+      speicherWarnung = Date.now();
+      import('./ui.js').then((u) => u.toast('Achtung: Der Gerätespeicher der App ist voll – Änderungen werden nicht dauerhaft gespeichert. Alte Fotos oder Offline-Daten löschen oder „Daten sichern“.')).catch(() => {});
+    }
+    return false;
+  }
 }
+export const speicherOk = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); return true; } catch { return false; } };
 
 export const store = {
   get: () => state,

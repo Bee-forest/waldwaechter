@@ -23,17 +23,27 @@ export const eigentuemerAbo = (f) => { subs.add(f); return () => subs.delete(f);
 
 // Hochgeladene Tabellen (je Forstbetrieb / FBG eine): { id, name, datei, datum, anzahl, gefunden, nichtGefunden }
 const DATEI_KEY = 'waldwaechter.eigentuemer.dateien';
-export function etDateien() { try { return JSON.parse(localStorage.getItem(DATEI_KEY) || '[]'); } catch { return []; } }
-function dateienSichern(l) { try { localStorage.setItem(DATEI_KEY, JSON.stringify(l)); } catch { /* voll */ } subs.forEach((f) => f()); }
-export function etDateiAktualisieren(id, werte) { dateienSichern(etDateien().map((d) => (d.id === id ? { ...d, ...werte } : d))); }
+export function etDateien() {
+  let l; try { l = JSON.parse(localStorage.getItem(DATEI_KEY) || '[]'); } catch { l = []; }
+  // Einträge aus früheren Importen (vor der Tabellenübersicht) als eigene Tabelle zeigen
+  const ids = new Set(l.map((d) => d.id));
+  const alt = Object.values(laden()).filter((e) => !e.datei || !ids.has(e.datei));
+  if (alt.length) l = [...l, { id: '__alt', name: 'Frühere Importe', datei: 'vor der Tabellenübersicht hochgeladen', datum: Math.min(...alt.map((e) => e.geaendert || Date.now())), anzahl: alt.length, gefunden: null, nichtGefunden: null }];
+  return l;
+}
+function dateienSichern(l) { try { localStorage.setItem(DATEI_KEY, JSON.stringify(l)); } catch { /* voll */ } bekannteIds = null; subs.forEach((f) => f()); }
+export function etDateiAktualisieren(id, werte) { if (id === '__alt') return; dateienSichern(etDateien().filter((d) => d.id !== '__alt').map((d) => (d.id === id ? { ...d, ...werte } : d))); }
 /** Tabelle mit allen ihren Eigentümereinträgen entfernen */
 export function etDateiEntfernen(id) {
   laden();
-  for (const [k, e] of Object.entries(et)) if (e.datei === id) delete et[k];
+  for (const [k, e] of Object.entries(et)) if (gehoertZu(e, id)) delete et[k];
   sichern();
-  dateienSichern(etDateien().filter((d) => d.id !== id));
+  dateienSichern(etDateien().filter((d) => d.id !== id && d.id !== '__alt'));
 }
-export const etDateiAnzahl = (id) => Object.values(laden()).filter((e) => e.datei === id).length;
+let bekannteIds = null;
+const ids = () => (bekannteIds ||= new Set((() => { try { return JSON.parse(localStorage.getItem(DATEI_KEY) || '[]'); } catch { return []; } })().map((d) => d.id)));
+const gehoertZu = (e, id) => (id === '__alt' ? !e.datei || !ids().has(e.datei) : e.datei === id);
+export const etDateiAnzahl = (id) => { const l = Object.values(laden()); return id === '__alt' ? l.filter((e) => gehoertZu(e, id)).length : l.filter((e) => e.datei === id).length; };
 
 const gemNorm = (t) => String(t || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '');
 const flurNorm = (f) => String(Number(String(f || '').replace(/\D/g, '')) || String(f || '').trim());
@@ -121,7 +131,7 @@ export async function eigentuemerImport(datei, { name = '' } = {}) {
   }
   sichern();
   const anzahl = Object.values(et).filter((e) => e.datei === dateiId).length;
-  const liste = etDateien().filter((d) => d.id !== dateiId);
+  const liste = etDateien().filter((d) => d.id !== dateiId && d.id !== '__alt');
   dateienSichern([...liste, { id: dateiId, name: name || alt?.name || datei.name.replace(/\.(xlsx|csv)$/i, ''), datei: datei.name, datum: Date.now(), anzahl, gefunden: null, nichtGefunden: null }]);
   return { neu, aktualisiert, fehler, gesamt: neu + aktualisiert, meine, dateiId, ersetzt: !!alt };
 }
@@ -131,7 +141,7 @@ export const etName = (e) => [e?.vorname, e?.nachname].filter(Boolean).join(' ')
 /** Alle Eigentümer als Excel-Liste (gleiches Format wie das Formular, inkl. Änderungen aus der App) */
 export async function eigentuemerExcel({ leer = false, dateiId = null } = {}) {
   const { schreibeXlsx } = await import('./xlsx.js');
-  const zeilen = leer ? [] : Object.values(laden()).filter((e) => !dateiId || e.datei === dateiId)
+  const zeilen = leer ? [] : Object.values(laden()).filter((e) => !dateiId || gehoertZu(e, dateiId))
     .sort((a, b) => String(a.gemarkung).localeCompare(String(b.gemarkung), 'de') || (Number(a.flur) || 0) - (Number(b.flur) || 0) || String(a.nr).localeCompare(String(b.nr), 'de', { numeric: true }))
     .map((e) => [e.gemarkung, e.flur, e.nr, e.vorname && e.nachname ? `${e.nachname}, ${e.vorname}` : etName(e), e.strasse, e.hausnummer, e.plz, e.ort, e.telefon, e.email].map((v) => v ?? ''));
   return schreibeXlsx([VORLAGE_KOPF, ...zeilen], { blatt: 'Waldbesitzer', breiten: [18, 7, 11, 28, 22, 11, 8, 18, 16, 28] });
@@ -142,7 +152,7 @@ export async function flaechenAusEigentuemern({ onFortschritt, dateiId = null } 
   const { source } = await import('./data/source.js');
   const { findeFlurstueck } = await import('./map/thueringen.js');
   const schonDa = new Map(store.get().parcels.map((p) => [flurstueckKey(p.gemarkung, p.flur, p.nr), p]));
-  const liste = Object.values(laden()).filter((e) => !dateiId || e.datei === dateiId);
+  const liste = Object.values(laden()).filter((e) => !dateiId || gehoertZu(e, dateiId));
   let hinzu = 0, vorhanden = 0;
   const nicht = []; // { text, grund }
   for (let i = 0; i < liste.length; i++) {
@@ -169,7 +179,7 @@ export async function flaechenAusEigentuemern({ onFortschritt, dateiId = null } 
     store.update((s) => { s.parcels.push({ ...p, category: ['Wald', 'Landwirtschaft', 'Gewässer', 'Gebäude'].includes(p.nutzung) ? p.nutzung : 'Wald', addedAt: Date.now(), ordnerId: null }); });
     hinzu++;
   }
-  const o = ordnerAusEigentuemern();
+  const o = ordnerAusEigentuemern({ dateiId });
   // Flurstücke der Tabelle ohne Namen kommen in einen Sammelordner der Tabelle (nicht zu den eigenen Flächen)
   const ohne = liste.filter((e) => !etName(e)).map((e) => store.get().parcels.find((p) => flurstueckKey(p.gemarkung, p.flur, p.nr) === flurstueckKey(e.gemarkung, e.flur, e.nr))).filter((p) => p && !p.ordnerId);
   if (ohne.length) {
@@ -180,7 +190,8 @@ export async function flaechenAusEigentuemern({ onFortschritt, dateiId = null } 
     o.zugeordnet += ohne.length; o.ohneName = ohne.length;
   }
   if (dateiId) etDateiAktualisieren(dateiId, { gefunden: hinzu + vorhanden, nichtGefunden: nicht.length, nichtListe: nicht.slice(0, 200) });
-  return { hinzu, vorhanden, nicht, nichtGefunden: nicht.map((x) => x.text), ...o };
+  const { speicherOk } = await import('./store.js');
+  return { hinzu, vorhanden, nicht, nichtGefunden: nicht.map((x) => x.text), ...o, gespeichert: speicherOk(), ordnerGesamt: ordnerListe().length };
 }
 export const etAdresse = (e) => [[e?.strasse, e?.hausnummer].filter(Boolean).join(' '), [e?.plz, e?.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
@@ -384,12 +395,21 @@ export async function ordnerAnlegen(vorgabe = '') {
 }
 
 /** Ordner aus der Eigentümerliste: je Eigentümer (Name + Anschrift) ein Ordner; eigene Flurstücke mit passendem Eigentümer werden zugeordnet */
-export function ordnerAusEigentuemern() {
+export function ordnerAusEigentuemern({ dateiId = null } = {}) {
   const s = store.get();
   const ordner = [...(s.ordner || [])];
   const nachName = new Map(ordner.map((o) => [o.name.toLowerCase(), o]));
   let neu = 0, zugeordnet = 0;
   const zuordnung = {};
+  // je Waldbesitzer der Tabelle(n) ein Ordner – auch wenn sein Flurstück (noch) nicht gefunden wurde
+  for (const e of Object.values(laden())) {
+    if (dateiId && !gehoertZu(e, dateiId)) continue;
+    const name = etName(e);
+    if (!name || nachName.has(name.toLowerCase())) continue;
+    const { gemarkung, flur, nr, geaendert, datei, ...nurPerson } = e;
+    const o = { id: uid(), name, erstellt: Date.now(), eigentuemer: nurPerson };
+    ordner.push(o); nachName.set(name.toLowerCase(), o); neu++;
+  }
   for (const p of s.parcels) {
     const e = eigentuemerVon(p);
     const name = etName(e);

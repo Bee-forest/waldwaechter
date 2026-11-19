@@ -138,10 +138,14 @@ export async function openProfile() {
 
   async function sortiereNachWaldbesitzer(dateiId = null) {
     toast('Flurstücke werden gesucht …');
-    const r = await flaechenAusEigentuemern({ dateiId, onFortschritt: (i, n) => { if (i % 25 === 0) toast(`Flurstück ${i} von ${n} …`); } });
+    let r;
+    try { r = await flaechenAusEigentuemern({ dateiId, onFortschritt: (i, n) => { if (i % 25 === 0) toast(`Flurstück ${i} von ${n} …`); } }); }
+    catch (e) { await dialog({ title: 'Einsortieren abgebrochen', body: h('p', {}, `Fehler: ${e?.message || e}. Bitte diese Meldung an den Support weitergeben.`), actions: [{ label: 'OK', value: true, primary: true }] }); return; }
     render();
     await dialog({ title: 'Flurstücke einsortiert', body: h('div', { class: 'form' },
-      h('p', {}, `${r.hinzu} Flurstücke neu hinzugefügt, ${r.vorhanden} waren schon da. ${r.neu} neue Ordner, ${r.zugeordnet} Flurstücke einsortiert.`),
+      h('p', {}, `${r.hinzu} Flurstücke neu hinzugefügt, ${r.vorhanden} waren schon da. ${r.neu} neue Ordner (insgesamt ${r.ordnerGesamt}), ${r.zugeordnet} Flurstücke einsortiert.`),
+      r.gespeichert ? null : h('p', { class: 'warn-line' }, 'Der Gerätespeicher der App ist voll – die Ordner sind nur bis zum Neuladen da. Bitte Speicher freimachen (alte Fotos, Offline-Karten) und erneut einsortieren.'),
+      r.ordnerGesamt ? h('p', { class: 'hint' }, 'Die Ordner wählst du oben auf der Startseite in der Ordnerleiste (📁) – dort gibt es auch die Suche.') : null,
       r.nicht.length ? h('div', {}, h('p', { class: 'warn-line' }, `${r.nicht.length} Flurstücke nicht gefunden:`),
         h('ul', { class: 'mat-kurz et-nicht' }, r.nicht.slice(0, 60).map((x) => h('li', {}, h('strong', {}, x.text), ` – ${x.grund}`))),
         r.nicht.length > 60 ? h('p', { class: 'muted' }, `… und ${r.nicht.length - 60} weitere.`) : null) : h('p', { class: 'pos' }, 'Alle Flurstücke wurden gefunden.')),

@@ -27,7 +27,7 @@ export function fotopunkteAbschnitt(p) {
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }) }, 'Hinführen'),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`fp:${f.id}`, `${f.name || 'Fotopunkt'} · ${titel}`, { verlauf: true, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit.` }) }, fotoKnopfText(`fp:${f.id}`)),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => aufKarteZeigen(f.at) }, 'Auf der Karte'),
-        h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktAufKarteVerschieben(f, p) }, 'Auf der Karte verschieben'),
+        h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktAufKarteVerschieben(f, p) }, 'Standort / Blickrichtung ändern'),
         h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktHierSetzen(f) }, 'Per GPS neu setzen'),
         h('button', { type: 'button', class: 'link-btn', onclick: async () => { if (await confirmDialog('Fotopunkt mit allen Aufnahmen löschen?', { ok: 'Löschen', danger: true })) { store.update((st) => { st.fotopunkte = st.fotopunkte.filter((x) => x.id !== f.id); }); fotosLoeschen(`fp:${f.id}`); } } }, 'löschen'))))));
 }
@@ -98,8 +98,9 @@ export async function fotopunktAnlegen(parcelId, p) {
   if (watch != null) navigator.geolocation.clearWatch(watch);
   if (!ok) return;
   if (ok === 'karte') {
-    w.karte = await punktAufKarteWaehlen({ titel: 'Fotopunkt auf der Karte setzen', center: w.at || (p?.ring ? centroid(p.ring) : null), blick: w.blick === '' ? null : Number(w.blick), umriss: p ? polysOf(p) : null });
-    if (!w.karte) return;
+    const r = await punktAufKarteWaehlen({ titel: 'Fotopunkt auf der Karte setzen', center: w.at || (p?.ring ? centroid(p.ring) : null), blick: w.blick, umriss: p ? polysOf(p) : null, mitBlick: true });
+    if (!r?.at) return;
+    w.karte = r.at; if (r.blick != null) w.blick = String(r.blick);
   } else if (!w.at) { toast('Noch kein GPS-Standort – bitte kurz warten oder „Auf Karte setzen“ wählen.'); return; }
   const id = uid();
   const blick = ((Math.round(Number(w.blick) || 0) % 360) + 360) % 360;
@@ -130,8 +131,9 @@ export function fotopunktFotos(f) {
 
 /** Fotopunkt auf der Karte an eine andere Stelle setzen */
 export async function fotopunktAufKarteVerschieben(f, p = null) {
-  const at = await punktAufKarteWaehlen({ titel: `${f.name || 'Fotopunkt'} verschieben`, start: f.at, blick: f.blick, umriss: p ? polysOf(p) : null });
-  if (!at) return;
-  store.update((s) => { const x = s.fotopunkte.find((y) => y.id === f.id); if (x) { x.at = at; x.genau = null; x.perKarte = true; } });
+  const r = await punktAufKarteWaehlen({ titel: `${f.name || 'Fotopunkt'} verschieben`, start: f.at, blick: f.blick, umriss: p ? polysOf(p) : null, mitBlick: true });
+  if (!r?.at) return;
+  const verschoben = r.at[0] !== f.at[0] || r.at[1] !== f.at[1];
+  store.update((s) => { const x = s.fotopunkte.find((y) => y.id === f.id); if (x) { if (verschoben) { x.at = r.at; x.genau = null; x.perKarte = true; } if (r.blick != null) x.blick = r.blick; } });
   toast('Fotopunkt verschoben');
 }

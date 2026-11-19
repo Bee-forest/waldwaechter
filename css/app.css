@@ -1381,6 +1381,7 @@ li.fin-zeile { cursor: default; }
 /* Fotopunkte auf der Karte: Kamera mit Blickkegel */
 .fp-icon { background: none; border: 0; }
 .fp-icon .fp-kegel { position: absolute; inset: 0; transform-origin: 50% 50%; pointer-events: none; }
-.fp-icon .fp-punkt { position: absolute; left: 17px; top: 17px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.fp-icon .fp-punkt { position: absolute; left: 42px; top: 42px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
 .fp-popup { min-width: 180px; }
 .fp-popup p { margin: 4px 0 8px; }
+.fp-icon .fp-richtung { position: absolute; transform: translate(-50%, -50%); background: #7B3FA0; color: #fff; font: 700 11px/1 system-ui, sans-serif; padding: 3px 5px; border-radius: 8px; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); white-space: nowrap; }

@@ -149,7 +149,10 @@ export async function openProfile() {
       r.ordnerGesamt ? h('p', { class: 'hint' }, 'Die Ordner wählst du oben auf der Startseite in der Ordnerleiste (📁) – dort gibt es auch die Suche.') : null,
       r.nicht.length ? h('div', {}, h('p', { class: 'warn-line' }, `${r.nicht.length} Flurstücke nicht gefunden:`),
         h('ul', { class: 'mat-kurz et-nicht' }, r.nicht.slice(0, 60).map((x) => h('li', {}, h('strong', {}, x.text), ` – ${x.grund}`))),
-        r.nicht.length > 60 ? h('p', { class: 'muted' }, `… und ${r.nicht.length - 60} weitere.`) : null) : h('p', { class: 'pos' }, 'Alle Flurstücke wurden gefunden.')),
+        r.nicht.length > 60 ? h('p', { class: 'muted' }, `… und ${r.nicht.length - 60} weitere.`) : null) : h('p', { class: 'pos' }, 'Alle Flurstücke wurden gefunden.'),
+      r.eigene?.length ? h('details', {}, h('summary', {}, `${r.eigene.length} Flurstücke bleiben bei den eigenen Flächen`),
+        h('p', { class: 'hint' }, 'Sie stehen in keiner Waldbesitzer-Tabelle (oder die Schreibweise passt nicht eindeutig). In der Flurstücks-Info lassen sie sich über 📁 einem Ordner zuordnen.'),
+        h('ul', { class: 'mat-kurz et-nicht' }, r.eigene.slice(0, 80).map((t) => h('li', {}, t))), r.eigene.length > 80 ? h('p', { class: 'muted' }, `… und ${r.eigene.length - 80} weitere.`) : null) : null),
       actions: [{ label: 'OK', value: true, primary: true }] });
   }
   const excelSpeichern = async (leer, dateiId = null, name = '') => {

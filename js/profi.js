@@ -16,6 +16,7 @@ function laden() {
   return et;
 }
 function sichern() {
+  nachNr = null;
   try { localStorage.setItem(ET_KEY, JSON.stringify(et)); } catch { toast('Speicher voll – Eigentümerdaten konnten nicht gespeichert werden.'); }
   subs.forEach((f) => f());
 }
@@ -50,9 +51,27 @@ const flurNorm = (f) => String(Number(String(f || '').replace(/\D/g, '')) || Str
 const nrNorm = (n) => String(n || '').replace(/\s+/g, '').split('/').map((x) => String(Number(x)) === 'NaN' ? x : String(Number(x))).join('/');
 export const flurstueckKey = (gemarkung, flur, nr) => `${gemNorm(gemarkung)}|${flurNorm(flur)}|${nrNorm(nr)}`;
 
+// Ersatzsuche, wenn die Schreibweise in der Tabelle von der amtlichen abweicht
+// (z. B. „Langenberg“ statt „Gera-Langenberg“, Flur 3 statt der amtlichen „0“): gleiche Nummer,
+// passende Flur und eine Gemarkung, deren Name im anderen enthalten ist
+let nachNr = null;
+// amtliche Gemarkungsnamen: Steht in der Tabelle eine andere amtliche Gemarkung (z. B. „Greiz“ statt „Greiz-Pohlitz“), ist es nicht dasselbe Flurstück
+let amtlicheGem = null;
+export const gemarkungenLaden = () => (amtlicheGem ? Promise.resolve() : fetch('data/alkis/index.json').then((r) => r.json()).then((j) => { amtlicheGem = new Set(Object.keys(j.gemarkungen || {}).map(gemNorm)); nachNr = null; }).catch(() => {}));
+gemarkungenLaden();
+function ersatzEintrag(p) {
+  if (!nachNr) { nachNr = new Map(); for (const e of Object.values(laden())) { const n = nrNorm(e.nr); if (!nachNr.has(n)) nachNr.set(n, []); nachNr.get(n).push(e); } }
+  const g = gemNorm(p.gemarkung), f = flurNorm(p.flur);
+  const gemPasst = (x) => { const y = gemNorm(String(x || '').replace(/\(.*?\)/g, '').replace(/\d{4,6}/g, '')); if (y === g) return true; if (!amtlicheGem || amtlicheGem.has(y)) return false; return y.length >= 3 && (g.includes(y) || y.includes(g)); };
+  const treffer = (nachNr.get(nrNorm(p.nr)) || []).filter((e) => {
+    const ef = flurNorm(e.flur);
+    return (ef === f || ef === '0' || f === '0' || !e.flur) && (gemPasst(e.gemarkung) || (p.source === 'alkis' && /^\d{4,6}$/.test(String(e.gemarkung || '').replace(/\D/g, '')) && String(e.gemarkung).replace(/\D/g, '').slice(-4) === String(p.id).slice(2, 6)));
+  });
+  return treffer.length === 1 ? treffer[0] : null; // bei mehreren möglichen Treffern lieber nichts raten
+}
 export function eigentuemerVon(p) {
   if (!p) return null;
-  return laden()[flurstueckKey(p.gemarkung, p.flur, p.nr)] || null;
+  return laden()[flurstueckKey(p.gemarkung, p.flur, p.nr)] || ersatzEintrag(p);
 }
 export const eigentuemerAnzahl = () => Object.keys(laden()).length;
 export function eigentuemerSpeichern(p, daten) {
@@ -149,6 +168,7 @@ export async function eigentuemerExcel({ leer = false, dateiId = null } = {}) {
 
 /** Flurstücke aus der Eigentümerliste zu den Flächen holen und je Waldbesitzer in einen Ordner legen */
 export async function flaechenAusEigentuemern({ onFortschritt, dateiId = null } = {}) {
+  await gemarkungenLaden();
   const { source } = await import('./data/source.js');
   const { findeFlurstueck } = await import('./map/thueringen.js');
   const schonDa = new Map(store.get().parcels.map((p) => [flurstueckKey(p.gemarkung, p.flur, p.nr), p]));
@@ -191,7 +211,8 @@ export async function flaechenAusEigentuemern({ onFortschritt, dateiId = null } 
   }
   if (dateiId) etDateiAktualisieren(dateiId, { gefunden: hinzu + vorhanden, nichtGefunden: nicht.length, nichtListe: nicht.slice(0, 200) });
   const { speicherOk } = await import('./store.js');
-  return { hinzu, vorhanden, nicht, nichtGefunden: nicht.map((x) => x.text), ...o, gespeichert: speicherOk(), ordnerGesamt: ordnerListe().length };
+  const eigene = store.get().parcels.filter((p) => !p.ordnerId).map((p) => `${p.gemarkung}, Flur ${p.flur}, ${p.nr}`);
+  return { eigene, hinzu, vorhanden, nicht, nichtGefunden: nicht.map((x) => x.text), ...o, gespeichert: speicherOk(), ordnerGesamt: ordnerListe().length };
 }
 export const etAdresse = (e) => [[e?.strasse, e?.hausnummer].filter(Boolean).join(' '), [e?.plz, e?.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
@@ -326,12 +347,14 @@ export function ordnerBeobachten() {
   pruefe();
   // einmalig: Flurstücke, die wegen eines früheren Fehlers mit Waldbesitzer bei den eigenen Flächen
   // gelandet sind, in den Ordner ihres Waldbesitzers legen
+  gemarkungenLaden().then(() => {
   const st = store.get();
-  if (istProfi() && !st.settings.ordnerReparatur1 && st.parcels.some((p) => !p.ordnerId && etName(eigentuemerVon(p)))) {
+  if (istProfi() && !st.settings.ordnerReparatur2 && st.parcels.some((p) => !p.ordnerId && etName(eigentuemerVon(p)))) {
     const r = ordnerAusEigentuemern();
     if (r.zugeordnet) setTimeout(() => toast(`${r.zugeordnet} Flurstücke in die Ordner ihrer Waldbesitzer einsortiert`), 1500);
   }
-  if (!st.settings.ordnerReparatur1) store.update((x) => { x.settings.ordnerReparatur1 = true; });
+  if (!st.settings.ordnerReparatur2) store.update((x) => { x.settings.ordnerReparatur2 = true; });
+  });
 }
 
 export function ordnerWaehlen(id) {
@@ -418,12 +441,16 @@ export function ordnerAusEigentuemern({ dateiId = null } = {}) {
     const o = { id: uid(), name, erstellt: Date.now(), eigentuemer: nurPerson };
     ordner.push(o); nachName.set(name.toLowerCase(), o); neu++;
   }
+  const dateiName = new Map(etDateien().map((d) => [d.id, d.name]));
   for (const p of s.parcels) {
     const e = eigentuemerVon(p);
-    const name = etName(e);
+    let name = etName(e);
+    // Flurstück steht in einer Tabelle, aber ohne Waldbesitzer → Sammelordner dieser Tabelle
+    const sammel = !name && e?.datei && !p.ordnerId;
+    if (sammel) name = `Ohne Waldbesitzer${dateiName.get(e.datei) ? ` (${dateiName.get(e.datei)})` : ''}`;
     if (!name) continue;
     let o = nachName.get(name.toLowerCase());
-    if (!o) { const { gemarkung, flur, nr, geaendert, ...nurPerson } = e; o = { id: uid(), name, erstellt: Date.now(), eigentuemer: nurPerson }; ordner.push(o); nachName.set(name.toLowerCase(), o); neu++; }
+    if (!o) { const { gemarkung, flur, nr, geaendert, ...nurPerson } = e; o = { id: uid(), name, erstellt: Date.now(), ...(sammel ? {} : { eigentuemer: nurPerson }) }; ordner.push(o); nachName.set(name.toLowerCase(), o); neu++; }
     if (p.ordnerId !== o.id) { zuordnung[p.id] = o.id; zugeordnet++; }
   }
   store.update((st) => { st.ordner = ordner; for (const p of st.parcels) if (zuordnung[p.id]) p.ordnerId = zuordnung[p.id]; });

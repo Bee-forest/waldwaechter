@@ -297,6 +297,7 @@ export async function localIndexInfo() {
 // ---------- Flurstück nach Gemarkung, Flur und Nummer finden (z. B. für den Excel-Import) ----------
 const gNorm = (t) => String(t || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
   .replace(/\bgemarkung\b|\bgmk\.?/g, '').replace(/\(.*?\)/g, '').replace(/[^a-z0-9]+/g, '');
+const gLose = (t) => gNorm(String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
 const fNorm = (f) => String(Number(String(f ?? '').replace(/\D/g, '')) || 0);
 /** „45/1“, „45-1“, „0045/0001“, „45 / 1“ → „45/1“ */
 export const nrNorm = (n) => String(n ?? '').trim().replace(/\s+/g, '').replace(/[-–\\]/g, '/').split('/').filter(Boolean)
@@ -327,11 +328,15 @@ export async function findeFlurstueck({ gemarkung, flur, nr }) {
       namen.filter((n) => teile.includes(gNorm(n)) || teile.includes(gNorm(n.split(/ b\. | bei /)[0]))),
       namen.filter((n) => gNorm(n).startsWith(g) || gNorm(n.split(/ b\. | bei /)[0]) === g),
       g.length >= 4 ? namen.filter((n) => g.includes(gNorm(n)) || gNorm(n).includes(g)) : [],
+      // Umlaut ohne Punkte geschrieben („Achelstadt“ statt „Achelstädt“)
+      namen.filter((n) => gLose(n) === gLose(roh.replace(/\d{4,6}/, ''))),
     ];
     kandidaten = [...new Set(stufen.flat())].slice(0, 10);
   }
   if (!kandidaten.length) return { grund: 'gemarkung' };
   const fl = fNorm(flur), nn = nrNorm(nr);
+  const egal = !String(flur ?? '').trim(); // ohne Flur: nur eindeutige Treffer übernehmen
+  let gefunden = null;
   for (const name of kandidaten) {
     const entries = await gemDatei(idx.gemarkungen[name]);
     for (const [k0, [x, y]] of Object.entries(entries)) {
@@ -341,12 +346,15 @@ export async function findeFlurstueck({ gemarkung, flur, nr }) {
       const i = k.indexOf('/');
       const f = k.slice(0, i), n = k.slice(i + 1);
       if (nrNorm(n) !== nn) continue;
-      if (f !== fl && f !== '0') continue; // manche Gemarkungen haben keine Flur (in ALKIS „0“)
+      if (!egal && f !== fl && f !== '0') continue; // manche Gemarkungen haben keine Flur (in ALKIS „0“)
       const tile = await loadTile(x, y);
       const p = tile.find((t) => t.flur === f && t.nr === n && (!pref || String(t.id).slice(2, 6) === pref));
-      if (p) return { p };
+      if (p && !egal) return { p };
+      if (p && gefunden && gefunden.id !== p.id) return { grund: 'flurstueck', gemarkungen: kandidaten, mehrdeutig: true };
+      if (p) gefunden = p;
     }
   }
+  if (gefunden) return { p: gefunden };
   return { grund: 'flurstueck', gemarkungen: kandidaten };
 }
 

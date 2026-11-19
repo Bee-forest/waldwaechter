@@ -134,7 +134,8 @@ export async function eigentuemerImport(datei, { name = '' } = {}) {
   for (const z of daten) {
     const r = {};
     zuordnung.forEach((sp, i) => { if (sp && z[i] != null && String(z[i]).trim()) r[sp] = String(z[i]).trim(); });
-    if (!r.gemarkung || !r.flur || !r.flurstueck) { fehler++; continue; }
+    if (!r.gemarkung || !r.flurstueck) { fehler++; continue; }
+    r.flur ||= ''; // Flur fehlt: die App sucht das Flurstück in allen Fluren der Gemarkung
     const k = flurstueckKey(r.gemarkung, r.flur, r.flurstueck);
     const eintrag = { gemarkung: r.gemarkung, flur: r.flur, nr: r.flurstueck, geaendert: Date.now(), datei: dateiId };
     for (const [f] of ET_FELDER) if (r[f]) eintrag[f] = r[f];
@@ -190,7 +191,7 @@ export async function flaechenAusEigentuemern({ onFortschritt, dateiId = null } 
         if (p?.ring) r = { p };
       } catch { /* bleibt nicht gefunden */ }
     }
-    if (!r.p) { nicht.push({ text, grund: r.grund === 'gemarkung' ? 'Gemarkung unbekannt (Schreibweise prüfen oder Gebiet noch nicht in der App)' : r.grund === 'flurstueck' ? `Flurstück in ${r.gemarkungen.join(' / ')} nicht gefunden (Flur und Nummer prüfen)` : 'Gebiet noch nicht in der App' }); continue; }
+    if (!r.p) { nicht.push({ text, grund: r.grund === 'gemarkung' ? 'Gemarkung unbekannt (Schreibweise prüfen oder Gebiet noch nicht in der App)' : r.mehrdeutig ? 'Flur fehlt, und die Nummer gibt es in mehreren Fluren – bitte Flur ergänzen' : r.grund === 'flurstueck' ? `Flurstück in ${r.gemarkungen.join(' / ')} nicht gefunden (Flur und Nummer prüfen)` : 'Gebiet noch nicht in der App' }); continue; }
     const p = r.p;
     // Eigentümer unter der amtlichen Schreibweise ablegen, damit Infobox und Ordner ihn finden
     const kAmtlich = flurstueckKey(p.gemarkung, p.flur, p.nr), kExcel = flurstueckKey(e.gemarkung, e.flur, e.nr);

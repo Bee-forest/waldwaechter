@@ -1,7 +1,19 @@
-2026-11-19 08:32 UTC
+2026-11-19 10:32 UTC
 Region Landkreis Greiz: bereits vorhanden, übersprungen
 Region Saale-Orla-Kreis: bereits vorhanden, übersprungen
 Region Ilm-Kreis: bereits vorhanden, übersprungen
 Region Landkreis Gotha: bereits vorhanden, übersprungen
 Region Stadt Suhl: bereits vorhanden, übersprungen
-Fertig: 0 Kacheln, 0 Flurstücke, 0 Fehler
+Region Stadt Gera: 225 Kacheln
+  Felder: identifier=DETHL58P0000p0TVFL, oid=DETHL58P0000p0TVFL, aktualit=2018-05-16, idflurst=DETHL58P0000p0TV, flaeche=1718, flstkennz=160207000018530001__, land=Thüringen, gemarkung=Gera, flur=Flur 0, flurstnr=1853/1, gmdschl=16052000, regbezirk=unbesetzt, kreis=Gera, gemeinde=Gera, lagebeztxt=Gagarinstraße, tntxt=Strassenverkehr; 1718
+  Verwende adv_alkis_wfs mit Variante utm (944 Flurstücke in der Probe)
+  25/225 Kacheln, 9534 Flurstücke
+  50/225 Kacheln, 21181 Flurstücke
+  75/225 Kacheln, 32688 Flurstücke
+  100/225 Kacheln, 43906 Flurstücke
+  125/225 Kacheln, 57970 Flurstücke
+  150/225 Kacheln, 73362 Flurstücke
+  175/225 Kacheln, 81645 Flurstücke
+  200/225 Kacheln, 89326 Flurstücke
+  225/225 Kacheln, 96974 Flurstücke
+Fertig: 223 Kacheln, 96974 Flurstücke, 0 Fehler

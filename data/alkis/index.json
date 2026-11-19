@@ -65,6 +65,17 @@
    "ok": true,
    "flurstuecke": 100686,
    "stand": "2026-11-17"
+  },
+  "Stadt Gera": {
+   "bbox": [
+    11.93,
+    50.78,
+    12.22,
+    50.98
+   ],
+   "ok": true,
+   "flurstuecke": 96974,
+   "stand": "2026-11-19"
   }
  },
  "gemarkungen": {
@@ -1291,7 +1302,10 @@
   "Schleusingen": "schleusingen.json",
   "St. Kilian": "st-kilian.json",
   "Hinternah": "hinternah.json",
-  "Waldau": "waldau.json"
+  "Waldau": "waldau.json",
+  "Thiemendorf": "thiemendorf.json",
+  "Ahlendorf": "ahlendorf.json",
+  "Nickelsdorf": "nickelsdorf.json"
  },
  "zoom": 14,
  "quelle": "© GDI-Th, dl-de/by-2-0 (ALKIS vereinfacht, Geoproxy Thüringen)",
@@ -2576,6 +2590,9 @@
   "5229": "Schleusingen",
   "5228": "St. Kilian",
   "5217": "Hinternah",
-  "2802": "Waldau"
+  "2802": "Waldau",
+  "2065": "Thiemendorf",
+  "2001": "Ahlendorf",
+  "2031": "Nickelsdorf"
  }
 }

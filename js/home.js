@@ -247,16 +247,21 @@ function zeigeBesonderheit(f, p) {
 }
 
 const PROFI_LAYER = new Set([]); // Rückegassen und Lagerplätze gibt es für alle
-let grenzGeprueft = false, grenzLaeuft = false;
-/** Grenzpunkte: passende Ebene des Geoportals einmal suchen und melden, was der Dienst liefert */
+let grenzGeprueft = false, grenzLaeuft = false, grenzHinweis = false, grenzWartet = false;
+/** Grenzpunkte: passende Ebene des Geoportals einmal suchen und melden, was der Dienst liefert.
+ *  Hinweise erscheinen höchstens einmal je Sitzung (die Funktion läuft bei jeder Änderung der App-Daten). */
 async function grenzpunktePruefen() {
   if (grenzGeprueft || grenzLaeuft) return;
-  if (map.getZoom() < 16) { toast('Grenzsteine erscheinen ab Zoomstufe 16 – näher heranzoomen.'); map.once('zoomend', () => { if (store.get().settings.layers.grenzpunkte) grenzpunktePruefen(); }); return; }
+  if (map.getZoom() < 16) {
+    if (!grenzHinweis) { grenzHinweis = true; toast('Grenzsteine erscheinen ab Zoomstufe 16 – näher heranzoomen.'); }
+    if (!grenzWartet) { grenzWartet = true; map.on('zoomend', function warte() { if (map.getZoom() >= 16) { map.off('zoomend', warte); grenzWartet = false; if (store.get().settings.layers.grenzpunkte) grenzpunktePruefen(); } }); }
+    return;
+  }
   grenzLaeuft = true;
   const r = await grenzpunkteFinden(map.getBounds()).catch((e) => ({ fehler: [e.message] }));
   grenzLaeuft = false;
-  if (r.fehler) { toast('Grenzsteine: Der Dienst des Geoportals liefert keine Grenzpunkte.'); say(`Grenzsteine konnten nicht geladen werden. Antwort des Geoportals: ${r.fehler.join(' | ').slice(0, 400)}`, { duration: 0 }); return; }
-  grenzGeprueft = true;
+  grenzGeprueft = true; // auch bei Fehler nicht ständig neu versuchen
+  if (r.fehler) { toast('Grenzsteine: Der Dienst des Geoportals liefert gerade keine Grenzpunkte.'); return; }
   overlays.grenzpunkte.setUrl(r.url, true); overlays.grenzpunkte.setParams({ layers: r.layer });
   if (!r.punkte) toast('Grenzsteine: In diesem Kartenausschnitt sind keine Grenzpunkte verzeichnet.');
 }

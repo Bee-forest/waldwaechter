@@ -1394,3 +1394,7 @@ li.fin-zeile { cursor: default; }
 .preview.menge-haupt .neben .pv-n { font-size: 18px; }
 .polter, .polter-inhalt, .polter-ergebnis, .polter-ergebnis > * { min-width: 0; max-width: 100%; }
 .polter-ergebnis small, .polter-ergebnis b { overflow-wrap: break-word; }
+.pflege .mit-einheit { display: flex; align-items: center; gap: 8px; }
+.pflege .mit-einheit input { flex: 1; min-width: 0; }
+.pflege .mit-einheit span { font-weight: 700; color: var(--ink-2); min-width: 1.6em; }
+.pflege .foerder-box { background: #EEF5E8; }

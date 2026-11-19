@@ -182,7 +182,7 @@ export function bestandsprofil(o) {
     h('div', { class: 'btn-row' },
       a.aktion === 'durchforstung' ? h('button', { type: 'button', class: `btn btn-small ${o.durchforstung?.faellig ? 'btn-primary' : ''}`, onclick: () => o.onDurchforstung?.() }, o.durchforstung?.faellig ? 'Durchforstung starten' : 'Durchforstung planen') : null,
       a.aktion && a.aktion !== 'durchforstung' ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => o.onAktion?.(a.aktion) }, { gassen: 'Rückegassen einzeichnen', habitat: 'Habitatbäume eintragen', jagd: 'Jagdeinrichtungen eintragen' }[a.aktion]) : null,
-      a.massnahme ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => o.onMassnahme?.(a.massnahme) }, 'Als Maßnahme planen') : null));
+      a.massnahme ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => o.onMassnahme?.(a.massnahme, a.k) }, 'Als Maßnahme planen') : null));
   const zeigeAlle = liste.length > 3;
   const ol = h('ol', { class: 'empf-liste' }, liste.slice(0, 3).map(aufgabeEl));
   fill(wrap,

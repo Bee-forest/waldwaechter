@@ -798,7 +798,7 @@ function empfehlungBlock(parcelId, polys, latlng, bztP) {
       onPhase: (key) => { store.update((s) => { s.bestandPhase ||= {}; if (key === ph.phase && gewaehlt) delete s.bestandPhase[parcelId]; else s.bestandPhase[parcelId] = key; }); zeichne(); },
       onZiele: zeichne,
       onDurchforstung: async () => { const { openThinningWizard } = await import('./thinning/wizard.js'); window.dispatchEvent(new CustomEvent('ww:navigate', { detail: 'massnahmen' })); openThinningWizard(df?.measureId ? { measureId: df.measureId } : { parcelId }); },
-      onMassnahme: (typ) => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId, typ } })),
+      onMassnahme: (typ, k) => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId, typ, pflegeArt: { kulturpflege: 'sicherung', laeuterung: 'dickung', mischung_dickung: 'dickung' }[k] || null } })),
       onAktion: (a) => { const c = map.getCenter(); if (a === 'gassen') openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); else openPunktEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()), art: a }); },
     }));
     block.setKurz(ph.phase ? `${ENTW_PHASEN[ph.phase].name}${oh ? ` · Oberhöhe ${Math.round(oh.oberhoehe)} m` : ''}${df?.faellig ? ' · Durchforstung fällig' : ''}` : 'Phase wählen');

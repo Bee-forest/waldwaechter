@@ -63,7 +63,7 @@ export function kategorie(m, x = {}) {
     case 'zaunbau': return 'zaun';
     case 'einzelschutz': return 'einzelschutz';
     case 'pflege': {
-      const a = x.pflegeArt || ({ Freischneiden: 'sicherung', Jungwuchspflege: 'jungwuchs', Jungbestandspflege: 'dickung', Wertastung: 'wertastung' })[det.art] || 'sicherung';
+      const a = x.pflegeArt || m.pflege?.art || ({ Freischneiden: 'sicherung', Jungwuchspflege: 'jungwuchs', Jungbestandspflege: 'dickung', Wertastung: 'wertastung', 'Kulturpflege (Sicherung der Kultur)': 'sicherung', 'Dickungspflege (Jungbestandspflege)': 'dickung', 'Wertästung': 'wertastung' })[det.art] || 'sicherung';
       return a === 'wertastung' ? null : a;
     }
     case 'holzernte_df': return det.verfahren === 'Rückepferd' ? 'pferd' : det.verfahren === 'Seilkran' ? 'seilkran' : null;

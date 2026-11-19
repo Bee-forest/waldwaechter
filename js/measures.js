@@ -28,7 +28,7 @@ export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', info: 'Pflanzfläche planen, Baumarten verteilen, Pflanzenzahl und Kosten', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
   zaunbau:      { label: 'Zaunbau', gruppe: 'wildschutz', info: 'Zaunverlauf einzeichnen, Material und Kosten', fields: [['length', 'Zaunlänge (m)', 'number'], ['zaun', 'Zauntyp', 'text'], ['tore', 'Tore', 'text']] },
   einzelschutz: { label: 'Einzelschutz', gruppe: 'wildschutz', info: 'Wuchshüllen, Drahthosen, Fege- und Verbissschutz', fields: [['art', 'Art des Schutzes', ['Wuchshülle', 'Freiwuchsgitter / Drahthose', 'Fegeschutz (Spirale, Fegestab)', 'Terminaltriebschutz', 'Verbissschutzmittel (Streichmittel)']], ['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen (Stück)', 'number'], ['hoehe', 'Höhe des Schutzes (z. B. 1,20 m)', 'text'], ['stab', 'Befestigung', ['Robinienstab', 'Lärchenstab', 'Tonkinstab', 'ohne Stab']], ['preis', 'Preis je Stück inkl. Stab (€)', 'decimal']] },
-  pflege:       { label: 'Pflege', fields: [['art', 'Art der Pflege', ['Jungwuchspflege', 'Jungbestandspflege', 'Freischneiden', 'Wertastung']], ['area', 'Fläche (ha)', 'decimal']] },
+  pflege:       { label: 'Pflege', info: 'Kulturpflege, Jungwuchs- und Dickungspflege, Wertästung – mit Fläche, Kosten und Förderung', fields: [['art', 'Art der Pflege', ['Kulturpflege (Sicherung der Kultur)', 'Jungwuchspflege', 'Dickungspflege (Jungbestandspflege)', 'Wertästung']], ['area', 'Fläche (ha)', 'decimal'], ['vorgehen', 'Vorgehen', 'text'], ['species', 'Hauptbaumart', 'text'], ['mittelhoehe', 'Mittelhöhe (m)', 'text'], ['pflanzjahr', 'Jahr der Pflanzung', 'text'], ['zBaeume', 'Z-Bäume (Stück)', 'text'], ['ausfuehrung', 'Ausführung', 'text']] },
   durchforstung:{ label: 'Durchforstung mit GPS', gruppe: 'holzernte', info: 'Geführt per GPS-Raster', fields: [] },
   holzernte_df: { label: 'Durchforstung', gruppe: 'holzernte', info: 'Ohne GPS-Raster dokumentieren', fields: [['verfahren', 'Verfahren', ['motormanuell', 'Harvester', 'Harvester und motormanuell', 'Seilkran', 'Rückepferd']], ['species', 'Hauptbaumart', 'species'], ['baeume', 'Anzahl entnommener Bäume', 'number'], ['menge', 'Entnahmemenge (Fm)', 'decimal'], ['area', 'Fläche (ha)', 'decimal']] },
   polter:       { label: 'Holzvermessung', gruppe: 'holzernte', info: 'Schritt für Schritt nach RVR (6. Aufl. 2024): Messverfahren, Sortiment, Menge in Rm oder Fm', fields: [['polterNr', 'Polter-Nr.', 'text'], ['species', 'Baumart', 'species'], ['sortiment', 'Sortiment', 'text'], ['verfahren', 'Messverfahren', 'text'], ['laenge', 'Poltertiefe/Bestelllänge (m)', 'text'], ['uebermass', 'Zugabe/Übermaß (m)', 'text'], ['rindenabzug', 'Rindenabzug', 'text'], ['stueck', 'Anzahl Stämme', 'text'], ['stirnflaechen', 'Stirnflächen gezählt (Foto)', 'text'], ['unterlagen', 'Unterlagen im Los (Rm m.R.)', 'text'], ['rm', 'Raummaß (Rm m.R.)', 'text'], ['red', 'Reduktionsfaktor', 'text'], ['faktor', 'Umrechnungsfaktor', 'text'], ['fm', 'Festmaß (Fm o.R.)', 'text'], ['pos', 'Standort des Polters', 'text']] },
@@ -310,7 +310,7 @@ function measureCard(m, byId) {
   );
 }
 
-async function openNewMeasure({ parcelId, antragId = null, typ = null } = {}) {
+async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt = null } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
@@ -334,6 +334,7 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null } = {}) {
     if (k === 'zaunbau') openZaunPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
     else if (k === 'einzelschutz') import('./einzelschutz.js').then(({ openEinzelschutzPlanung }) => openEinzelschutzPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) }));
     else if (k === 'pflanzung') openPflanzPlanung({ parcelId, foerdern, onSaved: nachSpeichern(foerdern) });
+    else if (k === 'pflege') import('./pflege.js').then(({ openPflegePlanung }) => openPflegePlanung({ parcelId, foerdern, art: pflegeArt, onSaved: nachSpeichern(foerdern) }));
     else if (k === 'schaden') import('./schaden.js').then((x) => x.openSchadensmeldung({ parcelId, onSaved: alleSchliessen }));
     else if (k === 'holzverkauf') { alleSchliessen(); import('./schaden.js').then((x) => x.openHolzVerkaufen({ parcelId })); }
     else formularSeite(k, foerdern);

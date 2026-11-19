@@ -172,6 +172,11 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
       x.kultur ??= 'ja';
     }
     if (m.type === 'pflege' && !x.pflegeArt) x.pflegeArt = kategorie(m, x) || 'wertastung';
+    if (m.type === 'pflege' && m.pflege) {
+      x.pflanzjahr ??= m.pflege.pflanzjahr || undefined;
+      x.mittelhoehe ??= m.pflege.mittelhoehe || undefined;
+      x.vorhaben ??= m.pflege.vorgehen || undefined;
+    }
   }
   // Besitzgröße: Summe der eigenen Waldflurstücke
   if (d.besitzHa == null || d.besitzHa === '') {

@@ -92,8 +92,6 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
   const status = h('p', { class: 'draw-status', 'aria-live': 'polite' });
   const umlaufHost = h('div');
   const teilHost = h('div');
-  const rest = h('div', { class: 'zaun-rest' });
-  const artHost = h('div');
 
   const flst = () => byId[s.parcelId] || null;
   const kulturen = () => (store.get().measures || []).filter((m) => m.type === 'pflanzung' && m.parcelId && m.parcelId === s.parcelId);
@@ -106,10 +104,10 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
     karte = miniKarte(mapEl, flst(), { zoom: 17 });
     karte.map.doubleClickZoom.disable();
     lyr.addTo(karte.map);
-    karte.map.on('click', (e) => { if (!s.teil) return; s.pts.push([e.latlng.lat, e.latlng.lng]); zeichne(); ruhig(renderRest); });
+    karte.map.on('click', (e) => { if (!s.teil) return; s.pts.push([e.latlng.lat, e.latlng.lng]); zeichne(); navAkt(); });
     umlauf = umlaufSteuerung({ map: karte.map, text: 'Teilfläche umlaufen',
       onPunkt: (ll) => { s.pts.push(ll); zeichne(); },
-      onEnde: () => { s.pts = vereinfachen(s.pts, 1.5); zeichne(); ruhig(renderRest); } });
+      onEnde: () => { s.pts = vereinfachen(s.pts, 1.5); zeichne(); navAkt(); } });
     zeichne();
   }
   function zeichne() {
@@ -122,8 +120,8 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
     } else status.textContent = flst() ? `Ganzes Flurstück: ${formatHa(ha())}` : 'Ohne Flurstück: Fläche unten von Hand eintragen.';
     fill(umlaufHost, s.teil ? umlauf?.el : null);
     fill(teilHost, s.teil ? h('div', { class: 'btn-row' },
-      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts.pop(); zeichne(); ruhig(renderRest); } }, 'Letzten Punkt entfernen'),
-      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts = []; zeichne(); ruhig(renderRest); } }, 'Neu beginnen')) : null);
+      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts.pop(); zeichne(); navAkt(); } }, 'Letzten Punkt entfernen'),
+      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts = []; zeichne(); navAkt(); } }, 'Neu beginnen')) : null);
   }
 
   // Kultur übernehmen: Pflanzjahr und Pflanzfläche
@@ -132,42 +130,19 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
     if (m) {
       const t = m.finishedAt || m.date || m.createdAt;
       if (t) s.pflanzjahr = String(new Date(t).getFullYear());
-      if (m.flaeche?.ring?.length >= 3) { s.teil = true; s.pts = m.flaeche.ring.map((x) => [...x]); }
-      karteNeu();
+      if (m.flaeche?.ring?.length >= 3) { s.teil = true; s.pts = m.flaeche.ring.map((x) => [...x]); karteVeraltet = true; }
     }
   }
-
-  function artWahl() {
-    fill(artHost,
-      h('h2', { class: 'step-title' }, 'Welche Pflege?'),
-      h('div', { class: 'q-cards' }, Object.entries(PFLEGE_ARTEN).map(([k, a]) => h('button', { type: 'button', class: `q-option ${s.art === k ? 'on' : ''}`, 'aria-pressed': String(s.art === k),
-        onclick: () => { if (s.art !== k && (k === 'wertastung' || s.art === 'wertastung')) s.preis = null; s.art = k; ruhig(() => { artWahl(); renderRest(); }); } },
-        h('span', { class: 'q-text' }, h('strong', {}, a.label), h('small', {}, a.text), h('small', { class: k === 'wertastung' ? 'muted' : 'pos' }, a.foerder))))));
-  }
-
-  fill(body,
-    foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Nach dem Buchen geht es direkt mit dem Förderantrag weiter. Gefördert werden Kulturpflege, Jungwuchs- und Dickungspflege – die Wertästung nicht.')) : null,
-    artHost,
-    h('h2', { class: 'step-title' }, 'Wo wird gepflegt?'),
-    h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; s.kulturId = null; karteNeu(); ruhig(renderRest); } },
-      h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
-    h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Umfang der Fläche' },
-      [[false, 'Ganzes Flurstück'], [true, 'Teilfläche einzeichnen']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.teil === k),
-        onclick: (e) => { s.teil = k; e.currentTarget.parentElement.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-checked', String(i === (k ? 1 : 0)))); mapEl.classList.toggle('malt', k); zeichne(); ruhig(renderRest); } }, l))),
-    mapEl, status, umlaufHost, teilHost,
-    rest);
-  artWahl();
-  karteNeu();
 
   const chips = (liste, aktiv, onToggle, mehrfach = true) => h('div', { class: 'q-chips' }, liste.map((x) => {
     const [k, l] = Array.isArray(x) ? x : [x, x];
     const an = mehrfach ? aktiv.includes(k) : aktiv === k;
-    return h('button', { type: 'button', class: `q-option ${an ? 'on' : ''}`, 'aria-pressed': String(an), onclick: () => { onToggle(k); ruhig(renderRest); } }, l);
+    return h('button', { type: 'button', class: `q-option ${an ? 'on' : ''}`, 'aria-pressed': String(an), onclick: () => { onToggle(k); ruhig(render); } }, l);
   }));
   const umschalten = (arr, k) => { const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); else arr.push(k); };
   const feld = (label, key, { einheit = '', placeholder = '', inputmode = 'decimal', type = 'text', neu = true } = {}) => h('label', {}, label,
     h('span', { class: 'mit-einheit' }, h('input', { type, inputmode, value: s[key] ?? '', placeholder,
-      oninput: (e) => { s[key] = e.target.value; }, onchange: () => { if (neu) ruhig(renderRest); } }), einheit ? h('span', {}, einheit) : null));
+      oninput: (e) => { s[key] = e.target.value; }, onchange: () => { if (neu) ruhig(render); } }), einheit ? h('span', {}, einheit) : null));
 
   function hinweise() {
     const a = s.art, out = [];
@@ -221,24 +196,48 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
     return { preis, menge: ha(), summe: preis != null ? ha() * preis * d : null, durchgaenge: d, einheit: 'ha' };
   }
 
-  function renderRest() {
-    if (!s.art) { fill(rest, h('p', { class: 'hint' }, 'Wähle oben die Art der Pflege.')); return; }
-    const A = PFLEGE_ARTEN[s.art];
+  // ---------- Schritte (wie bei der Durchforstung: Fortschrittsleiste oben, Weiter/Zurück unten) ----------
+  const SCHRITTE = ['art', 'flaeche', 'bestand', 'ausfuehrung', 'foerderung', 'termin'];
+  let schritt = s.art ? 1 : 0, zuletzt = null, karteVeraltet = true;
+  const titel = (q) => ({ art: 'Welche Pflege?', flaeche: 'Wo wird gepflegt?', bestand: s.art === 'sicherung' ? 'Kultur und Bewuchs' : s.art === 'wertastung' ? 'Bäume und Ästungshöhe' : 'Bestand und Eingriff',
+    ausfuehrung: 'Wer macht es?', foerderung: 'Förderung', termin: 'Termin und Notiz' })[q];
+  const kulturHost = h('div');
+  function kulturAuswahl() {
+    const ks = s.art === 'sicherung' ? kulturen() : [];
+    fill(kulturHost, ks.length ? h('div', {}, h('p', { class: 'sheet-label' }, 'Welche Pflanzung wird gepflegt?'),
+      h('div', { class: 'q-chips' }, [...ks.map((m) => [m.id, `${m.details?.species || 'Pflanzung'}${m.date || m.finishedAt ? ` ${new Date(m.finishedAt || m.date).getFullYear()}` : ''}${m.flaeche?.ha ? `, ${formatHa(m.flaeche.ha)}` : ''}`]), ['', 'Andere / ältere Kultur']].map(([id, l]) =>
+        h('button', { type: 'button', class: `q-option ${(s.kulturId || '') === id ? 'on' : ''}`, onclick: () => { kulturWaehlen(ks.find((m) => m.id === id) || null); if (!id) s.kulturId = null; ruhig(render); } }, l))),
+      h('small', { class: 'muted' }, 'Pflanzjahr und Pflanzfläche werden übernommen.')) : null);
+  }
+  const flaecheEl = h('div', { class: 'form' },
+    h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; s.kulturId = null; kulturAuswahl(); karteNeu(); navAkt(); } },
+      h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
+    h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Umfang der Fläche' },
+      [[false, 'Ganzes Flurstück'], [true, 'Teilfläche einzeichnen']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.teil === k),
+        onclick: (e) => { s.teil = k; e.currentTarget.parentElement.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-checked', String(i === (k ? 1 : 0)))); mapEl.classList.toggle('malt', k); zeichne(); navAkt(); } }, l))),
+    kulturHost, mapEl, status, umlaufHost, teilHost);
+  let nextBtn = null;
+  const kannWeiter = (q) => (q === 'art' ? !!s.art : q === 'flaeche' ? (!s.teil || s.pts.length >= 3) : true);
+  function navAkt() { if (nextBtn) nextBtn.disabled = !kannWeiter(SCHRITTE[schritt]); }
+
+  function inhalt(q) {
+    const A = PFLEGE_ARTEN[s.art] || {};
     const ks = kulturen();
     const f = foerderung(), k = kosten();
     const hw = hinweise();
-    fill(rest,
-      // Bestand und Vorgehen
-      h('h2', { class: 'step-title' }, s.art === 'sicherung' ? 'Kultur und Bewuchs' : s.art === 'wertastung' ? 'Bäume und Ästungshöhe' : 'Bestand und Eingriff'),
+    if (q === 'art') return [
+      foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Nach dem Buchen geht es direkt mit dem Förderantrag weiter. Gefördert werden Kulturpflege, Jungwuchs- und Dickungspflege – die Wertästung nicht.')) : null,
+      h('div', { class: 'q-cards' }, Object.entries(PFLEGE_ARTEN).map(([kk, a]) => h('button', { type: 'button', class: `q-option ${s.art === kk ? 'on' : ''}`, 'aria-pressed': String(s.art === kk),
+        onclick: () => { if (s.art !== kk && (kk === 'wertastung' || s.art === 'wertastung')) s.preis = null; s.art = kk; ruhig(render); } },
+        h('span', { class: 'q-text' }, h('strong', {}, a.label), h('small', {}, a.text), h('small', { class: kk === 'wertastung' ? 'muted' : 'pos' }, a.foerder)))))];
+    if (q === 'flaeche') return [flaecheEl];
+    if (q === 'bestand') return [
       s.art === 'sicherung' ? [
-        ks.length ? h('div', {}, h('p', { class: 'sheet-label' }, 'Welche Pflanzung wird gepflegt?'),
-          h('div', { class: 'q-chips' }, [...ks.map((m) => [m.id, `${m.details?.species || 'Pflanzung'}${m.date || m.finishedAt ? ` ${new Date(m.finishedAt || m.date).getFullYear()}` : ''}${m.flaeche?.ha ? `, ${formatHa(m.flaeche.ha)}` : ''}`]), ['', 'Andere / ältere Kultur']].map(([id, l]) =>
-            h('button', { type: 'button', class: `q-option ${(s.kulturId || '') === id ? 'on' : ''}`, onclick: () => { kulturWaehlen(ks.find((m) => m.id === id) || null); if (!id) s.kulturId = null; ruhig(renderRest); } }, l)))) : null,
         feld('Jahr der Pflanzung', 'pflanzjahr', { inputmode: 'numeric', placeholder: 'z. B. 2024' }),
         h('p', { class: 'sheet-label' }, 'Was bedrängt die Pflanzen?'),
         chips(VEGETATION, s.vegetation, (x) => umschalten(s.vegetation, x)),
         h('p', { class: 'sheet-label' }, 'Wie wird gepflegt?'),
-        h('div', { class: 'q-cards' }, VERFAHREN_KULTUR.map(([kk, l, t]) => h('button', { type: 'button', class: `q-option ${s.verfahren === kk ? 'on' : ''}`, onclick: () => { s.verfahren = kk; ruhig(renderRest); } },
+        h('div', { class: 'q-cards' }, VERFAHREN_KULTUR.map(([kk, l, t]) => h('button', { type: 'button', class: `q-option ${s.verfahren === kk ? 'on' : ''}`, onclick: () => { s.verfahren = kk; ruhig(render); } },
           h('span', { class: 'q-text' }, h('strong', {}, l), h('small', {}, t))))),
         h('p', { class: 'sheet-label' }, 'Umfang'),
         chips([['pflanzen', 'Nur um die Pflanzen / Reihen'], ['ganz', 'Ganzflächig']], s.umfang, (x) => { s.umfang = x; }, false),
@@ -251,33 +250,33 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
         s.art === 'dickung' ? feld('Stärkster BHD der Hauptbäume (ungefähr)', 'bhd', { einheit: 'cm', placeholder: 'unter 7' }) : null,
         feld('Stammzahl je ha (geschätzt, optional)', 'stammzahl', { inputmode: 'numeric', placeholder: 'z. B. 8000', neu: false }),
         h('p', { class: 'sheet-label' }, 'Was wird gemacht?'),
-        h('div', { class: 'q-cards' }, EINGRIFFE.map(([kk, l, t]) => { const an = s.eingriffe.includes(kk); return h('button', { type: 'button', class: `q-option ${an ? 'on' : ''}`, 'aria-pressed': String(an), onclick: () => { umschalten(s.eingriffe, kk); ruhig(renderRest); } },
+        h('div', { class: 'q-cards' }, EINGRIFFE.map(([kk, l, t]) => { const an = s.eingriffe.includes(kk); return h('button', { type: 'button', class: `q-option ${an ? 'on' : ''}`, 'aria-pressed': String(an), onclick: () => { umschalten(s.eingriffe, kk); ruhig(render); } },
           h('span', { class: 'q-text' }, h('strong', {}, l), h('small', {}, t))); })),
       ] : null,
       s.art === 'wertastung' ? [
-        h('label', {}, 'Baumart', h('select', { onchange: (e) => { s.species = e.target.value; ruhig(renderRest); } }, SPECIES.map((o) => h('option', { selected: o === s.species }, o)))),
+        h('label', {}, 'Baumart', h('select', { onchange: (e) => { s.species = e.target.value; ruhig(render); } }, SPECIES.map((o) => h('option', { selected: o === s.species }, o)))),
         feld('Anzahl Z-Bäume', 'zBaeume', { inputmode: 'numeric', placeholder: ha() ? `z. B. ${Math.round(ha() * (parseInt(Z_BAEUME[s.species], 10) || 100))}` : 'Stück' }),
         h('p', { class: 'sheet-label' }, 'Ästungshöhe'),
-        h('div', { class: 'q-cards' }, AESTUNG.map(([kk, l, t]) => h('button', { type: 'button', class: `q-option ${s.hoehe === kk ? 'on' : ''}`, onclick: () => { s.hoehe = kk; ruhig(renderRest); } },
+        h('div', { class: 'q-cards' }, AESTUNG.map(([kk, l, t]) => h('button', { type: 'button', class: `q-option ${s.hoehe === kk ? 'on' : ''}`, onclick: () => { s.hoehe = kk; ruhig(render); } },
           h('span', { class: 'q-text' }, h('strong', {}, l), h('small', {}, t))))),
         chips([['trocken', 'Trockenästung (tote Äste)'], ['gruen', 'Grünästung (lebende Äste)']], s.aestungArt, (x) => { s.aestungArt = x; }, false),
       ] : null,
       hw.length ? h('div', { class: 'lrt-hinweis' }, h('strong', {}, 'So geht es fachgerecht'), h('ul', {}, hw.map((t) => h('li', {}, t)))) : null,
 
-      // Ausführung und Kosten
-      h('h2', { class: 'step-title' }, 'Wer macht es?'),
+    ];
+    if (q === 'ausfuehrung') return [
       chips([['eigen', 'Ich selbst (Eigenleistung)'], ['unternehmer', 'Forstunternehmer / FBG']], s.ausfuehrung, (x) => { s.ausfuehrung = x; }, false),
       s.ausfuehrung === 'eigen' ? h('p', { class: 'hint' }, `Eigenleistung ist förderfähig – der Festbetrag je ha wird auch gezahlt, wenn du selbst arbeitest. ${s.art === 'dickung' || s.art === 'jungwuchs' ? 'Rechne mit etwa 15–20 Arbeitsstunden je ha. ' : ''}Arbeite nie allein mit Motorsäge oder Freischneider; Schutzausrüstung tragen.`) : null,
       k ? h('div', { class: 'calc-box' },
         h('label', {}, `Preis je ${k.einheit === 'ha' ? `ha${k.durchgaenge > 1 ? ' und Durchgang' : ''}` : 'Baum'} (netto)`, h('span', { class: 'mit-einheit' }, h('input', { type: 'text', inputmode: 'decimal', value: k.preis != null ? String(k.preis).replace('.', ',') : '', placeholder: 'Preis laut Angebot',
-          onchange: (e) => { const v = zahl(e.target.value); s.preis = v; ruhig(renderRest); } }), h('span', {}, '€'))),
+          onchange: (e) => { const v = zahl(e.target.value); s.preis = v; ruhig(render); } }), h('span', {}, '€'))),
         h('small', { class: 'muted' }, 'Trag den Preis aus dem Angebot deiner FBG oder des Unternehmers ein.'),
         k.preis == null ? null : k.einheit === 'ha'
           ? h('small', {}, `${formatHa(k.menge)} × ${euro(k.preis)}${k.durchgaenge > 1 ? ` × ${k.durchgaenge} Durchgänge` : ''} = `, h('b', {}, euro(k.summe)))
           : h('small', {}, `${zt(k.menge, 0)} Bäume × ${euro(k.preis)} = `, h('b', {}, euro(k.summe)))) : null,
 
-      // Förderung
-      h('h2', { class: 'step-title' }, 'Förderung'),
+    ];
+    if (q === 'foerderung') return [
       s.art === 'wertastung'
         ? h('p', { class: 'muted' }, 'Wertästung wird in Thüringen nicht gefördert.')
         : h('div', { class: 'calc-box foerder-box' },
@@ -288,12 +287,32 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
           k?.summe != null ? h('small', {}, 'Eigenanteil nach Förderung (Richtlinie): ', h('b', {}, euro(Math.max(0, k.summe - f.g)))) : null,
           h('small', { class: 'hint' }, `${s.art === 'sicherung' ? 'Jedes Jahr ein eigener Antrag, höchstens fünf Mal je Kultur. ' : 'Nur über die Richtlinie Teil A. '}Erst nach dem Bewilligungsbescheid beginnen. Fördersätze bitte bei FBG oder Forstamt prüfen.`)),
 
-      // Termin
-      h('h2', { class: 'step-title' }, 'Termin und Notiz'),
+    ];
+    return [
       h('p', { class: 'muted' }, `Beste Zeit: ${A.monate}.`),
       h('label', {}, 'Geplanter Termin', h('input', { type: 'date', value: s.date, onchange: (e) => { s.date = e.target.value; } })),
       h('label', {}, 'Notiz', h('textarea', { rows: 3, value: s.note, oninput: (e) => { s.note = e.target.value; } })),
-      h('button', { type: 'button', class: 'btn btn-primary btn-block btn-large', onclick: speichern }, 'Pflege buchen'));
+    ];
+  }
+
+  function render() {
+    const q = SCHRITTE[schritt];
+    nextBtn = h('button', { type: 'button', class: 'btn btn-primary btn-large', disabled: !kannWeiter(q),
+      onclick: () => { if (!kannWeiter(q)) return; if (schritt === SCHRITTE.length - 1) speichern(); else { schritt++; render(); } } }, schritt === SCHRITTE.length - 1 ? 'Pflege buchen' : 'Weiter');
+    const zurueck = h('button', { type: 'button', class: 'btn', onclick: () => { if (schritt === 0) page.close(); else { schritt--; render(); } } }, schritt === 0 ? 'Abbrechen' : 'Zurück');
+    fill(body,
+      h('div', { class: 'q-progress', 'aria-label': `Schritt ${schritt + 1} von ${SCHRITTE.length}` }, SCHRITTE.map((_, i) => h('span', { class: i < schritt ? 'done' : i === schritt ? 'now' : '' }))),
+      s.art && schritt > 0 ? h('p', { class: 'sheet-label' }, `${PFLEGE_ARTEN[s.art].label}${ha() && schritt > 1 ? ` · ${formatHa(ha())}` : ''}`) : null,
+      h('h2', { class: 'step-title' }, titel(q)),
+      h('div', { class: 'polter-inhalt' }, inhalt(q)),
+      h('div', { class: 'q-nav' }, zurueck, nextBtn));
+    if (q === 'flaeche') {
+      kulturAuswahl();
+      flaecheEl.querySelectorAll('.segmented button').forEach((b, i) => b.setAttribute('aria-checked', String(i === (s.teil ? 1 : 0)))); mapEl.classList.toggle('malt', s.teil);
+      if (!karte || karteVeraltet) { karteVeraltet = false; setTimeout(karteNeu, 0); }
+      else setTimeout(() => karte.map.invalidateSize(), 0);
+    }
+    if (q !== zuletzt) { zuletzt = q; body.closest('.page-body')?.scrollTo?.(0, 0); }
   }
 
   function speichern() {
@@ -318,6 +337,6 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
     page.close();
     onSaved?.(neuId);
   }
-  renderRest();
+  render();
   return page;
 }

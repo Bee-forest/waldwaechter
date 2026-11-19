@@ -294,6 +294,62 @@ export async function localIndexInfo() {
   return localIndex;
 }
 
+// ---------- Flurstück nach Gemarkung, Flur und Nummer finden (z. B. für den Excel-Import) ----------
+const gNorm = (t) => String(t || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+  .replace(/\bgemarkung\b|\bgmk\.?/g, '').replace(/\(.*?\)/g, '').replace(/[^a-z0-9]+/g, '');
+const fNorm = (f) => String(Number(String(f ?? '').replace(/\D/g, '')) || 0);
+/** „45/1“, „45-1“, „0045/0001“, „45 / 1“ → „45/1“ */
+export const nrNorm = (n) => String(n ?? '').trim().replace(/\s+/g, '').replace(/[-–\\]/g, '/').split('/').filter(Boolean)
+  .map((x) => (/^\d+$/.test(x) ? String(Number(x)) : x.toLowerCase())).join('/');
+const gemFiles = new Map();
+const gemDatei = (file) => { if (!gemFiles.has(file)) gemFiles.set(file, fetch(`data/alkis/gem/${file}`).then((r) => r.json()).catch(() => ({}))); return gemFiles.get(file); };
+
+/**
+ * Sucht ein Flurstück in den mitgelieferten ALKIS-Daten.
+ * Gemarkung als Name (Umlaute, Groß-/Kleinschreibung und Zusätze egal) oder als Gemarkungsnummer („2521“, „162521“).
+ * @returns {Promise<{ p?: object, grund?: 'gemarkung'|'flurstueck'|'keineDaten', gemarkungen?: string[] }>}
+ */
+export async function findeFlurstueck({ gemarkung, flur, nr }) {
+  const idx = await localIndexInfo();
+  if (!idx?.gemarkungen) return { grund: 'keineDaten' };
+  const roh = String(gemarkung ?? '').trim();
+  const zahl = roh.match(/\b(\d{4,6})\b/)?.[1];
+  const gnr = zahl ? zahl.slice(-4) : null;
+  const namen = Object.keys(idx.gemarkungen);
+  let kandidaten = [];
+  if (gnr && idx.gemnummern?.[gnr]) kandidaten = [idx.gemnummern[gnr]];
+  const g = gNorm(roh.replace(/\d{4,6}/, ''));
+  if (!kandidaten.length && g) {
+    // Stufen nacheinander; alle Treffer werden durchsucht, bis das Flurstück gefunden ist
+    const teile = roh.replace(/\d{4,6}/, '').split(/[-–\/,(]| b\. | bei /).map(gNorm).filter((t) => t.length >= 3);
+    const stufen = [
+      namen.filter((n) => gNorm(n) === g),
+      namen.filter((n) => teile.includes(gNorm(n)) || teile.includes(gNorm(n.split(/ b\. | bei /)[0]))),
+      namen.filter((n) => gNorm(n).startsWith(g) || gNorm(n.split(/ b\. | bei /)[0]) === g),
+      g.length >= 4 ? namen.filter((n) => g.includes(gNorm(n)) || gNorm(n).includes(g)) : [],
+    ];
+    kandidaten = [...new Set(stufen.flat())].slice(0, 10);
+  }
+  if (!kandidaten.length) return { grund: 'gemarkung' };
+  const fl = fNorm(flur), nn = nrNorm(nr);
+  for (const name of kandidaten) {
+    const entries = await gemDatei(idx.gemarkungen[name]);
+    for (const [k0, [x, y]] of Object.entries(entries)) {
+      const pref = k0.includes(':') ? k0.slice(0, k0.indexOf(':')) : null;
+      if (gnr && pref && pref !== gnr) continue;
+      const k = pref ? k0.slice(k0.indexOf(':') + 1) : k0;
+      const i = k.indexOf('/');
+      const f = k.slice(0, i), n = k.slice(i + 1);
+      if (nrNorm(n) !== nn) continue;
+      if (f !== fl && f !== '0') continue; // manche Gemarkungen haben keine Flur (in ALKIS „0“)
+      const tile = await loadTile(x, y);
+      const p = tile.find((t) => t.flur === f && t.nr === n && (!pref || String(t.id).slice(2, 6) === pref));
+      if (p) return { p };
+    }
+  }
+  return { grund: 'flurstueck', gemarkungen: kandidaten };
+}
+
 /** Flurstück aus den mitgelieferten Daten; null, wenn für diese Stelle keine Daten vorliegen */
 export async function localParcelAt([lat, lng]) {
   const list = await loadTile(tileX(lng), tileY(lat));
@@ -309,7 +365,8 @@ export async function localSearch({ gemarkung, flur, nr }) {
   const out = [];
   for (const [, file] of gems) {
     const entries = await fetch(`data/alkis/gem/${file}`).then((r) => r.json()).catch(() => ({}));
-    for (const [k, [x, y]] of Object.entries(entries)) {
+    for (const [k0, [x, y]] of Object.entries(entries)) {
+      const k = k0.includes(':') ? k0.slice(k0.indexOf(':') + 1) : k0; // „Gemarkungsnummer:Flur/Nummer“
       const [f, ...rest] = k.split('/');
       const n = rest.join('/');
       if (flur && String(Number(flur)) !== f) continue;

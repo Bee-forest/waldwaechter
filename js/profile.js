@@ -1,5 +1,5 @@
 // Profil: Flächenübersicht, persönliche Flurstücksliste, Konto, FBG, Einstellungen.
-import { h, fill, icon, openPage, confirmDialog, toast } from './ui.js';
+import { h, fill, icon, openPage, confirmDialog, toast, dialog } from './ui.js';
 import { zieleAbfrage, zieleText } from './empfehlung.js';
 import { exportKarte } from './berichte.js';
 import { store } from './store.js';
@@ -12,7 +12,7 @@ import { startTour, say } from './mascot.js';
 import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.js';
 import { buzz } from './thinning/feedback.js';
 import * as erinnerung from './erinnerung.js';
-import { passtFlurstueck, ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen, eigentuemerExcel, flaechenAusEigentuemern } from './profi.js';
+import { passtFlurstueck, ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen, eigentuemerExcel, flaechenAusEigentuemern, etDateien, etDateiEntfernen, etDateiAnzahl } from './profi.js';
 
 export async function openProfile() {
   const all = await source.allParcels();
@@ -136,17 +136,22 @@ export async function openProfile() {
     toast('Daten gespeichert');
   }
 
-  async function sortiereNachWaldbesitzer() {
+  async function sortiereNachWaldbesitzer(dateiId = null) {
     toast('Flurstücke werden gesucht …');
-    const r = await flaechenAusEigentuemern({ onFortschritt: (i, n) => { if (i % 10 === 0) toast(`Flurstück ${i} von ${n} …`); } });
-    say(`Fertig: ${r.hinzu} Flurstücke hinzugefügt, ${r.neu} neue Ordner, ${r.zugeordnet} Flurstücke einsortiert.${r.nichtGefunden.length ? ` Nicht gefunden: ${r.nichtGefunden.slice(0, 5).join(', ')}${r.nichtGefunden.length > 5 ? ' …' : ''} (Schreibweise der Gemarkung prüfen oder Gebiet noch nicht in der App).` : ''}`);
+    const r = await flaechenAusEigentuemern({ dateiId, onFortschritt: (i, n) => { if (i % 25 === 0) toast(`Flurstück ${i} von ${n} …`); } });
     render();
+    await dialog({ title: 'Flurstücke einsortiert', body: h('div', { class: 'form' },
+      h('p', {}, `${r.hinzu} Flurstücke neu hinzugefügt, ${r.vorhanden} waren schon da. ${r.neu} neue Ordner, ${r.zugeordnet} Flurstücke einsortiert.`),
+      r.nicht.length ? h('div', {}, h('p', { class: 'warn-line' }, `${r.nicht.length} Flurstücke nicht gefunden:`),
+        h('ul', { class: 'mat-kurz et-nicht' }, r.nicht.slice(0, 60).map((x) => h('li', {}, h('strong', {}, x.text), ` – ${x.grund}`))),
+        r.nicht.length > 60 ? h('p', { class: 'muted' }, `… und ${r.nicht.length - 60} weitere.`) : null) : h('p', { class: 'pos' }, 'Alle Flurstücke wurden gefunden.')),
+      actions: [{ label: 'OK', value: true, primary: true }] });
   }
-  const excelSpeichern = async (leer) => {
-    const blob = await eigentuemerExcel({ leer });
+  const excelSpeichern = async (leer, dateiId = null, name = '') => {
+    const blob = await eigentuemerExcel({ leer, dateiId });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = leer ? 'Waldbesitzer_Vorlage.xlsx' : `Waldbesitzer_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = leer ? 'Waldbesitzer_Vorlage.xlsx' : `Waldbesitzer_${name ? `${name.replace(/[^\wäöüÄÖÜß-]+/g, '_')}_` : ''}${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   };
@@ -159,12 +164,19 @@ export async function openProfile() {
       const f = e.target.files?.[0]; e.target.value = '';
       if (!f) return;
       try {
-        const r = await eigentuemerImport(f);
-        toast(`${r.gesamt} Eigentümer übernommen${r.fehler ? `, ${r.fehler} Zeilen ohne Gemarkung/Flur/Flurstück übersprungen` : ''}`);
+        const vorschlag = (etDateien().find((d) => d.datei === f.name)?.name) || f.name.replace(/\.(xlsx|csv)$/i, '');
+        let name = vorschlag;
+        const ok = await dialog({ title: 'Tabelle hochladen', body: h('div', { class: 'form' },
+          h('label', {}, 'Bezeichnung (z. B. Forstbetrieb oder FBG)', h('input', { value: vorschlag, oninput: (ev) => { name = ev.target.value; } })),
+          etDateien().some((d) => d.datei === f.name) ? h('p', { class: 'hint' }, 'Eine Tabelle mit diesem Dateinamen gibt es schon – ihre Einträge werden ersetzt.') : null),
+          actions: [{ label: 'Abbrechen', value: false }, { label: 'Einlesen', value: true, primary: true }] });
+        if (!ok) return;
+        const r = await eigentuemerImport(f, { name: name.trim() || vorschlag });
+        toast(`${r.gesamt} Datensätze eingelesen${r.fehler ? `, ${r.fehler} Zeilen ohne Gemarkung/Flur/Flurstück übersprungen` : ''}`);
         render();
         const sortieren = await confirmDialog('Flurstücke nach Waldbesitzer in Ordner sortieren?', { ok: 'Ja, sortieren',
-          body: `${r.gesamt} Zeilen eingelesen (${r.neu} neu, ${r.aktualisiert} aktualisiert). Die App kann die Flurstücke aus der Tabelle zu deinen Flächen holen und für jeden Waldbesitzer einen Ordner anlegen – alle Flurstücke desselben Waldbesitzers landen dann im selben Ordner.` });
-        if (sortieren) await sortiereNachWaldbesitzer();
+          body: `${r.gesamt} Datensätze aus „${name.trim() || vorschlag}“. Die App sucht die Flurstücke, holt sie zu deinen Flächen und legt für jeden Waldbesitzer einen Ordner an – alle Flurstücke desselben Waldbesitzers landen im selben Ordner.` });
+        if (sortieren) await sortiereNachWaldbesitzer(r.dateiId);
       } catch (err) { toast(`Import fehlgeschlagen: ${err.message || err}`); }
       render();
     } });
@@ -177,13 +189,20 @@ export async function openProfile() {
       an ? h('div', { class: 'form' },
         h('p', { class: 'sheet-label' }, 'Eigentümer'),
         h('p', {}, n ? `${n} Flurstücke mit Eigentümer hinterlegt.` : 'Noch keine Eigentümer hinterlegt.'),
-        h('label', { class: 'btn btn-primary' }, h('span', { html: icon.plus }), 'Excel-Tabelle importieren (.xlsx)', eingabe),
+        etDateien().length ? h('ul', { class: 'et-dateien' }, etDateien().map((d) => h('li', {},
+          h('div', {}, h('strong', {}, d.name), h('small', { class: 'muted' }, `${d.datei} · hochgeladen ${new Date(d.datum).toLocaleDateString('de-DE')}`),
+            h('small', {}, `${etDateiAnzahl(d.id)} Datensätze${d.gefunden != null ? ` · ${d.gefunden} Flurstücke gefunden${d.nichtGefunden ? `, ${d.nichtGefunden} nicht gefunden` : ''}` : ''}`)),
+          h('div', { class: 'btn-row' },
+            h('button', { class: 'btn btn-small', onclick: () => sortiereNachWaldbesitzer(d.id) }, d.gefunden != null ? 'Erneut einsortieren' : 'Flurstücke einsortieren'),
+            h('button', { class: 'btn btn-small', onclick: () => excelSpeichern(false, d.id, d.name) }, 'Als Excel'),
+            h('button', { class: 'link-btn', onclick: async () => { if (await confirmDialog(`Tabelle „${d.name}“ entfernen?`, { ok: 'Entfernen', danger: true, body: `${etDateiAnzahl(d.id)} Eigentümereinträge dieser Tabelle werden gelöscht. Flächen und Ordner bleiben erhalten.` })) { etDateiEntfernen(d.id); render(); } } }, 'entfernen'))))) : null,
+        h('label', { class: 'btn btn-primary' }, h('span', { html: icon.plus }), etDateien().length ? 'Weitere Excel-Tabelle hochladen' : 'Excel-Tabelle hochladen (.xlsx)', eingabe),
         h('p', { class: 'hint' }, 'Spalten: Gemarkung · Flur · Flurstück · Waldbesitzer · Straße · Hausnummer · PLZ · Ort · Telefon · E-Mail. Pflicht sind nur Gemarkung, Flur und Flurstück – alles andere darf leer bleiben und kann später in der App ergänzt werden. Mit Kopfzeile ist die Reihenfolge egal; Vorname und Nachname in getrennten Spalten gehen auch. Gleiche Flurstücke werden aktualisiert.'),
         h('div', { class: 'btn-row' },
           h('button', { class: 'btn btn-small', onclick: () => excelSpeichern(true) }, 'Leere Vorlage (Excel)'),
-          n ? h('button', { class: 'btn btn-small', onclick: () => excelSpeichern(false) }, 'Liste als Excel speichern') : null),
-        n ? h('p', { class: 'hint' }, '„Liste als Excel speichern“ enthält alle Einträge mit den Ergänzungen aus der App – damit ersetzt du deine Excel-Datei.') : null,
-        n ? h('button', { class: 'btn', onclick: sortiereNachWaldbesitzer }, 'Flurstücke nach Waldbesitzer in Ordner sortieren') : null,
+          n ? h('button', { class: 'btn btn-small', onclick: () => excelSpeichern(false) }, 'Alle als Excel speichern') : null),
+        n ? h('p', { class: 'hint' }, '„Als Excel“ bzw. „Alle als Excel speichern“ enthält die Einträge mit den Ergänzungen aus der App – damit ersetzt du deine Excel-Datei.') : null,
+        n ? h('button', { class: 'btn', onclick: () => sortiereNachWaldbesitzer() }, 'Alle Flurstücke nach Waldbesitzer in Ordner sortieren') : null,
         h('p', { class: 'hint' }, 'Eigentümerdaten sind personenbezogen: Sie bleiben nur auf diesem Gerät und sind nicht in „Daten sichern“ enthalten.'),
         n ? h('button', { class: 'btn btn-danger-ghost', onclick: async () => { if (await confirmDialog('Alle Eigentümerdaten löschen?', { ok: 'Löschen', danger: true, body: `${n} Einträge werden von diesem Gerät entfernt.` })) { eigentuemerAlleLoeschen(); render(); toast('Eigentümerdaten gelöscht'); } } }, 'Alle Eigentümerdaten löschen') : null) : null);
   }

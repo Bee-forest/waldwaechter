@@ -1363,3 +1363,7 @@ li.fin-zeile { cursor: default; }
 .nav-gps-gut { border-left-color: #2E7D32; }
 .nav-gps-mittel { border-left-color: #F9A825; background: #FFF8E1; color: #5D4300; }
 .nav-gps-schlecht { border-left-color: #C62828; background: #FDECEA; color: #7A1B14; }
+.et-dateien { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.et-dateien li { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.et-dateien li small { display: block; }
+.et-nicht { max-height: 40vh; overflow: auto; }

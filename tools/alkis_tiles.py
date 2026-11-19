@@ -10,7 +10,7 @@ Aufruf:
 
 Ausgabe (data/alkis/):
   14/<x>/<y>.json    Flurstücke je Kachel (Web-Mercator, Zoomstufe 14)
-  gem/<slug>.json    Suchindex je Gemarkung: "flur/nummer" -> [x, y]
+  gem/<slug>.json    Suchindex je Gemarkung: "gemarkungsnummer:flur/nummer" -> [x, y]
   index.json         Übersicht: Regionen, Gemarkungen, Kachelanzahl
   log.txt            Protokoll des letzten Laufs
 Nur Python-Standardbibliothek.
@@ -300,7 +300,9 @@ def run_region(name, bbox, gem_index, stats):
                 for p in feats:
                     lat, lon = centroid(p['q'])
                     if lon2x(lon) == x and lat2y(lat) == y:   # Suchindex: Kachel des Schwerpunkts
-                        gem_index.setdefault(p['g'], {})[f"{p['f']}/{p['n']}"] = [x, y]
+                        # Schlüssel mit Gemarkungsnummer (aus dem Flurstückskennzeichen): trennt gleichnamige Gemarkungen
+                        gnr = p.get('i', '')[2:6]
+                        gem_index.setdefault(p['g'], {})[f"{gnr}:{p['f']}/{p['n']}" if gnr else f"{p['f']}/{p['n']}"] = [x, y]
             if done % 25 == 0:
                 log(f'  {done}/{len(tiles)} Kacheln, {stats["parcels"]} Flurstücke')
 
@@ -349,9 +351,12 @@ def main():
                                  'flurstuecke': stats['parcels'] - before['parcels'], 'stand': time.strftime('%Y-%m-%d')}
 
     os.makedirs(os.path.join(OUT, 'gem'), exist_ok=True)
+    index['gemnummern'] = {}
     for g, entries in gem_index.items():
         f = f'{slug(g)}.json'
         index['gemarkungen'][g] = f
+        for k in entries:
+            if ':' in k: index['gemnummern'].setdefault(k.split(':', 1)[0], g)
         with open(os.path.join(OUT, 'gem', f), 'w', encoding='utf-8') as fh:
             json.dump(entries, fh, ensure_ascii=False, separators=(',', ':'))
     if all(index['regionen'].get(nm, {}).get('ok') for nm, _ in regions):

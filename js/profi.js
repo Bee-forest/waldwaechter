@@ -41,10 +41,13 @@ export function eigentuemerSpeichern(p, daten) {
 export function eigentuemerAlleLoeschen() { et = {}; sichern(); }
 
 export const ET_FELDER = [
-  ['vorname', 'Vorname'], ['nachname', 'Nachname'], ['strasse', 'Straße'], ['hausnummer', 'Hausnummer'],
+  ['vorname', 'Vorname'], ['nachname', 'Nachname bzw. Name'], ['strasse', 'Straße'], ['hausnummer', 'Hausnummer'],
   ['plz', 'PLZ'], ['ort', 'Ort'], ['telefon', 'Telefon'], ['email', 'E-Mail'],
 ];
-const SPALTEN = ['gemarkung', 'flur', 'flurstueck', 'vorname', 'nachname', 'strasse', 'hausnummer', 'plz', 'ort', 'telefon', 'email'];
+const SPALTEN_ALT = ['gemarkung', 'flur', 'flurstueck', 'vorname', 'nachname', 'strasse', 'hausnummer', 'plz', 'ort', 'telefon', 'email'];
+// Formular für Waldbesitzer: Name in einer Spalte, Adresse und Kontakt dürfen leer bleiben
+export const VORLAGE_KOPF = ['Gemarkung', 'Flur', 'Flurstück', 'Waldbesitzer', 'Straße', 'Hausnummer', 'PLZ', 'Ort', 'Telefon', 'E-Mail'];
+const SPALTEN = ['gemarkung', 'flur', 'flurstueck', 'waldbesitzer', 'strasse', 'hausnummer', 'plz', 'ort', 'telefon', 'email'];
 // Spaltenköpfe erkennen (Reihenfolge egal); ohne erkennbare Kopfzeile gilt die vorgegebene Reihenfolge
 function spalteVon(kopf) {
   const k = gemNorm(kopf);
@@ -53,7 +56,8 @@ function spalteVon(kopf) {
   if (k === 'flur' || k === 'flurnr' || k === 'flurnummer') return 'flur';
   if (k.startsWith('flurstueck') || k.startsWith('flst') || k === 'flurstuecksnummer') return 'flurstueck';
   if (k.startsWith('vorname')) return 'vorname';
-  if (k.startsWith('nachname') || k === 'name' || k === 'familienname') return 'nachname';
+  if (k.startsWith('nachname') || k === 'familienname') return 'nachname';
+  if (k.startsWith('waldbesitzer') || k.startsWith('eigentuemer') || k.startsWith('besitzer') || k === 'name' || k === 'inhaber') return 'waldbesitzer';
   if (k.startsWith('strasse') || k.startsWith('str')) return 'strasse';
   if (k.startsWith('hausnummer') || k === 'hnr' || k === 'hausnr' || k === 'nr') return 'hausnummer';
   if (k === 'plz' || k.startsWith('postleitzahl')) return 'plz';
@@ -69,7 +73,7 @@ export async function eigentuemerImport(datei) {
   if (!zeilen.length) throw new Error('Die Tabelle ist leer.');
   const kopf = zeilen[0].map(spalteVon);
   const mitKopf = kopf.filter(Boolean).length >= 3;
-  const zuordnung = mitKopf ? kopf : SPALTEN;
+  const zuordnung = mitKopf ? kopf : (zeilen[0].length >= 11 ? SPALTEN_ALT : SPALTEN);
   const daten = mitKopf ? zeilen.slice(1) : zeilen;
   laden();
   let neu = 0, aktualisiert = 0, fehler = 0;
@@ -82,6 +86,11 @@ export async function eigentuemerImport(datei) {
     const k = flurstueckKey(r.gemarkung, r.flur, r.flurstueck);
     const eintrag = { gemarkung: r.gemarkung, flur: r.flur, nr: r.flurstueck, geaendert: Date.now() };
     for (const [f] of ET_FELDER) if (r[f]) eintrag[f] = r[f];
+    // Waldbesitzer in einer Spalte: „Nachname, Vorname“ wird geteilt, sonst bleibt der Name so stehen (z. B. „Forst GbR Müller“)
+    if (r.waldbesitzer && !eintrag.vorname && !eintrag.nachname) {
+      const [a, b] = r.waldbesitzer.split(/\s*,\s*/);
+      if (b) { eintrag.nachname = a; eintrag.vorname = b; } else eintrag.nachname = r.waldbesitzer;
+    }
     if (eintrag.plz && /^\d{4}$/.test(eintrag.plz)) eintrag.plz = `0${eintrag.plz}`; // Excel speichert PLZ als Zahl (07973 → 7973)
     if (et[k]) aktualisiert++; else neu++;
     if (meineKeys.has(k)) meine++;
@@ -92,6 +101,37 @@ export async function eigentuemerImport(datei) {
 }
 
 export const etName = (e) => [e?.vorname, e?.nachname].filter(Boolean).join(' ');
+
+/** Alle Eigentümer als Excel-Liste (gleiches Format wie das Formular, inkl. Änderungen aus der App) */
+export async function eigentuemerExcel({ leer = false } = {}) {
+  const { schreibeXlsx } = await import('./xlsx.js');
+  const zeilen = leer ? [] : Object.values(laden())
+    .sort((a, b) => String(a.gemarkung).localeCompare(String(b.gemarkung), 'de') || (Number(a.flur) || 0) - (Number(b.flur) || 0) || String(a.nr).localeCompare(String(b.nr), 'de', { numeric: true }))
+    .map((e) => [e.gemarkung, e.flur, e.nr, e.vorname && e.nachname ? `${e.nachname}, ${e.vorname}` : etName(e), e.strasse, e.hausnummer, e.plz, e.ort, e.telefon, e.email].map((v) => v ?? ''));
+  return schreibeXlsx([VORLAGE_KOPF, ...zeilen], { blatt: 'Waldbesitzer', breiten: [18, 7, 11, 28, 22, 11, 8, 18, 16, 28] });
+}
+
+/** Flurstücke aus der Eigentümerliste zu den Flächen holen und je Waldbesitzer in einen Ordner legen */
+export async function flaechenAusEigentuemern({ onFortschritt } = {}) {
+  const { source } = await import('./data/source.js');
+  const vorhanden = new Set(store.get().parcels.map((p) => flurstueckKey(p.gemarkung, p.flur, p.nr)));
+  const offen = Object.values(laden()).filter((e) => !vorhanden.has(flurstueckKey(e.gemarkung, e.flur, e.nr)));
+  let hinzu = 0, nichtGefunden = [];
+  for (let i = 0; i < offen.length; i++) {
+    const e = offen[i];
+    onFortschritt?.(i + 1, offen.length);
+    try {
+      const treffer = await source.search({ gemarkung: e.gemarkung, flur: e.flur, nr: e.nr });
+      const p = treffer.find((t) => flurstueckKey(t.gemarkung, t.flur, t.nr) === flurstueckKey(e.gemarkung, e.flur, e.nr)) || (treffer.length === 1 ? treffer[0] : null);
+      if (!p?.ring) { nichtGefunden.push(`${e.gemarkung} ${e.flur}/${e.nr}`); continue; }
+      if (store.get().parcels.some((x) => x.id === p.id)) continue;
+      store.update((s) => { s.parcels.push({ ...p, category: p.nutzung && ['Wald', 'Landwirtschaft', 'Gewässer', 'Gebäude'].includes(p.nutzung) ? p.nutzung : 'Wald', addedAt: Date.now(), ordnerId: null }); });
+      hinzu++;
+    } catch { nichtGefunden.push(`${e.gemarkung} ${e.flur}/${e.nr}`); }
+  }
+  const o = ordnerAusEigentuemern();
+  return { hinzu, nichtGefunden, ...o };
+}
 export const etAdresse = (e) => [[e?.strasse, e?.hausnummer].filter(Boolean).join(' '), [e?.plz, e?.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
 export async function eigentuemerBearbeiten(p) {

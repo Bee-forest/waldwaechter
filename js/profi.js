@@ -71,7 +71,7 @@ function spalteVon(kopf) {
   if (k.startsWith('flurstueck') || k.startsWith('flst') || k === 'flurstuecksnummer') return 'flurstueck';
   if (k.startsWith('vorname')) return 'vorname';
   if (k.startsWith('nachname') || k === 'familienname') return 'nachname';
-  if (k.startsWith('waldbesitzer') || k.startsWith('eigentuemer') || k.startsWith('besitzer') || k === 'name' || k === 'inhaber') return 'waldbesitzer';
+  if (k.includes('besitzer') || k.includes('eigentuemer') || k.includes('eigentumer') || k.includes('inhaber') || k === 'name' || k.startsWith('namevorname') || k.startsWith('nameanschrift') || k === 'vollername') return 'waldbesitzer';
   if (k.startsWith('strasse') || k.startsWith('str')) return 'strasse';
   if (k.startsWith('hausnummer') || k === 'hnr' || k === 'hausnr' || k === 'nr') return 'hausnummer';
   if (k === 'plz' || k.startsWith('postleitzahl')) return 'plz';
@@ -86,6 +86,11 @@ export async function eigentuemerImport(datei, { name = '' } = {}) {
   const zeilen = await leseTabelle(datei);
   if (!zeilen.length) throw new Error('Die Tabelle ist leer.');
   const kopf = zeilen[0].map(spalteVon);
+  // Kopfzeile ohne erkannte Namensspalte: erste unbekannte Textspalte gilt als Waldbesitzer
+  if (kopf.some(Boolean) && !kopf.some((k) => ['waldbesitzer', 'vorname', 'nachname'].includes(k))) {
+    const i = kopf.findIndex((k, j) => !k && zeilen.slice(1, 20).some((z) => /[a-zäöüß]{2,}/i.test(String(z[j] ?? ''))));
+    if (i >= 0) kopf[i] = 'waldbesitzer';
+  }
   const mitKopf = kopf.filter(Boolean).length >= 3;
   const zuordnung = mitKopf ? kopf : (zeilen[0].length >= 11 ? SPALTEN_ALT : SPALTEN);
   const daten = mitKopf ? zeilen.slice(1) : zeilen;
@@ -165,6 +170,15 @@ export async function flaechenAusEigentuemern({ onFortschritt, dateiId = null } 
     hinzu++;
   }
   const o = ordnerAusEigentuemern();
+  // Flurstücke der Tabelle ohne Namen kommen in einen Sammelordner der Tabelle (nicht zu den eigenen Flächen)
+  const ohne = liste.filter((e) => !etName(e)).map((e) => store.get().parcels.find((p) => flurstueckKey(p.gemarkung, p.flur, p.nr) === flurstueckKey(e.gemarkung, e.flur, e.nr))).filter((p) => p && !p.ordnerId);
+  if (ohne.length) {
+    const d = etDateien().find((x) => x.id === dateiId);
+    const name = `Ohne Waldbesitzer${d ? ` (${d.name})` : ''}`;
+    let ord = ordnerListe().find((x) => x.name === name);
+    store.update((st) => { st.ordner ||= []; if (!ord) { ord = { id: uid(), name, erstellt: Date.now() }; st.ordner.push(ord); o.neu++; } for (const p of st.parcels) if (ohne.some((q) => q.id === p.id)) p.ordnerId = ord.id; });
+    o.zugeordnet += ohne.length; o.ohneName = ohne.length;
+  }
   if (dateiId) etDateiAktualisieren(dateiId, { gefunden: hinzu + vorhanden, nichtGefunden: nicht.length, nichtListe: nicht.slice(0, 200) });
   return { hinzu, vorhanden, nicht, nichtGefunden: nicht.map((x) => x.text), ...o };
 }
@@ -310,14 +324,48 @@ export function ordnerLeiste() {
   if (!istProfi()) return null;
   const a = aktiverOrdner();
   const liste = ordnerListe();
+  const name = a === 'eigen' ? 'Eigene Flächen' : a === 'alle' ? 'Alle Ordner' : liste.find((o) => o.id === a)?.name || 'Eigene Flächen';
   return h('div', { class: 'ordner-leiste' },
     h('span', { class: 'ordner-symbol', 'aria-hidden': 'true' }, '📁'),
-    h('select', { 'aria-label': 'Ordner', onchange: (e) => { if (e.target.value === '__neu') { e.target.value = a; ordnerAnlegen(); return; } if (e.target.value === '__verwalten') { e.target.value = a; openOrdnerVerwaltung(); return; } ordnerWaehlen(e.target.value); } },
-      h('option', { value: 'eigen', selected: a === 'eigen' }, 'Eigene Flächen'),
-      liste.slice().sort((x, y) => x.name.localeCompare(y.name, 'de')).map((o) => h('option', { value: o.id, selected: a === o.id }, o.name)),
-      h('option', { value: 'alle', selected: a === 'alle' }, 'Alle Ordner'),
-      h('option', { value: '__neu' }, '+ Neuer Ordner …'),
-      h('option', { value: '__verwalten' }, 'Ordner verwalten …')));
+    h('button', { type: 'button', class: 'ordner-knopf', 'aria-haspopup': 'dialog', 'aria-label': `Ordner wählen, gewählt: ${name}`, onclick: () => ordnerSuchen({ aktiv: a, mitSpezial: true }).then((v) => { if (v) ordnerWaehlen(v); }) },
+      h('span', { class: 'ordner-name' }, name), h('span', { class: 'ordner-zahl muted' }, liste.length ? `${liste.length} Ordner` : ''), h('span', { 'aria-hidden': 'true' }, '▾')));
+}
+
+/**
+ * Ordner mit Suchfeld auswählen (für viele Waldbesitzer). Liefert die Ordner-ID, 'eigen', 'alle' oder null.
+ * mitSpezial: „Eigene Flächen“ und „Alle Ordner“ anbieten; vorschlag: Name für „+ Neuer Ordner“.
+ */
+export function ordnerSuchen({ aktiv = null, mitSpezial = false, eigenWert = 'eigen', vorschlag = '' } = {}) {
+  return new Promise((fertig) => {
+    let erledigt = false;
+    const ende = (v) => { if (erledigt) return; erledigt = true; seite.close(); fertig(v); };
+    const s = store.get();
+    const zahl = new Map();
+    for (const p of s.parcels) if (p.ordnerId) zahl.set(p.ordnerId, (zahl.get(p.ordnerId) || 0) + 1);
+    const alle = ordnerListe().slice().sort((x, y) => x.name.localeCompare(y.name, 'de'));
+    const liste = h('ul', { class: 'ordner-suche-liste', role: 'listbox' });
+    const norm = (t) => gemNorm(t);
+    const zeile = (wert, titel, unter, aktivJa) => h('li', {}, h('button', { type: 'button', role: 'option', 'aria-selected': String(!!aktivJa), class: `ordner-suche-eintrag ${aktivJa ? 'on' : ''}`, onclick: () => ende(wert) },
+      h('strong', {}, titel), unter ? h('small', { class: 'muted' }, unter) : null));
+    const zeigen = (q) => {
+      const qq = norm(q);
+      const treffer = qq ? alle.filter((o) => norm(o.name).includes(qq) || norm(etName(o.eigentuemer) || '').includes(qq) || norm(o.eigentuemer?.ort || '').includes(qq)) : alle;
+      fill(liste,
+        mitSpezial && !qq ? [zeile(eigenWert, 'Eigene Flächen', `${s.parcels.filter((p) => !p.ordnerId).length} Flurstücke`, aktiv === eigenWert), zeile('alle', 'Alle Ordner', 'Alles zusammen', aktiv === 'alle')] : null,
+        !mitSpezial && !qq ? zeile(eigenWert, 'Eigene Flächen', null, aktiv === eigenWert) : null,
+        treffer.slice(0, 200).map((o) => zeile(o.id, o.name, [`${zahl.get(o.id) || 0} Flurstücke`, o.eigentuemer?.ort].filter(Boolean).join(' · '), aktiv === o.id)),
+        treffer.length > 200 ? h('li', { class: 'muted' }, `… ${treffer.length - 200} weitere – Suche genauer eingeben`) : null,
+        qq && !treffer.length ? h('li', { class: 'muted' }, 'Kein Ordner gefunden.') : null);
+    };
+    const feld = h('input', { type: 'search', placeholder: `In ${alle.length} Ordnern suchen (Name, Ort) …`, 'aria-label': 'Ordner suchen', autocomplete: 'off', oninput: (e) => zeigen(e.target.value) });
+    const body = h('div', { class: 'ordner-suche' }, feld, liste,
+      h('div', { class: 'btn-row' },
+        h('button', { type: 'button', class: 'btn', onclick: async () => { const o = await ordnerAnlegen(feld.value.trim() || vorschlag); if (o) ende(o.id); } }, '+ Neuer Ordner'),
+        mitSpezial ? h('button', { type: 'button', class: 'btn', onclick: () => { ende(null); openOrdnerVerwaltung(); } }, 'Ordner verwalten') : null));
+    const seite = openPage('Ordner wählen', body, { onClose: () => { if (!erledigt) { erledigt = true; fertig(null); } } });
+    zeigen('');
+    setTimeout(() => feld.focus(), 200);
+  });
 }
 
 export async function ordnerAnlegen(vorgabe = '') {
@@ -408,22 +456,23 @@ export function ordnerAuswahl(p, { beiAenderung } = {}) {
   const e = eigentuemerVon(p);
   const vorschlag = e && etName(e) && !liste.some((o) => o.name.toLowerCase() === etName(e).toLowerCase()) ? etName(e) : null;
   return h('div', { class: 'info-block' }, h('h3', {}, 'Ordner'),
-    h('select', { 'aria-label': 'Ordner des Flurstücks', onchange: async (ev) => {
-      let v = ev.target.value;
-      if (v === '__neu') { const o = await ordnerAnlegen(vorschlag || ''); if (!o) { ev.target.value = p.ordnerId || ''; return; } v = o.id; }
+    h('button', { type: 'button', class: 'ordner-knopf ordner-knopf-rahmen', 'aria-label': `Ordner des Flurstücks: ${ordnerName(p.ordnerId || null)} – ändern`, onclick: async () => {
+      const v = await ordnerSuchen({ aktiv: p.ordnerId || '', eigenWert: '', vorschlag: vorschlag || (e ? etName(e) : '') });
+      if (v == null) return;
       flurstueckZuordnen(p.id, v || null); toast(`Flurstück ${p.nr}: ${ordnerName(v || null)}`); beiAenderung?.();
-    } },
-      h('option', { value: '', selected: !p.ordnerId }, 'Eigene Flächen'),
-      liste.map((o) => h('option', { value: o.id, selected: p.ordnerId === o.id }, o.name)),
-      h('option', { value: '__neu' }, vorschlag ? `+ Neuer Ordner „${vorschlag}“` : '+ Neuer Ordner …')),
+    } }, h('span', { class: 'ordner-name' }, ordnerName(p.ordnerId || null)), h('span', { 'aria-hidden': 'true' }, '▾')),
     h('p', { class: 'hint' }, 'Maßnahmen und Finanzen dieses Flurstücks erscheinen im gewählten Ordner.'));
 }
 
 export function openOrdnerVerwaltung() {
   const inhalt = h('div', { class: 'ordner-seite' });
+  let suche = '';
+  const listeHost = h('div');
+  const sucheFeld = h('input', { type: 'search', placeholder: 'Ordner suchen (Name, Ort) …', 'aria-label': 'Ordner suchen', oninput: (e) => { suche = e.target.value; zeichne(); } });
   const zeichne = () => {
     const s = store.get();
-    const liste = (s.ordner || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    const q = gemNorm(suche);
+    const liste = (s.ordner || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'de')).filter((o) => !q || gemNorm(o.name).includes(q) || gemNorm(o.eigentuemer?.ort || '').includes(q));
     const zahl = (id) => ({
       fl: s.parcels.filter((p) => (p.ordnerId || null) === id).length,
       m: (s.measures || []).filter((m) => ordnerVon(m) === id).length,
@@ -438,9 +487,10 @@ export function openOrdnerVerwaltung() {
         if (!(await confirmDialog(`Ordner „${name}“ auflösen?`, { ok: 'Auflösen', danger: true, body: 'Flurstücke, Maßnahmen und Buchungen bleiben erhalten und kommen zu „Eigene Flächen“.' }))) return;
         store.update((st) => { st.ordner = st.ordner.filter((o) => o.id !== id); for (const p of st.parcels) if (p.ordnerId === id) p.ordnerId = null; for (const m of st.measures || []) if (m.ordnerId === id) m.ordnerId = null; for (const b of st.finanzen?.buchungen || []) if (b.ordnerId === id) b.ordnerId = null; if (st.settings.ordnerAktiv === id) st.settings.ordnerAktiv = 'eigen'; });
       } }, 'Auflösen') : null); };
-    fill(inhalt,
-      h('p', { class: 'muted' }, 'Je Eigentümer ein Ordner: Flurstücke, Maßnahmen und Finanzen werden getrennt geführt. Oben in jeder Ansicht wählst du, welcher Ordner zu sehen ist.'),
-      h('ul', { class: 'fin-liste' }, zeile(null, 'Eigene Flächen'), liste.map((o) => zeile(o.id, o.name))),
+    if (!inhalt.childNodes.length) fill(inhalt, h('p', { class: 'muted' }, 'Je Eigentümer ein Ordner: Flurstücke, Maßnahmen und Finanzen werden getrennt geführt. Oben in jeder Ansicht wählst du, welcher Ordner zu sehen ist.'), (s.ordner || []).length > 8 ? sucheFeld : null, listeHost);
+    fill(listeHost,
+      h('ul', { class: 'fin-liste' }, q ? null : zeile(null, 'Eigene Flächen'), liste.slice(0, 300).map((o) => zeile(o.id, o.name))),
+      liste.length > 300 ? h('p', { class: 'muted' }, `… ${liste.length - 300} weitere – Suche genauer eingeben`) : null,
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn btn-primary', onclick: () => ordnerAnlegen() }, '+ Neuer Ordner'),
         eigentuemerAnzahl() ? h('button', { class: 'btn', onclick: () => { const r = ordnerAusEigentuemern(); toast(`${r.neu} Ordner angelegt, ${r.zugeordnet} Flurstücke zugeordnet`); } }, 'Ordner aus Eigentümerliste') : null),

@@ -1,0 +1,20 @@
+name: Schutzgebietsverordnungen verlinken
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 1 */3 *'
+permissions:
+  contents: write
+jobs:
+  sammeln:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Links sammeln
+        run: python3 tools/schutz_vo.py
+      - name: Speichern
+        run: |
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add data/schutzgebiet-verordnungen.json
+          git diff --cached --quiet || (git commit -m "Schutzgebietsverordnungen aktualisiert" && git pull --rebase && git push)

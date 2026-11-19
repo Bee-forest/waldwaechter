@@ -4,6 +4,8 @@ import { h, fill, dialog, confirmDialog, toast, openPage } from './ui.js';
 import { store, uid } from './store.js';
 import { leseTabelle } from './xlsx.js';
 
+/** Flurstücke aus Tabellen holen und in Ordner einsortieren – vorerst ausgegraut, bis es zuverlässig funktioniert */
+export const EINSORTIEREN_AN = false;
 export const istProfi = () => !!store.get().settings?.profi;
 
 // ---------- Eigentümer ----------
@@ -376,11 +378,11 @@ export function ordnerBeobachten() {
   // gelandet sind, in den Ordner ihres Waldbesitzers legen
   gemarkungenLaden().then(() => {
   const st = store.get();
-  if (istProfi() && !st.settings.ordnerReparatur2 && st.parcels.some((p) => !p.ordnerId && etName(eigentuemerVon(p)))) {
+  if (EINSORTIEREN_AN && istProfi() && !st.settings.ordnerReparatur2 && st.parcels.some((p) => !p.ordnerId && etName(eigentuemerVon(p)))) {
     const r = ordnerAusEigentuemern();
     if (r.zugeordnet) setTimeout(() => toast(`${r.zugeordnet} Flurstücke in die Ordner ihrer Waldbesitzer einsortiert`), 1500);
   }
-  if (!st.settings.ordnerReparatur2) store.update((x) => { x.settings.ordnerReparatur2 = true; });
+  if (EINSORTIEREN_AN && !st.settings.ordnerReparatur2) store.update((x) => { x.settings.ordnerReparatur2 = true; });
   });
 }
 
@@ -575,8 +577,8 @@ export function openOrdnerVerwaltung() {
       liste.length > 300 ? h('p', { class: 'muted' }, `… ${liste.length - 300} weitere – Suche genauer eingeben`) : null,
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn btn-primary', onclick: () => ordnerAnlegen() }, '+ Neuer Ordner'),
-        eigentuemerAnzahl() ? h('button', { class: 'btn', onclick: () => { const r = ordnerAusEigentuemern(); toast(`${r.neu} Ordner angelegt, ${r.zugeordnet} Flurstücke zugeordnet`); } }, 'Ordner aus Eigentümerliste') : null),
-      eigentuemerAnzahl() ? h('p', { class: 'hint' }, '„Ordner aus Eigentümerliste“ legt für jeden importierten Eigentümer deiner Flurstücke einen Ordner an und ordnet die Flurstücke zu.') : null);
+        eigentuemerAnzahl() ? h('button', { class: 'btn', disabled: !EINSORTIEREN_AN, title: EINSORTIEREN_AN ? null : 'In Arbeit', onclick: () => { const r = ordnerAusEigentuemern(); toast(`${r.neu} Ordner angelegt, ${r.zugeordnet} Flurstücke zugeordnet`); } }, 'Ordner aus Eigentümerliste') : null),
+      eigentuemerAnzahl() ? h('p', { class: 'hint' }, EINSORTIEREN_AN ? '' : '(In Arbeit – kommt mit einem späteren Update.) ', '„Ordner aus Eigentümerliste“ legt für jeden importierten Eigentümer deiner Flurstücke einen Ordner an und ordnet die Flurstücke zu.') : null);
   };
   zeichne();
   const ab = store.subscribe(zeichne);

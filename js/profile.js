@@ -13,7 +13,7 @@ import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.j
 import { buzz } from './thinning/feedback.js';
 import * as erinnerung from './erinnerung.js';
 import { amtlichUebernehmen } from './data/source.js';
-import { passtFlurstueck, ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen, eigentuemerExcel, flaechenAusEigentuemern, etDateien, etDateiEntfernen, etDateiAnzahl, tabellenFolgen, ordnerMitInhaltLoeschen } from './profi.js';
+import { passtFlurstueck, ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen, eigentuemerExcel, flaechenAusEigentuemern, etDateien, etDateiEntfernen, etDateiAnzahl, tabellenFolgen, ordnerMitInhaltLoeschen, EINSORTIEREN_AN } from './profi.js';
 
 export async function openProfile() {
   const all = await source.allParcels();
@@ -198,7 +198,7 @@ export async function openProfile() {
         const r = await eigentuemerImport(f, { name: name.trim() || vorschlag });
         toast(`${r.gesamt} Datensätze eingelesen${r.fehler ? `, ${r.fehler} Zeilen ohne Gemarkung/Flur/Flurstück übersprungen` : ''}`);
         render();
-        const sortieren = await confirmDialog('Flurstücke nach Waldbesitzer in Ordner sortieren?', { ok: 'Ja, sortieren',
+        const sortieren = EINSORTIEREN_AN && await confirmDialog('Flurstücke nach Waldbesitzer in Ordner sortieren?', { ok: 'Ja, sortieren',
           body: `${r.gesamt} Datensätze aus „${name.trim() || vorschlag}“. Die App sucht die Flurstücke, holt sie zu deinen Flächen und legt für jeden Waldbesitzer einen Ordner an – alle Flurstücke desselben Waldbesitzers landen im selben Ordner.` });
         if (sortieren) await sortiereNachWaldbesitzer(r.dateiId);
       } catch (err) { toast(`Import fehlgeschlagen: ${err.message || err}`); }
@@ -217,7 +217,7 @@ export async function openProfile() {
           h('div', {}, h('strong', {}, d.name), h('small', { class: 'muted' }, `${d.datei} · hochgeladen ${new Date(d.datum).toLocaleDateString('de-DE')}`),
             h('small', {}, `${etDateiAnzahl(d.id)} Datensätze${d.gefunden != null ? ` · ${d.gefunden} Flurstücke gefunden${d.nichtGefunden ? `, ${d.nichtGefunden} nicht gefunden` : ''}` : ''}`)),
           h('div', { class: 'btn-row' },
-            h('button', { class: 'btn btn-small', onclick: () => sortiereNachWaldbesitzer(d.id) }, d.gefunden != null ? 'Erneut einsortieren' : 'Flurstücke einsortieren'),
+            h('button', { class: 'btn btn-small', disabled: !EINSORTIEREN_AN, onclick: () => sortiereNachWaldbesitzer(d.id) }, d.gefunden != null ? 'Erneut einsortieren' : 'Flurstücke einsortieren'),
             h('button', { class: 'btn btn-small', onclick: () => excelSpeichern(false, d.id, d.name) }, 'Als Excel'),
             h('button', { class: 'link-btn', onclick: () => tabelleLoeschen([d.id], `Tabelle „${d.name}“ entfernen?`, `${etDateiAnzahl(d.id)} Eigentümereinträge dieser Tabelle werden gelöscht.`) }, 'entfernen'))))) : null,
         h('label', { class: 'btn btn-primary' }, h('span', { html: icon.plus }), etDateien().length ? 'Weitere Excel-Tabelle hochladen' : 'Excel-Tabelle hochladen (.xlsx)', eingabe),
@@ -226,7 +226,8 @@ export async function openProfile() {
           h('button', { class: 'btn btn-small', onclick: () => excelSpeichern(true) }, 'Leere Vorlage (Excel)'),
           n ? h('button', { class: 'btn btn-small', onclick: () => excelSpeichern(false) }, 'Alle als Excel speichern') : null),
         n ? h('p', { class: 'hint' }, '„Als Excel“ bzw. „Alle als Excel speichern“ enthält die Einträge mit den Ergänzungen aus der App – damit ersetzt du deine Excel-Datei.') : null,
-        n ? h('button', { class: 'btn', onclick: () => sortiereNachWaldbesitzer() }, 'Alle Flurstücke nach Waldbesitzer in Ordner sortieren') : null,
+        n ? h('button', { class: 'btn', disabled: !EINSORTIEREN_AN, onclick: () => sortiereNachWaldbesitzer() }, 'Alle Flurstücke nach Waldbesitzer in Ordner sortieren') : null,
+        EINSORTIEREN_AN ? null : h('p', { class: 'hint' }, 'Das Einsortieren der Flurstücke in Ordner ist noch in Arbeit und kommt mit einem späteren Update. Die Eigentümer aus der Tabelle erscheinen schon jetzt in der Flurstücks-Info.'),
         h('p', { class: 'hint' }, 'Eigentümerdaten sind personenbezogen: Sie bleiben nur auf diesem Gerät und sind nicht in „Daten sichern“ enthalten.'),
         n ? h('button', { class: 'btn btn-danger-ghost', onclick: () => tabelleLoeschen(null, 'Alle Eigentümerdaten löschen?', `${n} Einträge werden von diesem Gerät entfernt.`) }, 'Alle Eigentümerdaten löschen') : null) : null);
   }

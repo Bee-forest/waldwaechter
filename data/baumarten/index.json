@@ -1,13 +1,14 @@
 {
  "quelle": "ThüringenForst, Thüringer Waldverzeichnis (© GDI-Th, dl-de/by-2-0)",
- "bestaende": 143061,
- "kacheln": 2788,
+ "bestaende": 143112,
+ "kacheln": 2798,
  "regionen": [
   "Landkreis Greiz",
   "Saale-Orla-Kreis",
   "Ilm-Kreis",
   "Landkreis Gotha",
-  "Stadt Suhl"
+  "Stadt Suhl",
+  "Stadt Gera"
  ],
- "stand": "2026-11-17"
+ "stand": "2026-11-19"
 }

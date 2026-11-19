@@ -46,6 +46,7 @@ def links_von(titel):
     p = d.get('parse', {})
     wt = p.get('wikitext', '') if isinstance(p.get('wikitext'), str) else ''
     links = p.get('externallinks', []) or []
+    kennung = re.search(r'\|\s*Kennung\s*=\s*(?:NSG[- ]?)?(\d{1,3})\b', wt)
     # Linktexte aus dem Wikitext ([url text])
     texte = {m.group(1): m.group(2) for m in re.finditer(r'\[(https?://[^\s\]]+)\s+([^\]]*)\]', wt)}
     treffer = []
@@ -54,7 +55,11 @@ def links_von(titel):
         t = texte.get(u, '')
         if GUT.search(u) or GUT.search(t) or (u.lower().endswith('.pdf') and PDF_OK.search(u + ' ' + t)):
             treffer.append({'url': u, 'text': re.sub(r"''+|<[^>]+>", '', t).strip()[:160]})
-    return treffer
+    return treffer, (kennung.group(1) if kennung else None)
+
+def slug(t):
+    t = re.sub(r'\s*\(.*?\)', '', t).lower().replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue').replace('ß', 'ss')
+    return re.sub(r'[^a-z0-9]+', '-', t).strip('-')
 
 def norm(t):
     t = t.lower().replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue').replace('ß', 'ss')
@@ -103,8 +108,13 @@ def main():
         titel = sorted({t for k in kats for t in mitglieder(k)})
         print(art, len(titel), 'Artikel', file=sys.stderr)
         for i, t in enumerate(titel):
-            l = links_von(t)
-            daten.setdefault(art, {})[norm(t)] = {'name': t, 'wiki': 'https://de.wikipedia.org/wiki/' + urllib.parse.quote(t.replace(' ', '_')), 'vo': l[:4]}
+            l, nr = links_von(t)
+            e = {'name': t, 'wiki': 'https://de.wikipedia.org/wiki/' + urllib.parse.quote(t.replace(' ', '_')), 'vo': l[:4]}
+            if art == 'nsg' and nr:
+                # Steckbrief des TLUBN mit Lesefassung der Verordnung: …/naturschutzgebiet/nsg-<Nr. dreistellig>-<name>
+                e['nr'] = nr
+                e['tlubn'] = f'https://tlubn.thueringen.de/naturschutz/schutzgebiete/naturschutzgebiet/nsg-{int(nr):03d}-{slug(t)}'
+            daten.setdefault(art, {})[norm(t)] = e
             if i % 50 == 0: print(' ', art, i, t, len(l), file=sys.stderr)
             time.sleep(0.15)
     # Einzelnachweise aus den Listen der Landkreise ergänzen
@@ -125,6 +135,6 @@ def main():
     stand = time.strftime('%Y-%m-%d')
     json.dump({'stand': stand, 'quelle': 'Wikipedia-Artikel und deren Einzelnachweise', 'gebiete': daten}, open('data/schutzgebiet-verordnungen.json', 'w'), ensure_ascii=False, separators=(',', ':'))
     for art, d in daten.items():
-        print(art, len(d), 'Gebiete,', sum(1 for x in d.values() if x['vo']), 'mit Verordnungslink')
+        print(art, len(d), 'Gebiete,', sum(1 for x in d.values() if x['vo']), 'mit Verordnungslink,', sum(1 for x in d.values() if x.get('tlubn')), 'mit TLUBN-Steckbrief')
 
 main()

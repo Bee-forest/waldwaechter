@@ -3,10 +3,10 @@
 // Blickrichtung, an dem jedes Jahr fotografiert wird.
 import { h, fill, openPage, dialog, confirmDialog, toast, fmtDate } from './ui.js';
 import { store, uid } from './store.js';
-import { centroid, compassLabel, polysOf } from './geo.js';
+import { compassLabel } from './geo.js';
 import { openFotos, fotoListe, fotosLoeschen, fotoKnopfText } from './fotos.js';
 import { openNavigation } from './grenzfinder.js';
-import { punktAufKarteWaehlen, aufKarteZeigen } from './map/fotopunkte.js';
+import { fotopunktAufKarte } from './map/fotopunkte.js';
 
 
 /** Tagebuch und Flurstückhistorie sind eins: die Seite ist die Detailansicht der Flurstückhistorie */
@@ -16,7 +16,7 @@ export async function openWaldtagebuch(parcelId) {
 }
 
 /** Abschnitt „Fotopunkte“ eines Flurstücks (für die Flurstückhistorie) */
-export function fotopunkteAbschnitt(p) {
+export function fotopunkteAbschnitt(p, ort) {
   const fps = (store.get().fotopunkte || []).filter((f) => f.parcelId === p.id);
   const titel = `Flurstück ${p.nr}, ${p.gemarkung}`;
   if (!fps.length) return null;
@@ -26,8 +26,8 @@ export function fotopunkteAbschnitt(p) {
       h('div', { class: 'btn-row' },
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }) }, 'Hinführen'),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`fp:${f.id}`, `${f.name || 'Fotopunkt'} · ${titel}`, { verlauf: true, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit.` }) }, fotoKnopfText(`fp:${f.id}`)),
-        h('button', { type: 'button', class: 'btn btn-small', onclick: () => aufKarteZeigen(f.at) }, 'Auf der Karte'),
-        h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktAufKarteVerschieben(f, p) }, 'Standort / Blickrichtung ändern'),
+        h('button', { type: 'button', class: 'btn btn-small', onclick: () => ort.zeige(f) }, 'Auf der Karte'),
+        h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktAufKarteVerschieben(f, p, ort) }, 'Standort / Blickrichtung ändern'),
         h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktHierSetzen(f) }, 'Per GPS neu setzen'),
         h('button', { type: 'button', class: 'link-btn', onclick: async () => { if (await confirmDialog('Fotopunkt mit allen Aufnahmen löschen?', { ok: 'Löschen', danger: true })) { store.update((st) => { st.fotopunkte = st.fotopunkte.filter((x) => x.id !== f.id); }); fotosLoeschen(`fp:${f.id}`); } } }, 'löschen'))))));
 }
@@ -63,16 +63,15 @@ export async function notizDialog(parcelId, alt = null) {
   });
 }
 
-export async function fotopunktAnlegen(parcelId, p) {
-  const w = { name: '', blick: '', at: null, genau: null, karte: null };
-  const posText = h('span', {}, 'Standort wird bestimmt …');
-  const blickFeld = h('input', { type: 'number', min: 0, max: 359, inputmode: 'numeric', placeholder: 'z. B. 135', oninput: (e) => { w.blick = e.target.value; } });
-  // Standort laufend messen und die genaueste Messung behalten
-  const watch = navigator.geolocation?.watchPosition((pp) => {
-    const acc = Math.round(pp.coords.accuracy);
-    if (w.genau == null || acc <= w.genau) { w.at = [pp.coords.latitude, pp.coords.longitude]; w.genau = acc; }
-    posText.textContent = `Standort gemessen: ± ${w.genau} m${w.genau > 15 ? ' – kurz stehen bleiben, die Genauigkeit wird noch besser' : ''}`;
-  }, () => { posText.textContent = 'Kein GPS – bitte GPS einschalten und die Standortfreigabe erlauben.'; }, { enableHighAccuracy: true, maximumAge: 0, timeout: 60000 });
+/**
+ * Fotopunkt anlegen: Standort und Blickrichtung direkt in der Karte der Flurstückhistorie setzen
+ * (ort = { map, leiste }), danach Name vergeben.
+ */
+export async function fotopunktAnlegen(parcelId, p, ort) {
+  const r = await fotopunktAufKarte(ort.map, ort.leiste, { titel: 'Neuer Fotopunkt' });
+  if (!r) return;
+  const w = { name: '', blick: r.blick != null ? String(r.blick) : '' };
+  const blickFeld = h('input', { type: 'number', min: 0, max: 359, inputmode: 'numeric', placeholder: 'z. B. 135', value: w.blick, oninput: (e) => { w.blick = e.target.value; } });
   const kompassKnopf = h('button', { type: 'button', class: 'btn btn-small', onclick: async () => {
     try {
       if (typeof DeviceOrientationEvent?.requestPermission === 'function' && (await DeviceOrientationEvent.requestPermission()) !== 'granted') throw new Error('Kompass nicht freigegeben');
@@ -85,28 +84,20 @@ export async function fotopunktAnlegen(parcelId, p) {
       const sx = werte.reduce((a, v) => a + Math.cos((v * Math.PI) / 180), 0), sy = werte.reduce((a, v) => a + Math.sin((v * Math.PI) / 180), 0);
       w.blick = String(Math.round(((Math.atan2(sy, sx) * 180) / Math.PI + 360) % 360)); blickFeld.value = w.blick;
     } catch (e) { toast(e.message); }
-  } }, 'Mit Kompass messen');
+  } }, 'Vor Ort mit Kompass messen');
   const ok = await dialog({
     title: 'Fotopunkt anlegen',
     body: h('div', { class: 'form' },
-      h('p', { class: 'muted' }, 'Stell dich an eine Stelle, die du wiederfindest (z. B. Wegkreuzung, markierter Baum). Von hier fotografierst du jedes Jahr in die gleiche Richtung. Ohne GPS oder von unterwegs: „Auf Karte setzen“ – du tippst die Stelle in der Karte an.'),
-      h('p', {}, posText),
       h('label', {}, 'Name', h('input', { placeholder: 'z. B. Blick über die Kultur', oninput: (e) => { w.name = e.target.value; } })),
-      h('label', {}, 'Blickrichtung (Grad)', blickFeld), kompassKnopf),
-    actions: [{ label: 'Abbrechen', value: false }, { label: 'Auf Karte setzen', value: 'karte' }, { label: 'Hier anlegen (GPS)', value: true, primary: true }],
+      h('label', {}, 'Blickrichtung (Grad)', blickFeld), kompassKnopf,
+      h('p', { class: 'hint' }, 'Von hier fotografierst du jedes Jahr in die gleiche Richtung – am besten zur gleichen Jahreszeit.')),
+    actions: [{ label: 'Abbrechen', value: false }, { label: 'Anlegen', value: true, primary: true }],
   });
-  if (watch != null) navigator.geolocation.clearWatch(watch);
   if (!ok) return;
-  if (ok === 'karte') {
-    const r = await punktAufKarteWaehlen({ titel: 'Fotopunkt auf der Karte setzen', center: w.at || (p?.ring ? centroid(p.ring) : null), blick: w.blick, umriss: p ? polysOf(p) : null, mitBlick: true });
-    if (!r?.at) return;
-    w.karte = r.at; if (r.blick != null) w.blick = String(r.blick);
-  } else if (!w.at) { toast('Noch kein GPS-Standort – bitte kurz warten oder „Auf Karte setzen“ wählen.'); return; }
   const id = uid();
   const blick = ((Math.round(Number(w.blick) || 0) % 360) + 360) % 360;
-  const at = w.karte || w.at, genau = w.karte ? null : w.genau;
-  store.update((s) => { s.fotopunkte ||= []; s.fotopunkte.push({ id, parcelId, at, genau, perKarte: !!w.karte, blick, name: w.name.trim() || `Fotopunkt ${(s.fotopunkte.filter((x) => x.parcelId === parcelId).length) + 1}`, erfasst: Date.now() }); });
-  openFotos(`fp:${id}`, w.name.trim() || 'Fotopunkt', { verlauf: true, hinweis: `Fotografiere von hier in Richtung ${blick}° (${compassLabel(blick)}).` });
+  store.update((s) => { s.fotopunkte ||= []; s.fotopunkte.push({ id, parcelId, at: r.at, genau: r.genau, perKarte: r.genau == null, blick, name: w.name.trim() || `Fotopunkt ${(s.fotopunkte.filter((x) => x.parcelId === parcelId).length) + 1}`, erfasst: Date.now() }); });
+  toast('Fotopunkt angelegt');
 }
 
 /** Fotopunkt auf den aktuellen GPS-Standort verschieben (z. B. wenn er falsch erfasst wurde) */
@@ -129,11 +120,13 @@ export function fotopunktFotos(f) {
   openFotos(`fp:${f.id}`, f.name || 'Fotopunkt', { verlauf: true, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit.` });
 }
 
-/** Fotopunkt auf der Karte an eine andere Stelle setzen */
-export async function fotopunktAufKarteVerschieben(f, p = null) {
-  const r = await punktAufKarteWaehlen({ titel: `${f.name || 'Fotopunkt'} verschieben`, start: f.at, blick: f.blick, umriss: p ? polysOf(p) : null, mitBlick: true });
-  if (!r?.at) return;
+/** Standort und Blickrichtung eines Fotopunkts in der Karte ändern (ort = { map, leiste, ohne(id) }) */
+export async function fotopunktAufKarteVerschieben(f, p, ort) {
+  ort.ohne?.(f.id);
+  const r = await fotopunktAufKarte(ort.map, ort.leiste, { start: f.at, blick: f.blick, titel: `${f.name || 'Fotopunkt'} ändern` });
+  ort.ohne?.(null);
+  if (!r) return;
   const verschoben = r.at[0] !== f.at[0] || r.at[1] !== f.at[1];
-  store.update((s) => { const x = s.fotopunkte.find((y) => y.id === f.id); if (x) { if (verschoben) { x.at = r.at; x.genau = null; x.perKarte = true; } if (r.blick != null) x.blick = r.blick; } });
-  toast('Fotopunkt verschoben');
+  store.update((s) => { const x = s.fotopunkte.find((y) => y.id === f.id); if (x) { if (verschoben) { x.at = r.at; x.genau = r.genau; x.perKarte = r.genau == null; } if (r.blick != null) x.blick = r.blick; } });
+  toast('Fotopunkt geändert');
 }

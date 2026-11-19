@@ -9,7 +9,9 @@ import { openVerlauf, anhangOeffnen } from './vertraeglichkeit.js';
 import { openThinningWizard } from './thinning/wizard.js';
 import { fmt, bLabel, HOEHENKLASSEN } from './thinning/methode.js';
 import { passtFlurstueck } from './profi.js';
-import { notizDialog, fotopunktAnlegen, fotopunkteAbschnitt, notizZeile } from './tagebuch.js';
+import { notizDialog, fotopunktAnlegen, fotopunkteAbschnitt, notizZeile, fotopunktFotos, fotopunktAufKarteVerschieben } from './tagebuch.js';
+import { createFotopunktLayer } from './map/fotopunkte.js';
+import { openNavigation } from './grenzfinder.js';
 
 const STATUS = { geplant: 'Geplant', arbeit: 'In Arbeit', fertig: 'Abgeschlossen' };
 const euro = (v) => `${Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -45,20 +47,21 @@ export async function openFlurstueckHistorie() {
 }
 
 /** Flurstückhistorie eines Flurstücks direkt öffnen (z. B. aus der Infobox) */
-export async function openHistorieFlurstueck(parcelId) {
+export async function openHistorieFlurstueck(parcelId, { fotopunkt = null } = {}) {
   const [all, T] = await Promise.all([source.allParcels(), measureTypes()]);
   const p = all.find((x) => x.id === parcelId) || store.get().parcels.find((x) => x.id === parcelId);
   if (!p?.ring) { toast('Flurstück nicht gefunden'); return; }
-  openDetail(p, T);
+  openDetail(p, T, { fotopunkt });
 }
 
-function openDetail(p, T) {
+function openDetail(p, T, { fotopunkt = null } = {}) {
   const body = h('div', { class: 'historie-detail' });
   const mapEl = h('div', { class: 'mini-map historie-map' });
   const listHost = h('div');
-  const page = openPage(`Flurstück ${p.nr}`, body, { onClose: () => karte?.remove() });
+  const fpLeiste = h('div', { class: 'fp-leiste' });
+  const page = openPage(`Flurstück ${p.nr}`, body, { onClose: () => { fpLyr?.entfernen?.(); karte?.remove(); } });
   body.append(
-    h('div', { class: 'historie-kopf' }, mapEl,
+    h('div', { class: 'historie-kopf' }, mapEl, fpLeiste,
       h('p', { class: 'muted map-legende' }, h('span', { class: 'sw sw-flst' }), 'Flurstück ', h('span', { class: 'sw sw-mn' }), 'Fläche der gewählten Maßnahme')),
     h('h2', { class: 'section-title flst-titel' }, 'Angaben zum Flurstück'),
     h('dl', { class: 'parcel-facts' },
@@ -67,6 +70,19 @@ function openDetail(p, T) {
       p.nutzungText ? h('div', {}, h('dt', {}, 'Nutzung laut ALKIS'), h('dd', {}, p.nutzungText)) : null),
     listHost);
   const karte = miniKarte(mapEl, p);
+  // Fotopunkte direkt in dieser Karte zeigen, setzen und ändern
+  let ohneId = null;
+  const ort = {
+    map: karte.map, leiste: fpLeiste,
+    ohne: (id) => { ohneId = id; fpLyr.neuZeichnen(); },
+    zeige: (f) => { mapEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); karte.map.flyTo(f.at, Math.max(karte.map.getZoom(), 18), { duration: 0.6 }); },
+  };
+  const fpLyr = createFotopunktLayer(karte.map, {
+    fotos: (f) => fotopunktFotos(f),
+    hinfuehren: (f) => openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }),
+    verschieben: (f) => fotopunktAufKarteVerschieben(f, p, ort),
+  }, { ohne: () => ohneId }).addTo(karte.map);
+  if (fotopunkt) { const f = (store.get().fotopunkte || []).find((x) => x.id === fotopunkt); if (f) setTimeout(() => fotopunktAufKarteVerschieben(f, p, ort), 400); }
   let offen = null;
 
   function render() {
@@ -79,8 +95,8 @@ function openDetail(p, T) {
     fill(listHost,
       h('div', { class: 'btn-row historie-aktionen' },
         h('button', { type: 'button', class: 'btn btn-primary', onclick: () => notizDialog(p.id) }, 'Tagebuch-Eintrag schreiben'),
-        h('button', { type: 'button', class: 'btn', onclick: () => fotopunktAnlegen(p.id, p) }, 'Fotopunkt anlegen')),
-      fotopunkteAbschnitt(p),
+        h('button', { type: 'button', class: 'btn', onclick: () => fotopunktAnlegen(p.id, p, ort) }, 'Fotopunkt anlegen')),
+      fotopunkteAbschnitt(p, ort),
       h('h2', { class: 'section-title' }, 'Chronik: Maßnahmen und Tagebuch'),
       summeKosten ? h('p', { class: 'muted' }, `Kosten aller Maßnahmen: ${euro(summeKosten)}`) : null,
       chronik.length

@@ -2,9 +2,8 @@
 // „Fotos“ / „Hinführen“ / „Verschieben“. Dazu ein Kartenwähler, um einen Fotopunkt per Fingertipp
 // zu setzen oder zu verschieben (ohne GPS am Ort).
 /* global L */
-import { h, fill, openPage } from '../ui.js';
+import { h } from '../ui.js';
 import { store } from '../store.js';
-import { createBaseMap } from './basemap.js';
 import { compassLabel } from '../geo.js';
 
 export const FOTOPUNKT_FARBE = '#7B3FA0';
@@ -31,12 +30,12 @@ export function fotopunktIcon(blick) {
 }
 
 /** Ebene mit allen Fotopunkten. aktionen: { fotos(f), hinfuehren(f), verschieben(f) } */
-export function createFotopunktLayer(map, aktionen = {}) {
+export function createFotopunktLayer(map, aktionen = {}, { ohne = () => null } = {}) {
   const gruppe = L.layerGroup();
   function zeichne() {
     gruppe.clearLayers();
     for (const f of store.get().fotopunkte || []) {
-      if (!f.at) continue;
+      if (!f.at || f.id === ohne()) continue;
       const m = L.marker(f.at, { icon: fotopunktIcon(f.blick), title: f.name || 'Fotopunkt', zIndexOffset: 400 });
       m.bindPopup(() => h('div', { class: 'fp-popup' },
         h('strong', {}, f.name || 'Fotopunkt'),
@@ -49,52 +48,72 @@ export function createFotopunktLayer(map, aktionen = {}) {
     }
   }
   zeichne();
-  store.subscribe(zeichne);
+  const ab = store.subscribe(zeichne);
+  gruppe.neuZeichnen = zeichne; gruppe.entfernen = ab;
   return gruppe;
 }
 
 /**
- * Punkt auf der Karte wählen. Liefert [lat, lng] oder null (abgebrochen).
- * @param {object} o  titel, center, zoom, start (bisheriger Punkt), blick (für die Vorschau), umriss (Polygone des Flurstücks)
+ * Fotopunkt direkt in einer vorhandenen Karte setzen (z. B. der Karte der Flurstückhistorie).
+ * Unter der Karte erscheint eine Leiste: Standort / Blickrichtung, GPS, Abbrechen, Übernehmen.
+ * Liefert { at, blick, genau } oder null.
  */
-export function punktAufKarteWaehlen({ titel = 'Punkt auf der Karte setzen', center, zoom = 17, start = null, blick = null, umriss = null, mitBlick = false } = {}) {
+export function fotopunktAufKarte(map, leiste, { start = null, blick = null, titel = 'Fotopunkt setzen', mitGps = true } = {}) {
   return new Promise((resolve) => {
-    let gewaehlt = start ? [...start] : null, fertig = false, modus = 'ort';
+    let at = start ? [...start] : null, genau = null, modus = at ? 'blick' : 'ort', watch = null;
     let richtung = blick === '' || blick == null || !Number.isFinite(Number(blick)) ? null : Number(blick);
-    const mapEl = h('div', { class: 'ersch-map malt' });
-    const status = h('p', { class: 'draw-status' });
-    const ok = h('button', { type: 'button', class: 'btn btn-primary btn-block', onclick: () => { fertig = true; seite.close(); resolve(mitBlick ? { at: gewaehlt, blick: richtung } : gewaehlt); } }, 'Übernehmen');
-    const modusEl = h('div', { class: 'segmented ersch-modus', role: 'radiogroup', 'aria-label': 'Was setzen' });
-    const zeigeModus = () => fill(modusEl, [['ort', 'Standort'], ['blick', 'Blickrichtung']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(modus === k), disabled: k === 'blick' && !gewaehlt, onclick: () => { modus = k; zeigeModus(); zeigeStatus(); } }, l)));
-    const zeigeStatus = () => {
-      status.textContent = modus === 'blick'
-        ? `Tippe in die Karte, wohin du von hier aus schaust (z. B. auf die Kultur).${richtung != null ? ` Jetzt: ${Math.round(richtung)}° (${compassLabel(Math.round(richtung))}).` : ''}`
-        : gewaehlt ? `Punkt gesetzt. Tippe erneut, um ihn zu verschieben – oder ziehe ihn mit dem Finger.${mitBlick ? ' Dann oben „Blickrichtung“ wählen.' : ''}` : 'Tippe in die Karte, wo der Fotopunkt ist (z. B. Wegkreuzung, markierter Baum).';
-      ok.disabled = !gewaehlt;
-    };
-    const seite = openPage(titel, h('div', { class: 'ersch' }, mitBlick ? modusEl : null, mapEl, h('div', { class: 'ersch-leiste' }, status, ok)), { onClose: () => { map.remove(); if (!fertig) resolve(null); } });
-    const base = createBaseMap(mapEl, { center: start || center, zoom, basemap: store.get().settings.basemap, alkis: true });
-    const map = base.map;
-    L.control.zoom({ position: 'topleft' }).addTo(map);
-    if (umriss?.length) L.polygon(umriss, { color: '#FFFFFF', weight: 3, fillOpacity: 0.08, interactive: false }).addTo(map);
+    const box = h('div', { class: 'fp-edit' });
+    leiste.replaceChildren(box);
+    map.getContainer().classList.add('malt');
     let marker = null;
-    const setze = (ll) => {
-      gewaehlt = [Number(ll[0].toFixed(7)), Number(ll[1].toFixed(7))];
+    const gpsStopp = () => { if (watch != null) { navigator.geolocation.clearWatch(watch); watch = null; } };
+    const ende = (wert) => {
+      gpsStopp(); map.off('click', klick); marker?.remove(); map.getContainer().classList.remove('malt');
+      leiste.replaceChildren(); resolve(wert);
+    };
+    const setze = (ll, acc = null) => {
+      at = [Number(ll[0].toFixed(7)), Number(ll[1].toFixed(7))]; genau = acc;
       if (!marker) {
-        marker = L.marker(gewaehlt, { icon: fotopunktIcon(richtung), draggable: true }).addTo(map);
-        marker.on('dragend', () => { const p = marker.getLatLng(); gewaehlt = [Number(p.lat.toFixed(7)), Number(p.lng.toFixed(7))]; });
-      } else marker.setLatLng(gewaehlt);
-      zeigeModus(); zeigeStatus();
+        marker = L.marker(at, { icon: fotopunktIcon(richtung), draggable: true, zIndexOffset: 1000 }).addTo(map);
+        marker.on('dragend', () => { const q = marker.getLatLng(); at = [Number(q.lat.toFixed(7)), Number(q.lng.toFixed(7))]; genau = null; });
+      } else marker.setLatLng(at);
+      malen();
     };
     const richte = (ll) => {
-      const a = map.latLngToContainerPoint(gewaehlt), b = map.latLngToContainerPoint(ll);
+      const a = map.latLngToContainerPoint(at), b = map.latLngToContainerPoint(ll);
       richtung = Math.round(((Math.atan2(b.x - a.x, a.y - b.y) * 180) / Math.PI + 360) % 360);
-      marker.setIcon(fotopunktIcon(richtung)); zeigeStatus();
+      marker.setIcon(fotopunktIcon(richtung)); malen();
     };
-    if (gewaehlt) setze(gewaehlt);
-    map.on('click', (e) => (modus === 'blick' && gewaehlt ? richte(e.latlng) : setze([e.latlng.lat, e.latlng.lng])));
-    zeigeModus(); zeigeStatus();
-    setTimeout(() => map.invalidateSize(), 250);
+    function klick(e) { if (modus === 'blick' && at) richte(e.latlng); else { setze([e.latlng.lat, e.latlng.lng]); if (richtung == null) { modus = 'blick'; malen(); } } }
+    map.on('click', klick);
+    const gps = () => {
+      if (!navigator.geolocation) return;
+      gpsStopp();
+      let best = null;
+      watch = navigator.geolocation.watchPosition((pp) => {
+        const acc = Math.round(pp.coords.accuracy);
+        if (!best || acc <= best) { best = acc; setze([pp.coords.latitude, pp.coords.longitude], acc); map.panTo(at); }
+        if (acc <= 5) gpsStopp();
+      }, () => { gpsStopp(); malen('Kein GPS – bitte GPS einschalten oder den Punkt in die Karte tippen.'); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+      setTimeout(gpsStopp, 20000);
+      malen();
+    };
+    function malen(fehler = null) {
+      const text = fehler || (modus === 'blick'
+        ? `Tippe in die Karte, wohin du von hier aus schaust (z. B. auf die Kultur).${richtung != null ? ` Jetzt: ${richtung}° (${compassLabel(richtung)}).` : ''}`
+        : at ? `Standort gesetzt${genau != null ? ` (GPS ± ${genau} m${watch != null ? ', wird noch genauer …' : ''})` : ''}. Tippe erneut zum Verschieben oder ziehe den Punkt.` : 'Tippe in die Karte, wo der Fotopunkt ist (z. B. Wegkreuzung, markierter Baum) – oder nimm deinen GPS-Standort.');
+      box.replaceChildren(
+        h('strong', {}, titel),
+        h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Was setzen' }, [['ort', 'Standort'], ['blick', 'Blickrichtung']].map(([k, l]) =>
+          h('button', { type: 'button', role: 'radio', 'aria-checked': String(modus === k), disabled: k === 'blick' && !at, onclick: () => { modus = k; malen(); } }, l))),
+        h('p', { class: 'draw-status' }, text),
+        h('div', { class: 'btn-row' },
+          h('button', { type: 'button', class: 'btn btn-small', onclick: () => ende(null) }, 'Abbrechen'),
+          mitGps && navigator.geolocation && modus === 'ort' ? h('button', { type: 'button', class: 'btn btn-small', onclick: gps }, watch != null ? 'GPS misst …' : 'Mein GPS-Standort') : null,
+          h('button', { type: 'button', class: 'btn btn-small btn-primary', disabled: !at, onclick: () => ende({ at, blick: richtung, genau }) }, 'Übernehmen')));
+    }
+    if (at) setze(at); else malen();
+    map.getContainer().scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 

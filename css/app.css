@@ -1385,3 +1385,6 @@ li.fin-zeile { cursor: default; }
 .fp-popup { min-width: 180px; }
 .fp-popup p { margin: 4px 0 8px; }
 .fp-icon .fp-richtung { position: absolute; transform: translate(-50%, -50%); background: #7B3FA0; color: #fff; font: 700 11px/1 system-ui, sans-serif; padding: 3px 5px; border-radius: 8px; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); white-space: nowrap; }
+.fp-leiste:empty { display: none; }
+.fp-edit { margin: 8px 0 0; padding: 10px 12px; border: 1.5px solid #7B3FA0; border-radius: 14px; background: var(--card, #fff); display: grid; gap: 8px; }
+.fp-edit .draw-status { margin: 0; }

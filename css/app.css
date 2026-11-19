@@ -751,7 +751,7 @@ body.flash::after { content: ''; position: fixed; inset: 0; z-index: 4000; point
 .mess-werte li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--surface-2); border-radius: 10px; }
 .q-nav { display: flex; gap: 10px; justify-content: space-between; margin-top: 6px; }
 .q-nav .btn-primary { flex: 1; }
-.polter-ergebnis small b { white-space: nowrap; }
+.polter-ergebnis small b { white-space: normal; }
 .polter .q-nav { background: var(--bg); padding: 10px 0; }
 .einheit-zeile { display: flex; align-items: center; gap: 10px; font-weight: 600; }
 .einheit-wahl button { min-width: 56px; white-space: nowrap; }
@@ -1388,3 +1388,9 @@ li.fin-zeile { cursor: default; }
 .fp-leiste:empty { display: none; }
 .fp-edit { margin: 8px 0 0; padding: 10px 12px; border: 1.5px solid #7B3FA0; border-radius: 14px; background: var(--card, #fff); display: grid; gap: 8px; }
 .fp-edit .draw-status { margin: 0; }
+/* Holzvermessung: gewählte Einheit groß, die andere klein */
+.preview.menge-haupt { grid-template-columns: 1.4fr 1fr 0.8fr; align-items: end; }
+.preview.menge-haupt .haupt .pv-n { font-size: 30px; color: var(--ink, #1F2A22); }
+.preview.menge-haupt .neben .pv-n { font-size: 18px; }
+.polter, .polter-inhalt, .polter-ergebnis, .polter-ergebnis > * { min-width: 0; max-width: 100%; }
+.polter-ergebnis small, .polter-ergebnis b { overflow-wrap: break-word; }

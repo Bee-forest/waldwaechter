@@ -31,7 +31,7 @@ export const MEASURE_TYPES = {
   pflege:       { label: 'Pflege', fields: [['art', 'Art der Pflege', ['Jungwuchspflege', 'Jungbestandspflege', 'Freischneiden', 'Wertastung']], ['area', 'Fläche (ha)', 'decimal']] },
   durchforstung:{ label: 'Durchforstung mit GPS', gruppe: 'holzernte', info: 'Geführt per GPS-Raster', fields: [] },
   holzernte_df: { label: 'Durchforstung', gruppe: 'holzernte', info: 'Ohne GPS-Raster dokumentieren', fields: [['verfahren', 'Verfahren', ['motormanuell', 'Harvester', 'Harvester und motormanuell', 'Seilkran', 'Rückepferd']], ['species', 'Hauptbaumart', 'species'], ['baeume', 'Anzahl entnommener Bäume', 'number'], ['menge', 'Entnahmemenge (Fm)', 'decimal'], ['area', 'Fläche (ha)', 'decimal']] },
-  polter:       { label: 'Poltervermessung', gruppe: 'holzernte', info: 'Schritt für Schritt nach RVR: Messverfahren, Sortiment, Volumen', fields: [['polterNr', 'Polter-Nr.', 'text'], ['species', 'Baumart', 'species'], ['sortiment', 'Sortiment', 'text'], ['verfahren', 'Messverfahren', 'text'], ['laenge', 'Poltertiefe/Bestelllänge (m)', 'text'], ['uebermass', 'Zugabe/Übermaß (m)', 'text'], ['rindenabzug', 'Rindenabzug', 'text'], ['stueck', 'Anzahl Stämme', 'text'], ['stirnflaechen', 'Stirnflächen gezählt (Foto)', 'text'], ['unterlagen', 'Unterlagen im Los (Rm m.R.)', 'text'], ['rm', 'Raummaß netto (Rm m.R.)', 'text'], ['red', 'Reduktionsfaktor', 'text'], ['faktor', 'Umrechnungsfaktor', 'text'], ['fm', 'Holzmenge (Fm o.R.)', 'text'], ['pos', 'Standort des Polters', 'text']] },
+  polter:       { label: 'Holzvermessung', gruppe: 'holzernte', info: 'Schritt für Schritt nach RVR (6. Aufl. 2024): Messverfahren, Sortiment, Menge in Rm oder Fm', fields: [['polterNr', 'Polter-Nr.', 'text'], ['species', 'Baumart', 'species'], ['sortiment', 'Sortiment', 'text'], ['verfahren', 'Messverfahren', 'text'], ['laenge', 'Poltertiefe/Bestelllänge (m)', 'text'], ['uebermass', 'Zugabe/Übermaß (m)', 'text'], ['rindenabzug', 'Rindenabzug', 'text'], ['stueck', 'Anzahl Stämme', 'text'], ['stirnflaechen', 'Stirnflächen gezählt (Foto)', 'text'], ['unterlagen', 'Unterlagen im Los (Rm m.R.)', 'text'], ['rm', 'Raummaß (Rm m.R.)', 'text'], ['red', 'Reduktionsfaktor', 'text'], ['faktor', 'Umrechnungsfaktor', 'text'], ['fm', 'Festmaß (Fm o.R.)', 'text'], ['pos', 'Standort des Polters', 'text']] },
   schaden:      { label: 'Schadensmeldung', info: 'Käfer, Windwurf, Bruch – mit GPS, Foto und Meldung an die FBG', fields: [['schaden', 'Schaden', 'text'], ['species', 'Baumart', 'text'], ['menge', 'Menge grob (Fm)', 'text'], ['baeume', 'Anzahl Bäume', 'text'], ['gps', 'GPS', 'text'], ['gemeldet', 'An FBG gemeldet am', 'text']] },
   holzverkauf:  { label: 'Holz verkaufen', gruppe: 'holzernte', info: 'Anfrage an die FBG mit Fläche, Baumart und Menge', fields: [['species', 'Baumart', 'text'], ['menge', 'Menge geschätzt (Fm)', 'text'], ['zustand', 'Zustand', 'text'], ['wann', 'Zeitraum', 'text'], ['gemeldet', 'Angefragt am', 'text']] },
   verkehrssicherung: { label: 'Verkehrssicherung', fields: [] },
@@ -351,9 +351,9 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null } = {}) {
     return;
   }
 
-  // Seite 1: Art der Maßnahme. Gruppen: Holzernte (Durchforstung mit GPS, Durchforstung, Poltervermessung) und Wildschutz (Zaunbau, Einzelschutz)
+  // Seite 1: Art der Maßnahme. Gruppen: Holzernte (Durchforstung mit GPS, Durchforstung, Holzvermessung) und Wildschutz (Zaunbau, Einzelschutz)
   const GRUPPEN = {
-    holzernte: { label: 'Holzernte', info: 'Durchforstung mit GPS, Durchforstung, Poltervermessung, Holz verkaufen', frage: 'Welche Holzernte?' },
+    holzernte: { label: 'Holzernte', info: 'Durchforstung mit GPS, Durchforstung, Holzvermessung, Holz verkaufen', frage: 'Welche Holzernte?' },
     wildschutz: { label: 'Wildschutz', info: 'Zaunbau, Einzelschutz', frage: 'Welcher Wildschutz?' },
   };
   neueSeite('Neue Maßnahme', h('div', { class: 'new-measure' },

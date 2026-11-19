@@ -1,3 +1,4 @@
+import { amtlichUebernehmen } from '../data/source.js';
 // Durchforstungs-Workflow: Bestandsauswahl → Angaben → Raster → Navigation im Bestand.
 /* global L */
 import { h, fill, icon, dialog, confirmDialog, toast } from '../ui.js';
@@ -79,7 +80,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
     const fresh = await parcelExact(p);
     if (fresh === p || st.sel?.parcelId !== id) return;
     byId[id] = fresh;
-    store.update((s) => { const i = s.parcels.findIndex((x) => x.id === id); if (i >= 0) s.parcels[i] = { ...s.parcels[i], ...fresh, category: s.parcels[i].category, addedAt: s.parcels[i].addedAt }; });
+    store.update((s) => { const x = s.parcels.find((y) => y.id === id); if (x) amtlichUebernehmen(x, p, fresh); });
     if (st.step <= 1 && !st.plan) { st.sel = selFromParcel(fresh); st.auto = null; if (st.step === 0) renderSelect(); else renderParams(); }
   }
   function parcelCard() {

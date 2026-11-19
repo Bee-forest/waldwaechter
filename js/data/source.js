@@ -100,3 +100,10 @@ export const source = {
 
   async allRescuePoints() { return demoOn() ? rescuePoints : []; },
 };
+
+/** Nachgeladene amtliche Daten in ein gespeichertes Flurstück übernehmen – nur Felder, die der Abruf
+ *  tatsächlich geändert hat. Ordner, Nutzungsart usw., die inzwischen geändert wurden, bleiben erhalten. */
+export function amtlichUebernehmen(ziel, alt, neu) {
+  for (const [k, v] of Object.entries(neu)) if (k !== 'ordnerId' && k !== 'category' && k !== 'addedAt' && v !== alt[k]) ziel[k] = v;
+  return ziel;
+}

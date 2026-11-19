@@ -324,6 +324,14 @@ export function ordnerBeobachten() {
   };
   store.subscribe(pruefe);
   pruefe();
+  // einmalig: Flurstücke, die wegen eines früheren Fehlers mit Waldbesitzer bei den eigenen Flächen
+  // gelandet sind, in den Ordner ihres Waldbesitzers legen
+  const st = store.get();
+  if (istProfi() && !st.settings.ordnerReparatur1 && st.parcels.some((p) => !p.ordnerId && etName(eigentuemerVon(p)))) {
+    const r = ordnerAusEigentuemern();
+    if (r.zugeordnet) setTimeout(() => toast(`${r.zugeordnet} Flurstücke in die Ordner ihrer Waldbesitzer einsortiert`), 1500);
+  }
+  if (!st.settings.ordnerReparatur1) store.update((x) => { x.settings.ordnerReparatur1 = true; });
 }
 
 export function ordnerWaehlen(id) {

@@ -12,6 +12,7 @@ import { startTour, say } from './mascot.js';
 import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.js';
 import { buzz } from './thinning/feedback.js';
 import * as erinnerung from './erinnerung.js';
+import { amtlichUebernehmen } from './data/source.js';
 import { passtFlurstueck, ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen, eigentuemerExcel, flaechenAusEigentuemern, etDateien, etDateiEntfernen, etDateiAnzahl } from './profi.js';
 
 export async function openProfile() {
@@ -25,7 +26,7 @@ export async function openProfile() {
       const p = byId[sp.id];
       if (!p || p.source !== 'alkis' || (p.flaecheAmtlich && p.polys)) continue;
       const fresh = await parcelExact(p).catch(() => p);
-      if (fresh && fresh !== p) { byId[sp.id] = fresh; changed = true; store.update((s) => { const i = s.parcels.findIndex((x) => x.id === sp.id); if (i >= 0) s.parcels[i] = { ...s.parcels[i], ...fresh, category: s.parcels[i].category, addedAt: s.parcels[i].addedAt }; }); }
+      if (fresh && fresh !== p) { byId[sp.id] = fresh; changed = true; store.update((s) => { const x = s.parcels.find((y) => y.id === sp.id); if (x) amtlichUebernehmen(x, p, fresh); }); }
     }
     if (changed) render();
   })();

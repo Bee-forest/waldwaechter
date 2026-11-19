@@ -41,6 +41,32 @@ export function etDateiEntfernen(id) {
   sichern();
   dateienSichern(etDateien().filter((d) => d.id !== id && d.id !== '__alt'));
 }
+/** Was beim Entfernen von Tabellen (null = alle) mit wegfällt: Ordner der Waldbesitzer, die nur in
+ *  diesen Tabellen stehen, deren Flurstücke sowie Maßnahmen und Buchungen in diesen Ordnern */
+export function tabellenFolgen(dateiIds = null) {
+  const betroffen = (e) => !dateiIds || dateiIds.some((id) => gehoertZu(e, id));
+  const namen = new Set(), andere = new Set();
+  for (const e of Object.values(laden())) { const n = etName(e).toLowerCase(); if (n) (betroffen(e) ? namen : andere).add(n); }
+  const sammel = new Set(etDateien().filter((d) => !dateiIds || dateiIds.includes(d.id)).map((d) => `ohne waldbesitzer (${d.name})`.toLowerCase()));
+  const ordner = ordnerListe().filter((o) => { const n = o.name.toLowerCase(); return (namen.has(n) && !andere.has(n)) || sammel.has(n) || (!dateiIds && n.startsWith('ohne waldbesitzer')); });
+  const ids = new Set(ordner.map((o) => o.id));
+  const s = store.get();
+  const flaechen = s.parcels.filter((p) => ids.has(p.ordnerId));
+  const massnahmen = (s.measures || []).filter((m) => ids.has(ordnerVon(m)));
+  const buchungen = (s.finanzen?.buchungen || []).filter((b) => ids.has(ordnerVon(b)));
+  return { ordner, flaechen, massnahmen, buchungen };
+}
+/** Ordner (mit Flurstücken, Maßnahmen und Buchungen) aus tabellenFolgen() löschen */
+export function ordnerMitInhaltLoeschen(f) {
+  const ids = new Set(f.ordner.map((o) => o.id)), fl = new Set(f.flaechen.map((p) => p.id)), ms = new Set(f.massnahmen.map((m) => m.id)), bs = new Set(f.buchungen.map((b) => b.id));
+  store.update((st) => {
+    st.ordner = (st.ordner || []).filter((o) => !ids.has(o.id));
+    st.parcels = st.parcels.filter((p) => !fl.has(p.id));
+    st.measures = (st.measures || []).filter((m) => !ms.has(m.id));
+    if (st.finanzen?.buchungen) st.finanzen.buchungen = st.finanzen.buchungen.filter((b) => !bs.has(b.id));
+    if (ids.has(st.settings.ordnerAktiv)) st.settings.ordnerAktiv = 'eigen';
+  });
+}
 let bekannteIds = null;
 const ids = () => (bekannteIds ||= new Set((() => { try { return JSON.parse(localStorage.getItem(DATEI_KEY) || '[]'); } catch { return []; } })().map((d) => d.id)));
 const gehoertZu = (e, id) => (id === '__alt' ? !e.datei || !ids().has(e.datei) : e.datei === id);

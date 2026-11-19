@@ -13,7 +13,7 @@ import { applyTheme, installApp, canInstall, isIOS, isStandalone } from './app.j
 import { buzz } from './thinning/feedback.js';
 import * as erinnerung from './erinnerung.js';
 import { amtlichUebernehmen } from './data/source.js';
-import { passtFlurstueck, ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen, eigentuemerExcel, flaechenAusEigentuemern, etDateien, etDateiEntfernen, etDateiAnzahl } from './profi.js';
+import { passtFlurstueck, ordnerName, istProfi, eigentuemerImport, eigentuemerAnzahl, eigentuemerAlleLoeschen, eigentuemerExcel, flaechenAusEigentuemern, etDateien, etDateiEntfernen, etDateiAnzahl, tabellenFolgen, ordnerMitInhaltLoeschen } from './profi.js';
 
 export async function openProfile() {
   const all = await source.allParcels();
@@ -155,6 +155,22 @@ export async function openProfile() {
         h('ul', { class: 'mat-kurz et-nicht' }, r.eigene.slice(0, 80).map((t) => h('li', {}, t))), r.eigene.length > 80 ? h('p', { class: 'muted' }, `… und ${r.eigene.length - 80} weitere.`) : null) : null),
       actions: [{ label: 'OK', value: true, primary: true }] });
   }
+  /** Tabelle(n) löschen – mit den Ordnern ihrer Waldbesitzer und deren Flurstücken */
+  async function tabelleLoeschen(ids, titel, text) {
+    const f = tabellenFolgen(ids);
+    const mitInhalt = f.massnahmen.length || f.buchungen.length;
+    const v = await dialog({ title: titel, body: h('div', { class: 'form' },
+      h('p', {}, text),
+      f.ordner.length ? h('p', {}, `Dazu gehören ${f.ordner.length} Ordner mit ${f.flaechen.length} Flurstücken – sie werden mitgelöscht.`) : null,
+      mitInhalt ? h('p', { class: 'warn-line' }, `In diesen Ordnern sind ${[f.massnahmen.length ? `${f.massnahmen.length} Maßnahmen` : '', f.buchungen.length ? `${f.buchungen.length} Buchungen` : ''].filter(Boolean).join(' und ')} eingetragen. Sie werden ebenfalls gelöscht. Wer sie behalten will, exportiert vorher den Waldbericht oder die Finanzen.`) : null,
+      h('p', { class: 'muted' }, 'Das lässt sich nicht rückgängig machen.')),
+      actions: [{ label: 'Abbrechen', value: null }, f.ordner.length ? { label: 'Nur Tabelle', value: 'tabelle' } : null, { label: f.ordner.length ? 'Alles löschen' : 'Löschen', value: 'alles', danger: true }].filter(Boolean) });
+    if (!v) return;
+    if (v === 'alles' && f.ordner.length) ordnerMitInhaltLoeschen(f);
+    if (ids) ids.forEach(etDateiEntfernen); else eigentuemerAlleLoeschen();
+    render();
+    toast(v === 'alles' && f.ordner.length ? `Tabelle, ${f.ordner.length} Ordner und ${f.flaechen.length} Flurstücke gelöscht` : 'Tabelle gelöscht');
+  }
   const excelSpeichern = async (leer, dateiId = null, name = '') => {
     const blob = await eigentuemerExcel({ leer, dateiId });
     const a = document.createElement('a');
@@ -203,7 +219,7 @@ export async function openProfile() {
           h('div', { class: 'btn-row' },
             h('button', { class: 'btn btn-small', onclick: () => sortiereNachWaldbesitzer(d.id) }, d.gefunden != null ? 'Erneut einsortieren' : 'Flurstücke einsortieren'),
             h('button', { class: 'btn btn-small', onclick: () => excelSpeichern(false, d.id, d.name) }, 'Als Excel'),
-            h('button', { class: 'link-btn', onclick: async () => { if (await confirmDialog(`Tabelle „${d.name}“ entfernen?`, { ok: 'Entfernen', danger: true, body: `${etDateiAnzahl(d.id)} Eigentümereinträge dieser Tabelle werden gelöscht. Flächen und Ordner bleiben erhalten.` })) { etDateiEntfernen(d.id); render(); } } }, 'entfernen'))))) : null,
+            h('button', { class: 'link-btn', onclick: () => tabelleLoeschen([d.id], `Tabelle „${d.name}“ entfernen?`, `${etDateiAnzahl(d.id)} Eigentümereinträge dieser Tabelle werden gelöscht.`) }, 'entfernen'))))) : null,
         h('label', { class: 'btn btn-primary' }, h('span', { html: icon.plus }), etDateien().length ? 'Weitere Excel-Tabelle hochladen' : 'Excel-Tabelle hochladen (.xlsx)', eingabe),
         h('p', { class: 'hint' }, 'Spalten: Gemarkung · Flur · Flurstück · Waldbesitzer · Straße · Hausnummer · PLZ · Ort · Telefon · E-Mail. Pflicht sind nur Gemarkung, Flur und Flurstück – alles andere darf leer bleiben und kann später in der App ergänzt werden. Mit Kopfzeile ist die Reihenfolge egal; Vorname und Nachname in getrennten Spalten gehen auch. Gleiche Flurstücke werden aktualisiert.'),
         h('div', { class: 'btn-row' },
@@ -212,7 +228,7 @@ export async function openProfile() {
         n ? h('p', { class: 'hint' }, '„Als Excel“ bzw. „Alle als Excel speichern“ enthält die Einträge mit den Ergänzungen aus der App – damit ersetzt du deine Excel-Datei.') : null,
         n ? h('button', { class: 'btn', onclick: () => sortiereNachWaldbesitzer() }, 'Alle Flurstücke nach Waldbesitzer in Ordner sortieren') : null,
         h('p', { class: 'hint' }, 'Eigentümerdaten sind personenbezogen: Sie bleiben nur auf diesem Gerät und sind nicht in „Daten sichern“ enthalten.'),
-        n ? h('button', { class: 'btn btn-danger-ghost', onclick: async () => { if (await confirmDialog('Alle Eigentümerdaten löschen?', { ok: 'Löschen', danger: true, body: `${n} Einträge werden von diesem Gerät entfernt.` })) { eigentuemerAlleLoeschen(); render(); toast('Eigentümerdaten gelöscht'); } } }, 'Alle Eigentümerdaten löschen') : null) : null);
+        n ? h('button', { class: 'btn btn-danger-ghost', onclick: () => tabelleLoeschen(null, 'Alle Eigentümerdaten löschen?', `${n} Einträge werden von diesem Gerät entfernt.`) }, 'Alle Eigentümerdaten löschen') : null) : null);
   }
 
   /** Erinnerungen an anstehende Maßnahmen */

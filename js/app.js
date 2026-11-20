@@ -59,6 +59,11 @@ function show(key) {
 }
 window.addEventListener('ww:navigate', (e) => show(e.detail));
 window.addEventListener('hashchange', () => show(location.hash.replace('#/', '')));
+// Gerät gedreht: Karten neu vermessen. Manche Geräte melden die neue Größe erst verzögert, daher zweimal.
+const nachDrehen = () => { invalidateMap(); window.dispatchEvent(new Event('resize')); };
+const drehen = () => { setTimeout(nachDrehen, 150); setTimeout(nachDrehen, 600); };
+screen.orientation?.addEventListener?.('change', drehen);
+window.addEventListener('orientationchange', drehen);
 
 async function main() {
   applyTheme();

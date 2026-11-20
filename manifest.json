@@ -12,7 +12,7 @@
     "standalone",
     "minimal-ui"
   ],
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#EEF2EC",
   "theme_color": "#EEF2EC",
   "categories": [

@@ -55,8 +55,8 @@ export function miniKarte(el, parcel, { zoom = 17, hell = false } = {}) {
  * Auswahl für das Formular „Neue Maßnahme“: ganzes Flurstück oder Teilfläche einzeichnen.
  * Gibt { el, wert() } zurück; wert() liefert { modus, ring?, ha } oder null, wenn die Zeichnung unvollständig ist.
  */
-export function flaechenWahl(parcel) {
-  let modus = 'ganz', draft = [], karte = null, umlauf = null;
+export function flaechenWahl(parcel, start = null) {
+  let modus = start?.length >= 3 ? 'teil' : 'ganz', draft = start?.length >= 3 ? start.map((x) => [...x]) : [], karte = null, umlauf = null;
   const umlaufHost = h('div');
   const host = h('div', { class: 'flaeche-wahl' });
   const status = h('p', { class: 'draw-status', 'aria-live': 'polite' });

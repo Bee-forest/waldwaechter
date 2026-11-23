@@ -1,4 +1,5 @@
 // Flurstückhistorie: alle eigenen Flurstücke und je Flurstück alle Maßnahmen (Vollzug) mit Fläche und Angaben.
+import { openProtokoll, protokollKurz, openMassnahmeBearbeiten } from './massnahme-protokoll.js';
 import { h, fill, icon, openPage, fmtDate, toast } from './ui.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
@@ -166,6 +167,7 @@ function openDetail(p, T, { fotopunkt = null } = {}) {
       z('Kontrollen erledigt', done.length ? done.map(([k, ts]) => `${k.startsWith('winter') ? 'unbelaubt' : 'belaubt'} ${k.split('-').slice(1).join('/')}: ${fmtDate(ts)}`).join('; ') : 'noch keine');
     }
     if (m.note) z('Notiz', m.note);
+    if (m.protokoll) z('Abschlussprotokoll', protokollKurz(m.protokoll) + (m.protokoll.auffaellig ? ` – ${m.protokoll.auffaellig}` : ''));
     const kostenIn = h('input', { type: 'number', inputmode: 'decimal', min: 0, step: '0.01', value: m.kosten ?? '', placeholder: '0,00',
       onchange: (e) => { const v = e.target.value === '' ? null : Number(e.target.value); store.update((s) => { const x = s.measures.find((y) => y.id === m.id); if (x) x.kosten = v; }); toast('Kosten gespeichert'); } });
     return h('div', { class: 'hm-details' },
@@ -173,6 +175,8 @@ function openDetail(p, T, { fotopunkt = null } = {}) {
       h('label', { class: 'kosten-feld' }, 'Kosten (€)', kostenIn),
       h('div', { class: 'measure-actions' },
         m.type === 'durchforstung' ? h('button', { class: 'btn', onclick: () => { page.close(); openThinningWizard({ measureId: m.id }); } }, m.status === 'fertig' ? 'Durchforstung ansehen' : 'Durchforstung öffnen') : null,
+        m.status === 'fertig' && !m.serie ? h('button', { class: 'btn', onclick: () => openProtokoll(m.id) }, m.protokoll ? 'Protokoll ansehen' : 'Protokoll ausfüllen') : null,
+        m.status !== 'fertig' && m.type !== 'durchforstung' ? h('button', { class: 'btn', onclick: () => openMassnahmeBearbeiten(m.id) }, 'Bearbeiten') : null,
         h('button', { class: 'btn', onclick: () => openVerlauf(m.id) }, m.anhaenge?.length ? `Verlauf · ${m.anhaenge.length} Anhang${m.anhaenge.length > 1 ? 'e' : ''}` : 'Verlauf'),
         m.anhaenge?.some((a) => a.typ === 'pflanzplan') ? h('button', { class: 'btn', onclick: () => anhangOeffnen(m.id, [...m.anhaenge].reverse().find((a) => a.typ === 'pflanzplan')) }, 'Pflanzplan (PDF)') : null));
   }

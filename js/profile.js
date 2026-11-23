@@ -1,4 +1,5 @@
 // Profil: Flächenübersicht, persönliche Flurstücksliste, Konto, FBG, Einstellungen.
+import { unternehmerUebersicht } from './massnahme-protokoll.js';
 import { h, fill, icon, openPage, confirmDialog, toast, dialog } from './ui.js';
 import { zieleAbfrage, zieleText } from './empfehlung.js';
 import { exportKarte } from './berichte.js';
@@ -81,6 +82,16 @@ export async function openProfile() {
       ),
 
       profiKarte(),
+      (() => {
+        const u = unternehmerUebersicht();
+        return u.length ? h('section', { class: 'card' },
+          h('h2', {}, 'Unternehmer-Bewertungen'),
+          h('p', { class: 'hint' }, 'Aus den Abschlussprotokollen deiner erledigten Maßnahmen.'),
+          h('ul', { class: 'unternehmer-liste' }, u.map((e) => h('li', {},
+            h('strong', {}, e.name),
+            h('span', { class: 'sterne-text' }, e.schnitt ? `${'★'.repeat(Math.round(e.schnitt))}${'☆'.repeat(5 - Math.round(e.schnitt))} ${e.schnitt.toLocaleString('de-DE', { maximumFractionDigits: 1 })}` : 'ohne Sterne'),
+            h('small', { class: 'muted' }, [`${e.n} ${e.n === 1 ? 'Maßnahme' : 'Maßnahmen'}`, e.schaeden ? `${e.schaeden}× erhebliche Schäden` : '', e.nein ? `${e.nein}× „nicht wieder“` : ''].filter(Boolean).join(' · ')))))) : null;
+      })(),
 
       h('section', { class: 'card' },
         h('h2', {}, 'Kontodaten'),

@@ -1496,3 +1496,16 @@ input[type="date"], input[type="time"], input[type="month"] { width: 100%; }
   .wz-menue { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .map-wrap { height: min(70dvh, 760px); }
 }
+/* Abschlussprotokoll */
+.bewertung { display: grid; gap: 6px; }
+.bew-zeile { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.bew-zeile > span:first-child { flex: 1 1 140px; min-width: 0; font-weight: 600; }
+.sterne { display: inline-flex; gap: 2px; }
+.sterne button { width: 38px; height: 38px; border: 0; background: none; font-size: 26px; line-height: 1; color: #C9CFC6; cursor: pointer; padding: 0; }
+.sterne button.an { color: #E0A100; }
+.sterne-text { color: #C88F00; letter-spacing: 1px; }
+.protokoll-aktionen { margin-top: 8px; }
+.protokoll-aktionen .btn-primary { flex: 1; }
+.unternehmer-liste { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.unternehmer-liste li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.unternehmer-liste li small { grid-column: 1 / -1; }

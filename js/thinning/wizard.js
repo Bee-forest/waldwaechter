@@ -1221,6 +1221,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         ),
       ),
       naechsterEingriffButton(),
+      h('button', { class: 'btn btn-block', onclick: () => import('../massnahme-protokoll.js').then((x) => x.openProtokoll(st.measureId)) }, 'Abschlussprotokoll: Schäden und Unternehmer'),
       h('button', { class: 'btn btn-primary btn-block', onclick: close }, 'Zur Maßnahmenübersicht'),
     );
   }
@@ -1601,6 +1602,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
         h('button', { class: 'btn', onclick: async () => herunterladen(await protokollPdf(), protokollName('pdf'), { titel: 'Durchforstungsprotokoll' }) }, 'Protokoll als PDF'),
         h('button', { class: 'btn', onclick: () => herunterladen(new Blob(['﻿' + protokollCsv()], { type: 'text/csv;charset=utf-8' }), protokollName('csv')) }, 'Protokoll als CSV')),
       naechsterEingriffButton(),
+      h('button', { class: 'btn btn-block', onclick: () => import('../massnahme-protokoll.js').then((x) => x.openProtokoll(st.measureId)) }, 'Abschlussprotokoll: Schäden und Unternehmer'),
       h('button', { class: 'btn btn-primary btn-block', onclick: close }, 'Zur Maßnahmenübersicht'),
     );
   }

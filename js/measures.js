@@ -23,6 +23,7 @@ import { openPflanzPlanung } from './pflanzung.js';
 import { FOERDER, fragFoerderung, weiterZumAntrag, openFoerderantrag, antragFuer } from './foerderung.js';
 import { kopfInhalt } from './home.js';
 import { passtEintrag, passtFlurstueck } from './profi.js';
+import { openMassnahmeBearbeiten, openProtokoll, protokollKurz } from './massnahme-protokoll.js';
 
 export const MEASURE_TYPES = {
   pflanzung:    { label: 'Pflanzung', info: 'Pflanzfläche planen, Baumarten verteilen, Pflanzenzahl und Kosten', fields: [['species', 'Baumart', 'species'], ['count', 'Anzahl Pflanzen', 'number'], ['area', 'Fläche (ha)', 'decimal'], ['verband', 'Pflanzverband (z. B. 2 × 1 m)', 'text']] },
@@ -199,7 +200,9 @@ function kalender(list, byId) {
           h('span', { class: 'cal-date' }, e.date.toLocaleDateString('de-DE', { weekday: ansicht === 'monat' ? undefined : 'short', day: '2-digit', month: '2-digit' })),
           h('span', { class: 'cal-text' }, h('strong', {}, e.m.type === 'verkehrssicherung' ? `Verkehrssicherung: ${e.label}` : e.label), h('small', {}, wo(e.m, byId))),
           e.m.serie && !e.done ? h('button', { class: 'btn btn-small', onclick: () => { store.update((s) => { const x = s.measures.find((y) => y.id === e.m.id); x.erledigt = { ...(x.erledigt || {}), [e.key]: Date.now() }; }); toast('Kontrolle als erledigt vermerkt'); } }, 'Erledigt') : null,
-          e.done ? h('span', { class: 'badge badge-fertig' }, 'Erledigt') : null))
+          e.done && !e.m.serie && e.m.type !== 'schaden' ? h('button', { class: `btn btn-small ${e.m.protokoll ? '' : 'btn-primary'}`, title: 'Abschlussprotokoll', onclick: () => openProtokoll(e.m.id) }, e.m.protokoll ? 'Protokoll' : 'Protokoll ausfüllen') : null,
+          e.done && (e.m.serie || e.m.type === 'schaden') ? h('span', { class: 'badge badge-fertig' }, 'Erledigt') : null,
+          !e.done && !e.m.serie && e.m.type !== 'durchforstung' ? h('button', { class: 'icon-btn', 'aria-label': 'Bearbeiten', title: 'Bearbeiten', html: icon.edit, onclick: () => openMassnahmeBearbeiten(e.m.id) }) : null))
       : h('li', { class: 'muted' }, tagWahl ? 'An diesem Tag ist nichts geplant.' : leer)),
   );
 }
@@ -284,6 +287,7 @@ function measureCard(m, byId) {
     m.kosten ? h('p', { class: 'measure-details' }, `Kosten: ${Number(m.kosten).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`) : null,
     m.thinning?.plan ? h('p', { class: 'measure-details' }, `${m.thinning.plan.eingriffe?.anzahl > 1 ? `Eingriff ${m.thinning.plan.eingriffe.nr} von ${m.thinning.plan.eingriffe.anzahl}, ` : ''}${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.methode === 'f4' ? `${fmtM3(m.thinning.plan.planung?.mengeHa)} m³/ha = ${fmtM3(m.thinning.plan.planung?.budget)} m³ Menge${m.thinning.f4 ? `, ${fmtM3(m.thinning.f4.gezaehlt)} m³ gezählt` : ''}` : `${m.thinning.plan.total} Bäume Entnahme geplant`}`) : null,
     m.note ? h('p', { class: 'measure-note' }, m.note) : null,
+    m.protokoll ? h('p', { class: `measure-details ${m.protokoll.schadenStufe === 'erheblich' ? 'warn-line' : ''}` }, `Protokoll: ${protokollKurz(m.protokoll)}`) : null,
     progress,
     m.type === 'durchforstung' && m.thinning?.natura2000?.length && m.date && inBrutzeit(m.date, schutzzeitVon(m)) && !m.anhaenge?.some((a) => a.typ === 'vertraeglichkeit')
       ? h('p', { class: 'warn-line' }, `Termin in der Brut- und Setzzeit (${schutzzeitText(schutzzeitVon(m))}, Schutzgebiet) – verschieben oder Verträglichkeits-Vorprüfung ausfüllen.`) : null,
@@ -291,9 +295,12 @@ function measureCard(m, byId) {
       action,
       m.type === 'schaden' ? h('button', { class: 'btn btn-voll', onclick: () => import('./schaden.js').then((x) => x.schadenMelden(m.id)) }, m.schaden?.gemeldet ? 'Erneut an FBG melden' : 'An FBG melden') : null,
       m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn btn-status', title: m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren', onclick: () => {
-        store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = x.status === 'geplant' ? 'arbeit' : 'fertig'; if (x.status === 'fertig') x.finishedAt = Date.now(); });
+        if (m.status === 'geplant') store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = 'arbeit'; });
+        else openProtokoll(m.id, { abschliessen: true }); // Erledigt: gleich das Abschlussprotokoll anbieten
       } }, h('span', { html: m.status === 'geplant' ? icon.play : icon.checkmark }), m.status === 'geplant' ? 'Begonnen' : 'Erledigt') : null,
+      m.status === 'fertig' && !m.serie && m.type !== 'schaden' ? h('button', { class: 'btn btn-voll', onclick: () => openProtokoll(m.id) }, m.protokoll ? 'Protokoll ansehen' : 'Protokoll ausfüllen') : null,
       h('span', { class: 'measure-icons' },
+        m.status !== 'fertig' && m.type !== 'durchforstung' ? knopf(icon.edit, 0, 'Bearbeiten', () => openMassnahmeBearbeiten(m.id)) : null,
         knopf(icon.camera, fotoAnzahl(`m:${m.id}`), 'Fotos', () => openFotos(`m:${m.id}`, `${MEASURE_TYPES[m.type]?.label || 'Maßnahme'} · ${where}`)),
         knopf(icon.history, m.anhaenge?.length || 0, 'Verlauf und Anhänge', () => openVerlauf(m.id)),
         knopf(icon.auftrag, 0, 'Auftrag an Dienstleister (PDF)', () => import('./berichte.js').then((x) => x.unternehmerAuftrag(m.id)).catch(() => toast('Auftrag konnte nicht erstellt werden.'))),

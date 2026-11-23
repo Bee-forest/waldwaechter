@@ -31,14 +31,16 @@ const GEBIETS_ART = {
 };
 
 /** FFH-, Vogelschutz- und Naturschutzgebiete, die eine Fläche berühren – Stichprobe über die Fläche, live */
-export async function natura2000InFlaeche(sel, { layers = ['ffh_geb', 'spa', 'nsg'] } = {}) {
+export async function natura2000InFlaeche(sel, { layers = ['ffh_geb', 'spa', 'nsg'], meldeErreichbar = null } = {}) {
   const polys = polysOf(sel);
   const pts = [centroid(sel.ring), ...generateGrid(sel.ring, 60, { polys }).filter((_, i) => i % 2 === 0).slice(0, 8)];
   const found = new Map();
+  let ok = 0;
   await Promise.all(layers.flatMap((layer) => pts.map(async (pt) => {
     try {
       const res = await fetch(gfiUrl(SCHUTZ, layer, pt), { mode: 'cors' });
       if (!res.ok) return;
+      ok++;
       for (const f of parseFeatures(await res.text())) {
         const name = umlaut(f.siteName || f.name || f.NAME || '');
         const key = `${layer}|${name || f.localId || ''}`;
@@ -46,8 +48,24 @@ export async function natura2000InFlaeche(sel, { layers = ['ffh_geb', 'spa', 'ns
       }
     } catch { /* Punkt nicht abfragbar */ }
   })));
+  meldeErreichbar?.(ok > 0);
   return [...found.values()];
 }
+
+// ---------- Schutzgebiete für alle Maßnahmen ----------
+export const ALLE_SCHUTZ = ['ffh_geb', 'spa', 'nsg', 'nationalpark', 'biosreserv', 'lsg', 'naturpark'];
+/** Alle Schutzgebiete auf einer Fläche (Natura 2000, NSG, LSG, Naturpark …) */
+export const schutzgebieteInFlaeche = (sel, o = {}) => natura2000InFlaeche(sel, { ...o, layers: ALLE_SCHUTZ });
+/** Gebiete, in denen ein Eingriff in der Brut- und Setzzeit eine Vorprüfung braucht */
+export const STRENG = ['ffh_geb', 'spa', 'nsg', 'nationalpark', 'biosreserv'];
+export const strengeGebiete = (g) => (g || []).filter((x) => STRENG.includes(x.layer));
+/** Maßnahmen, die in den Bestand eingreifen (Fällung, Pflege) */
+export const EINGRIFF = ['durchforstung', 'holzernte_df', 'pflege'];
+/** Schutzgebiete einer Maßnahme (GPS-Durchforstung: aus dem Assistenten, sonst aus der Hintergrundprüfung) */
+export const gebieteVon = (m) => m?.thinning?.natura2000 || m?.schutzgebiete || [];
+/** Braucht dieser Termin eine Verträglichkeits-Vorprüfung? */
+export const vorpruefungNoetig = (m, ts = m?.date) => EINGRIFF.includes(m?.type) && ts && strengeGebiete(gebieteVon(m)).length && inBrutzeit(ts, schutzzeitVon(m)) && !m.anhaenge?.some((a) => a.typ === 'vertraeglichkeit');
+export const gebieteText = (g) => g.map((x) => `${x.art} „${x.name || 'ohne Namen'}“`).join(', ');
 
 export function gebietsCode(props = {}) {
   for (const v of Object.values(props)) { const m = String(v).match(/\bDE[ _-]?(\d{4})[ _-]?(\d{3})\b/); if (m) return `DE${m[1]}${m[2]}`; }

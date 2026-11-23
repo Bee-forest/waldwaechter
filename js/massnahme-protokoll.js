@@ -58,6 +58,11 @@ export async function openMassnahmeBearbeiten(measureId) {
     });
     toast('Änderungen gespeichert');
     page.close();
+    // Termin jetzt in der Brut- und Setzzeit eines Schutzgebiets? Gleich nachfragen.
+    import('./schutzgebiete.js').then(async ({ vorpruefungNoetig }) => {
+      const neu = store.get().measures.find((y) => y.id === m.id);
+      if (neu && neu.date !== m.date && vorpruefungNoetig(neu)) (await import('./schutzpruefung.js')).brutzeitDialog(neu);
+    });
   } },
     h('p', { class: 'hint' }, `Gebucht am ${fmtDate(m.createdAt)}. Solange die Maßnahme nicht erledigt ist, kannst du alles ändern.`),
     h('label', {}, 'Fläche',

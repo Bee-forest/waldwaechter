@@ -5,7 +5,7 @@ import { openFotos, fotoAnzahl, fotosLoeschen } from './fotos.js';
 // Symbolknopf mit Zähler für die Maßnahmenkarte
 const knopf = (svg, n, label, onclick) => h('button', { type: 'button', class: 'icon-btn measure-icon', 'aria-label': n ? `${label} (${n})` : label, title: label, onclick },
   h('span', { html: svg }), n ? h('span', { class: 'zaehler' }, String(n)) : null);
-import { inBrutzeit, nachBrutzeit, schutzzeitVon, schutzzeitText, datumText } from './schutzgebiete.js';
+import { inBrutzeit, nachBrutzeit, schutzzeitVon, schutzzeitText, datumText, gebieteVon, strengeGebiete, vorpruefungNoetig, gebieteText, zeigeVerordnung, EINGRIFF } from './schutzgebiete.js';
 import { openVertraeglichkeit, openVerlauf, anhangOeffnen, protokoll } from './vertraeglichkeit.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
@@ -213,9 +213,9 @@ function datumFeld(m) {
     h('input', { type: 'date', value: m.date ? ymd(new Date(m.date)) : '', onchange: async (e) => {
       const v = e.target.value;
       let ts = v ? new Date(`${v}T09:00`).getTime() : null;
-      const natura = m.thinning?.natura2000 || [];
+      const natura = strengeGebiete(gebieteVon(m));
       const szm = schutzzeitVon(m);
-      if (ts && m.type === 'durchforstung' && natura.length && inBrutzeit(ts, szm) && !m.anhaenge?.some((a) => a.typ === 'vertraeglichkeit')) {
+      if (vorpruefungNoetig(m, ts)) {
         const w = await dialog({
           title: 'Termin in der Brut- und Setzzeit',
           body: h('div', {}, h('p', {}, `Die Fläche liegt im ${natura.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')}. Der Termin fällt in die Brut- und Setzzeit (${schutzzeitText(szm)}).`),
@@ -289,8 +289,10 @@ function measureCard(m, byId) {
     m.note ? h('p', { class: 'measure-note' }, m.note) : null,
     m.protokoll ? h('p', { class: `measure-details ${m.protokoll.schadenStufe === 'erheblich' ? 'warn-line' : ''}` }, `Protokoll: ${protokollKurz(m.protokoll)}`) : null,
     progress,
-    m.type === 'durchforstung' && m.thinning?.natura2000?.length && m.date && inBrutzeit(m.date, schutzzeitVon(m)) && !m.anhaenge?.some((a) => a.typ === 'vertraeglichkeit')
-      ? h('p', { class: 'warn-line' }, `Termin in der Brut- und Setzzeit (${schutzzeitText(schutzzeitVon(m))}, Schutzgebiet) – verschieben oder Verträglichkeits-Vorprüfung ausfüllen.`) : null,
+    gebieteVon(m).length ? h('p', { class: 'measure-details schutz-zeile' }, 'Schutzgebiet: ',
+      gebieteVon(m).map((g, i) => [i ? ', ' : '', h('button', { type: 'button', class: 'link-btn', onclick: () => zeigeVerordnung({ label: g.art, layer: g.layer, props: g.props || {}, text: '' }) }, `${g.art} „${g.name || 'ohne Namen'}“`)])) : null,
+    vorpruefungNoetig(m)
+      ? h('p', { class: 'warn-line' }, `Termin in der Brut- und Setzzeit (${schutzzeitText(schutzzeitVon(m))}, Schutzgebiet) – verschieben oder `, h('button', { type: 'button', class: 'link-btn', onclick: () => openVertraeglichkeit(m.id) }, 'Verträglichkeits-Vorprüfung ausfüllen'), '.') : null,
     h('div', { class: 'measure-actions' },
       action,
       m.type === 'schaden' ? h('button', { class: 'btn btn-voll', onclick: () => import('./schaden.js').then((x) => x.schadenMelden(m.id)) }, m.schaden?.gemeldet ? 'Erneut an FBG melden' : 'An FBG melden') : null,
@@ -387,7 +389,11 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
     const t = MEASURE_TYPES[type];
     const flHost = h('div', { class: 'flaeche-host' });
     let wahl = null;
-    const zeigeWahl = (id) => { wahl?.entferne(); wahl = null; flHost.replaceChildren(); if (id && byId[id]) { wahl = flaechenWahl(byId[id]); flHost.append(wahl.el); } };
+    const schutzHost = h('div');
+    const zeigeWahl = (id) => {
+      wahl?.entferne(); wahl = null; flHost.replaceChildren(); schutzHost.replaceChildren();
+      if (id && byId[id]) { wahl = flaechenWahl(byId[id]); flHost.append(wahl.el); import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(byId[id], { eingriff: EINGRIFF.includes(type) }))); }
+    };
     const form = h('form', { class: 'form', onsubmit: (e) => {
       e.preventDefault();
       const fd = new FormData(form);
@@ -413,7 +419,7 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
           h('option', { value: '' }, mine.length ? 'Fläche wählen' : 'Noch keine eigenen Flächen'),
           mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${CATEGORIES[p.category].label}, ${formatHa(amtlicheFlaecheHa(byId[p.id]))})`)),
         )),
-      flHost,
+      flHost, schutzHost,
       t.fields.map(([k, label, kind]) => h('label', {}, label,
         Array.isArray(kind) ? h('select', { name: k }, kind.map((o) => h('option', {}, o)))
           : kind === 'species' ? h('select', { name: k }, SPECIES.map((o) => h('option', {}, o)))

@@ -80,7 +80,8 @@ async function main() {
   views.home.hidden = false;
   await initHome(views.home);
   initMeasures(views.massnahmen);
-  ordnerBeobachten();
+  import('./schutzpruefung.js').then((x) => x.schutzpruefungStarten());
+ordnerBeobachten();
   initFinanzen(views.finanzen);
   initAktuelles(views.aktuelles);
   renderPlaceholder(views.ki, 'ki');

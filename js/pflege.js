@@ -202,6 +202,9 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
   const titel = (q) => ({ art: 'Welche Pflege?', flaeche: 'Wo wird gepflegt?', bestand: s.art === 'sicherung' ? 'Kultur und Bewuchs' : s.art === 'wertastung' ? 'Bäume und Ästungshöhe' : 'Bestand und Eingriff',
     ausfuehrung: 'Wer macht es?', foerderung: 'Förderung', termin: 'Termin und Notiz' })[q];
   const kulturHost = h('div');
+  const schutzHost = h('div');
+  let schutzFuer = null;
+  const schutzAkt = () => { const p = flst(); if (!p || schutzFuer === p.id) return; schutzFuer = p.id; import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(p, { eingriff: s.art !== 'wertastung' }))); };
   function kulturAuswahl() {
     const ks = s.art === 'sicherung' ? kulturen() : [];
     fill(kulturHost, ks.length ? h('div', {}, h('p', { class: 'sheet-label' }, 'Welche Pflanzung wird gepflegt?'),
@@ -210,12 +213,12 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
       h('small', { class: 'muted' }, 'Pflanzjahr und Pflanzfläche werden übernommen.')) : null);
   }
   const flaecheEl = h('div', { class: 'form' },
-    h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; s.kulturId = null; kulturAuswahl(); karteNeu(); navAkt(); } },
+    h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; s.kulturId = null; kulturAuswahl(); schutzAkt(); karteNeu(); navAkt(); } },
       h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
     h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Umfang der Fläche' },
       [[false, 'Ganzes Flurstück'], [true, 'Teilfläche einzeichnen']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.teil === k),
         onclick: (e) => { s.teil = k; e.currentTarget.parentElement.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-checked', String(i === (k ? 1 : 0)))); mapEl.classList.toggle('malt', k); zeichne(); navAkt(); } }, l))),
-    kulturHost, mapEl, status, umlaufHost, teilHost);
+    kulturHost, mapEl, status, umlaufHost, teilHost, schutzHost);
   let nextBtn = null;
   const kannWeiter = (q) => (q === 'art' ? !!s.art : q === 'flaeche' ? (!s.teil || s.pts.length >= 3) : true);
   function navAkt() { if (nextBtn) nextBtn.disabled = !kannWeiter(SCHRITTE[schritt]); }
@@ -307,7 +310,7 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
       h('div', { class: 'polter-inhalt' }, inhalt(q)),
       h('div', { class: 'q-nav' }, zurueck, nextBtn));
     if (q === 'flaeche') {
-      kulturAuswahl();
+      kulturAuswahl(); schutzAkt();
       flaecheEl.querySelectorAll('.segmented button').forEach((b, i) => b.setAttribute('aria-checked', String(i === (s.teil ? 1 : 0)))); mapEl.classList.toggle('malt', s.teil);
       if (!karte || karteVeraltet) { karteVeraltet = false; setTimeout(karteNeu, 0); }
       else setTimeout(() => karte.map.invalidateSize(), 0);

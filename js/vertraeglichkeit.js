@@ -85,12 +85,17 @@ export function openVertraeglichkeit(measureId, { anhangId = null, nurLesen = fa
 function vorbelegen(m, k) {
   const ymd = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const pl = m?.thinning?.plan;
-  const ffh = m?.thinning?.natura2000 || k.natura2000 || [];
+  const ffh = (m?.thinning?.natura2000 || m?.schutzgebiete || k.natura2000 || []).filter((g) => !['lsg', 'naturpark'].includes(g.layer));
+  const d = m?.details || {};
+  const p = store.get().parcels.find((x) => x.id === m?.parcelId);
+  const art = m?.type === 'pflege' ? (d.art || 'Pflege') : m?.type === 'holzernte_df' ? 'Durchforstung' : 'Durchforstung';
   return {
-    massnahme: pl?.eingriffe?.anzahl > 1 ? `Durchforstung, Eingriff ${pl.eingriffe.nr} von ${pl.eingriffe.anzahl}` : 'Durchforstung',
-    flaeche: m?.thinning?.label || '', ha: pl ? pl.areaHa.toFixed(2).replace('.', ',') : '',
+    massnahme: pl?.eingriffe?.anzahl > 1 ? `Durchforstung, Eingriff ${pl.eingriffe.nr} von ${pl.eingriffe.anzahl}` : art,
+    flaeche: m?.thinning?.label || (p ? `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}` : ''),
+    ha: pl ? pl.areaHa.toFixed(2).replace('.', ',') : m?.flaeche?.ha ? m.flaeche.ha.toFixed(2).replace('.', ',') : d.area || '',
+    technik: d.verfahren || '',
     von: ymd(m?.date || Date.now()), bis: '',
-    entnahme: pl?.methode === 'f4' ? `höchstens ${Math.round((pl.planung?.mengeHa || 0) * 10) / 10} m³/ha in diesem Eingriff (Obergrenze 50 m³/ha), einzelstammweise an zufällig gelegten Rasterpunkten` : pl ? `ca. ${Math.round(pl.eingriffe?.vEingriff || 0)} Fm/ha, ${pl.total} Bäume (${pl.regel} je Rasterpunkt)` : '',
+    entnahme: !pl && (d.menge || d.baeume) ? [d.menge ? `ca. ${d.menge} Fm` : '', d.baeume ? `${d.baeume} Bäume` : ''].filter(Boolean).join(', ') : pl?.methode === 'f4' ? `höchstens ${Math.round((pl.planung?.mengeHa || 0) * 10) / 10} m³/ha in diesem Eingriff (Obergrenze 50 m³/ha), einzelstammweise an zufällig gelegten Rasterpunkten` : pl ? `ca. ${Math.round(pl.eingriffe?.vEingriff || 0)} Fm/ha, ${pl.total} Bäume (${pl.regel} je Rasterpunkt)` : '',
     gebiet: ffh.map((g) => `${g.art}: ${g.name}`).join('; '), gebietsnr: ffh.map((g) => g.code).filter(Boolean).join(', '),
     lrt: (m?.thinning?.lrt || k.lrt || []).map((l) => l.titel).join('; '),
     name: store.get().profile.name || '', datum: ymd(Date.now()),

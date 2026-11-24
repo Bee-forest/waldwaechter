@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v2.80.0';
+const VERSION = 'v3.0.0';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -12,7 +12,7 @@ const OFFLINE = 'ww-offline-v1'; // ausdrücklich gespeicherte Gebiete – wird 
 const MAX_TILES = 3000;
 
 const SHELL_FILES = [
-  './', './index.html', './manifest.json', './css/app.css',
+  './', './index.html', './manifest.json', './css/app.css', './css/design.css',
   './vendor/leaflet/leaflet.js', './vendor/leaflet/leaflet.css',
   './vendor/leaflet/images/layers.png', './vendor/leaflet/images/layers-2x.png',
   './vendor/leaflet/images/marker-icon.png', './vendor/leaflet/images/marker-icon-2x.png', './vendor/leaflet/images/marker-shadow.png',

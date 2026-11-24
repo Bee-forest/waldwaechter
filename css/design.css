@@ -1,0 +1,141 @@
+/* WaldWächter – Design 2026 („Forstkarte“)
+   Wird nach app.css geladen und legt das neue Erscheinungsbild darüber.
+   Leitidee: helles Papier statt Grünfläche, tiefes Fichtengrün für Handlungen,
+   Markierorange nur für das, was jetzt dran ist. Weiße Karten mit feiner Linie,
+   klare Hierarchie (Augenbraue → Titel → Inhalt), große Trefferflächen. */
+
+:root {
+  --bg: #F3F1EB;
+  --surface: #FFFFFF;
+  --surface-2: #F4F2EC;
+  --surface-3: #ECE9E1;
+  --ink: #1B2A21;
+  --ink-2: #627067;
+  --ink-3: #8A948D;
+  --line: #E3DFD5;
+  --line-strong: #D3CEC2;
+  --primary: #1F4D3A;
+  --primary-2: #2C6A4F;
+  --primary-ink: #FFFFFF;
+  --primary-soft: #E2EDE6;
+  --signal: #D9622B;
+  --signal-soft: #FBE9DF;
+  --ok: #2F8F55;
+  --ok-soft: #E3F2E8;
+  --danger: #B93A2E;
+  --shadow: 0 1px 2px rgba(27, 42, 33, .05), 0 8px 24px -6px rgba(27, 42, 33, .10);
+  --shadow-lg: 0 2px 6px rgba(27, 42, 33, .06), 0 18px 40px -12px rgba(27, 42, 33, .22);
+  --r-card: 22px;
+  --r-sheet: 26px;
+  --r-btn: 14px;
+}
+[data-theme='dark'] {
+  --bg: #101612; --surface: #18211B; --surface-2: #1E2922; --surface-3: #25322A;
+  --ink: #ECF1EC; --ink-2: #A9B7AD; --ink-3: #7E8C82; --line: #2B382F; --line-strong: #39483E;
+  --primary: #8FD1A5; --primary-2: #A6DDB8; --primary-ink: #0E1611; --primary-soft: #21382A;
+  --signal: #F08A55; --signal-soft: #3A2418; --ok: #6BCB8B; --ok-soft: #1E3326; --danger: #FF7F72;
+}
+html { background: var(--bg); }
+body { background: var(--bg); letter-spacing: .002em; }
+
+/* ---------- Typografie ---------- */
+h1, h2, h3 { letter-spacing: -.012em; }
+.view-head h1, .view > h1 { font-size: 28px; }
+.eyebrow { font-size: 12.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+/* ---------- Kopfzeile: frei auf dem Papier statt in einer Karte ---------- */
+.app-head.card { background: transparent; border: 0; box-shadow: none; padding: 4px 2px 2px; }
+.app-logo { width: 48px; height: 48px; border-radius: 14px; box-shadow: 0 1px 0 var(--line), 0 4px 12px -4px rgba(27, 42, 33, .25); }
+.app-title h1 { font-size: 25px; font-weight: 700; letter-spacing: -.02em; }
+.app-title p { font-size: 13px; font-weight: 400; color: var(--ink-2); margin-top: 2px; }
+.avatar { width: 44px; height: 44px; font-size: 15px; background: var(--primary); }
+.wanzen-knopf { width: 44px; height: 44px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+
+/* ---------- Karten ---------- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); }
+.page .card, .page-body .card { border-radius: 20px; box-shadow: none; }
+.card h2 { font-size: 18px; }
+.map-card { padding: 14px; gap: 12px; }
+.map-card-head h2 { font-size: 16px; }
+
+/* ---------- Knöpfe ---------- */
+.btn { border-width: 1px; border-color: var(--line-strong); border-radius: var(--r-btn); min-height: 48px; transition: background .15s, border-color .15s, transform .05s; }
+.btn:hover { border-color: var(--ink-3); }
+.btn-primary { background: var(--primary); border-color: var(--primary); box-shadow: 0 6px 16px -8px rgba(31, 77, 58, .8); }
+.btn-primary:hover { background: var(--primary-2); border-color: var(--primary-2); }
+.btn-ghost { color: var(--primary); }
+.btn-small { min-height: 38px; border-radius: 12px; }
+.btn-large { min-height: 54px; font-size: 17px; }
+.icon-btn { width: 44px; height: 44px; }
+.icon-btn:hover { background: var(--surface-2); }
+.link-btn { color: var(--primary); font-weight: 700; }
+
+/* ---------- Tab-Leiste: schwebend, aktive Seite als Pille ---------- */
+.tabbar { background: rgba(255, 255, 255, .92); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border: 1px solid var(--line); border-radius: 26px; box-shadow: var(--shadow-lg); padding: 6px; }
+[data-theme='dark'] .tabbar { background: rgba(24, 33, 27, .92); }
+.tabbar button { border-radius: 20px; transition: background .15s; }
+.tabbar button[aria-current='page'] { background: var(--primary); }
+.tabbar button[aria-current='page'] .tab-icon, .tabbar button[aria-current='page'] .tab-label { color: var(--primary-ink); }
+.tabbar button:not([aria-current='page']) .tab-icon { color: var(--ink-2); }
+
+/* ---------- Formulare ---------- */
+input:not([type='checkbox']):not([type='radio']), select, textarea { border-width: 1px; border-color: var(--line-strong); border-radius: 12px; min-height: 48px; background: var(--surface); }
+input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.form label { font-size: 14px; color: var(--ink); }
+.segmented { background: var(--surface-3); border: 0; border-radius: 14px; padding: 4px; }
+.segmented button[aria-checked='true'], .segmented button[aria-selected='true'] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(27, 42, 33, .12), 0 2px 8px -2px rgba(27, 42, 33, .12); }
+.segmented.compact { background: var(--surface-3); border: 0; }
+.segmented.compact button { color: var(--ink-2); }
+.segmented.compact button[aria-checked='true'] { background: var(--primary); color: var(--primary-ink); }
+.sheet-label { font-size: 13px; letter-spacing: .02em; }
+
+/* ---------- Seiten und Fenster ---------- */
+.page { background: var(--bg); }
+.page-head { background: rgba(255, 255, 255, .9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); min-height: 56px; }
+[data-theme='dark'] .page-head { background: rgba(24, 33, 27, .9); }
+.page-head h1 { font-size: 18px; }
+.dialog { border-radius: 28px 28px 0 0; box-shadow: var(--shadow-lg); }
+@media (min-width: 600px) { .dialog { border-radius: 28px; margin-bottom: 24px; } }
+.dialog-title { font-size: 21px; }
+.scrim { background: rgba(16, 24, 19, .45); backdrop-filter: blur(2px); }
+#toast { border-radius: 999px; padding: 12px 20px; box-shadow: var(--shadow-lg); }
+
+/* ---------- Auswahlkacheln (Neue Maßnahme, Assistenten) ---------- */
+.type-tile { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); padding: 14px 40px 14px 16px; position: relative; min-height: 72px; transition: border-color .15s, transform .05s; }
+.type-tile::after { content: '›'; position: absolute; right: 16px; top: 50%; transform: translateY(-52%); font-size: 26px; color: var(--ink-3); line-height: 1; }
+.type-tile:hover { border-color: var(--primary); }
+.type-tile:active { transform: scale(.99); }
+.type-tile strong { font-size: 17px; }
+.type-tile.type-feature { border-color: var(--line); background: var(--surface); }
+.type-tile.type-feature strong { color: var(--primary); }
+.q-option { border-width: 1px; border-radius: 14px; background: var(--surface); }
+.q-option.on { border-color: var(--primary); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.q-progress span { border-radius: 999px; }
+
+/* ---------- Hinweise ---------- */
+.lrt-hinweis { background: var(--ok-soft); border-left: 0; border-radius: 16px; box-shadow: inset 4px 0 0 var(--ok); }
+.lrt-hinweis.brutzeit, .lrt-hinweis.wald-hinweis { background: var(--signal-soft); box-shadow: inset 4px 0 0 var(--signal); }
+.lrt-hinweis.ok, .lrt-hinweis.brutzeit.ok, .lrt-hinweis.wald-hinweis.ok { background: var(--ok-soft); box-shadow: inset 4px 0 0 var(--ok); }
+.calc-box { background: var(--surface-2); border-radius: 16px; border: 1px solid var(--line); }
+.warn-line { color: var(--signal); }
+
+/* ---------- Maßnahmen-Karten (bis zur neuen Liste) ---------- */
+.measure { border: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 14px 16px; position: relative; overflow: hidden; }
+.measure::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--line-strong); }
+.measure-geplant::before { background: var(--primary); }
+.measure-arbeit::before { background: var(--signal); }
+.measure-fertig::before { background: var(--ok); }
+.badge { border-radius: 999px; font-size: 12.5px; padding: 3px 10px; background: var(--surface-3); }
+.badge-arbeit { background: var(--signal-soft); color: var(--signal); }
+.badge-fertig { background: var(--ok-soft); color: var(--ok); }
+
+/* ---------- Flurstücks-Info ---------- */
+.infobox .facts, .infobox .info-block { background: var(--surface-2); border: 1px solid var(--line); border-radius: 18px; }
+.infobox .info-block.add-block { background: var(--primary-soft); border-color: transparent; }
+
+/* Zusammenfassung im Profil: dunkle Karte */
+.card.summary { background: linear-gradient(160deg, #24573F 0%, #1A4232 100%); border: 0; color: #fff; box-shadow: var(--shadow-lg); }
+.card.summary .hint, .card.summary .muted, .card.summary small { color: rgba(255, 255, 255, .78); }
+/* Fokusrahmen ruhiger, nur bei Tastaturbedienung deutlich */
+:focus-visible { outline: 2px solid var(--primary-2); outline-offset: 2px; }
+.page-head .icon-btn:focus-visible { outline-offset: -2px; }

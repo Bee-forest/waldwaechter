@@ -100,7 +100,7 @@ async function erstellen(w) {
   const kw = mitListe ? 560 : R - L, kh = 470;
   doc.text(L, 40, 'Revierkarte – jagdliche Einrichtungen', { bold: true, size: 16, farbe: GRUEN });
   doc.text(L, 55, `${flst.map((p) => `Flurstück ${p.nr}, ${p.gemarkung}`).join(' · ').slice(0, 150)} · ${jagd.length} ${jagd.length === 1 ? 'Einrichtung' : 'Einrichtungen'} · Stand ${new Date().toLocaleDateString('de-DE')}`, { size: 9, farbe: GRAU });
-  const wegeWms = w.wege ? (await amtlicheWegeEbenen()).map((e) => ({ ...e, fein: 1.5 })) : [];
+  const wegeWms = w.wege ? (await amtlicheWegeEbenen()).map((e) => ({ ...e, fein: 2.5 })) : [];
   if (w.wege && !wegeWms.length) w.wegeFehler = true;
   const k = await pdfKarte(doc, { x: L, y: 66, w: kw, h: kh, pts, basemap: w.basemap, rand: 24, wms: wegeWms });
   if (wegeWms.some((e) => e.fehler)) w.wegeFehler = true;

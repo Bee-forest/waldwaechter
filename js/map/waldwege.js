@@ -28,7 +28,7 @@ async function ebenenSuchen({ url, muster, nicht }) {
 // Beim Herauszoomen feiner: Kacheln mit mehr Pixeln anfordern, der Browser verkleinert sie → dünnere Linien
 const FeinWMS = L.TileLayer.WMS.extend({
   getTileUrl(coords) {
-    const f = coords.z >= 17 ? 1 : coords.z >= 15 ? 1.5 : 2;
+    const f = coords.z >= 18 ? 1.5 : coords.z >= 16 ? 2 : coords.z >= 14 ? 3 : 4;
     const w = this.wmsParams.width, hh = this.wmsParams.height;
     this.wmsParams.width = Math.round(w * f); this.wmsParams.height = Math.round(hh * f);
     const url = L.TileLayer.WMS.prototype.getTileUrl.call(this, coords);
@@ -49,7 +49,7 @@ export function createAmtlicheWegeLayer() {
     for (const q of QUELLEN) {
       const namen = await ebenenSuchen(q);
       if (!namen.length || !grp._map) continue;
-      new FeinWMS(q.url, { layers: namen.join(','), format: 'image/png', transparent: true, version: '1.3.0', attribution: TH_ATTR, maxZoom: 21, minZoom: 12, zIndex: 260, className: 'wege-amtlich', opacity: 0.85 }).addTo(grp);
+      new FeinWMS(q.url, { layers: namen.join(','), format: 'image/png', transparent: true, version: '1.3.0', attribution: TH_ATTR, maxZoom: 21, minZoom: 12, zIndex: 260, className: 'wege-amtlich', opacity: 0.8 }).addTo(grp);
     }
   });
   return grp;

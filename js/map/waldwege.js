@@ -36,6 +36,12 @@ const FeinWMS = L.TileLayer.WMS.extend({
     return url;
   },
 });
+/** Dienste und Ebenennamen der amtlichen Wege (für PDF-Karten) */
+export async function amtlicheWegeEbenen() {
+  const r = [];
+  for (const q of QUELLEN) { const namen = await ebenenSuchen(q); if (namen.length) r.push({ url: q.url, layers: namen.join(',') }); }
+  return r;
+}
 /** Amtliche Wege als WMS-Ebenen (Gruppe); leer, wenn der Dienst nichts Passendes anbietet */
 export function createAmtlicheWegeLayer() {
   const grp = L.layerGroup();

@@ -17,7 +17,7 @@ const kartenLink = ([lat, lng]) => `https://www.google.com/maps/search/?api=1&qu
 const dateiname = (s) => s.replace(/[^\wäöüÄÖÜß-]+/g, '_');
 
 /** Kartenrahmen mit Hintergrund; liefert tr([lat,lng]) → [x,y] auf der Seite */
-export async function pdfKarte(doc, { x, y, w, h, pts, rand = 18, basemap = 'osm' }) {
+export async function pdfKarte(doc, { x, y, w, h, pts, rand = 18, basemap = 'osm', wms = [] }) {
   const c = centroid(pts);
   const P = makeProjector(c);
   const XY = pts.map(P.toXY);
@@ -27,7 +27,7 @@ export async function pdfKarte(doc, { x, y, w, h, pts, rand = 18, basemap = 'osm
   const tr = (ll) => { const [a, b] = P.toXY(ll); return [ox + (a - minX) * sk, oy + (maxY - b) * sk]; };
   const ecke = (u, v) => P.toLatLng([(u - ox) / sk + minX, maxY - (v - oy) / sk]);
   const [nord, west] = ecke(x, y), [sued, ost] = ecke(x + w, y + h);
-  const hg = await kartenBild({ nord, sued, west, ost, basemap, breitePx: Math.round(w * 2.6) }).catch(() => null);
+  const hg = await kartenBild({ nord, sued, west, ost, basemap, breitePx: Math.round(w * 2.6), wms }).catch(() => null);
   doc.rechteck(x, y, w, h, { fill: [248, 250, 246] });
   if (hg) doc.bild(x, y, w, h, hg);
   doc.rechteck(x, y, w, h, { stroke: [170, 180, 170] });

@@ -31,7 +31,7 @@ export async function kartenBild(o) {
 }
 
 /** Kacheln eines Ausschnitts auf einer Leinwand; liefert { cv, w, h, z, x0, y0 } (Pixel in Kachelkoordinaten der Zoomstufe z) */
-export async function kartenLeinwand({ nord, sued, west, ost, basemap = 'osm', breitePx = 1400, beschriftung = false, zoom = null }) {
+export async function kartenLeinwand({ nord, sued, west, ost, basemap = 'osm', breitePx = 1400, beschriftung = false, zoom = null, wms = [] }) {
   const maxZ = basemap === 'osm' ? 19 : 20;
   let z = zoom ?? Math.ceil(Math.log2(breitePx / (((ost - west) / 360) * 256)));
   z = Math.max(10, Math.min(maxZ, z));
@@ -56,6 +56,14 @@ export async function kartenLeinwand({ nord, sued, west, ost, basemap = 'osm', b
     bilder.forEach((img, i) => { if (img) { ctx.drawImage(img, kacheln[i][0] * 256 - x0, kacheln[i][1] * 256 - y0, 256, 256); if (e === 0) geladen++; } });
   }
   if (!geladen) return null;
+  // zusätzliche WMS-Ebenen (z. B. Wege aus dem Geoportal) passgenau darüber legen
+  const R = 6378137, mx = (lon) => (lon * Math.PI / 180) * R, my = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * R;
+  for (const e of wms) {
+    const q = new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: e.layers, STYLES: '', CRS: 'EPSG:3857',
+      BBOX: [mx(west), my(sued), mx(ost), my(nord)].join(','), WIDTH: String(Math.round(w * (e.fein || 1))), HEIGHT: String(Math.round(h * (e.fein || 1))), FORMAT: 'image/png', TRANSPARENT: 'true' });
+    const img = await ladeBild(`${e.url}?${q}`, 20000);
+    if (img) { ctx.globalAlpha = e.alpha ?? 1; ctx.drawImage(img, 0, 0, w, h); ctx.globalAlpha = 1; } else e.fehler = true;
+  }
   return { cv, w, h, z, x0, y0, lon2px, lat2px };
 }
 export const KARTEN_QUELLE = { osm: '© OpenStreetMap-Mitwirkende', dop: 'Digitales Orthophoto (Luftbild) © GDI-Th, Datenlizenz Deutschland – Namensnennung 2.0 (dl-de/by-2-0)' };

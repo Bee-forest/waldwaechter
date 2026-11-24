@@ -174,6 +174,8 @@ export function openPunktEditor({ center, zoom = 17, art = 'habitat' } = {}) {
       h('p', { class: 'draw-status' }, `Tippe in die Karte, wo ${art === 'habitat' ? 'ein Habitatbaum steht oder liegt' : 'eine jagdliche Einrichtung steht'} – dann öffnet sich das Formular. Vorhandene Punkte antippen zum Bearbeiten oder Löschen, gedrückt halten und ziehen zum Verschieben.`),
       h('p', { class: 'muted' }, `Eingetragen: ${zaehle}`),
       h('div', { class: 'punkt-legende' }, A.typen.map(([k, l]) => h('span', {}, h('span', { class: `punkt-mini punkt-${A.form}`, style: `background:${A.farbe}`, html: SYMBOLE[k] }), l))),
+      h('label', { class: 'jk-check' }, h('input', { type: 'checkbox', checked: !!store.get().settings?.layers?.wegeAmtlich, onchange: (e) => store.update((st) => { st.settings.layers.wegeAmtlich = e.target.checked; }) }),
+        h('span', {}, 'Wege einblenden', h('small', {}, 'Straßen, Fahr- und Erholungswege aus dem Geoportal Thüringen'))),
       art === 'jagd' ? h('button', { type: 'button', class: 'btn btn-block', onclick: () => import('../jagdkarte.js').then((x) => x.openJagdkarte()) }, 'Revierkarte als PDF erstellen') : null);
   }
   render();

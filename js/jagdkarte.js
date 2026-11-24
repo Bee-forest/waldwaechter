@@ -10,7 +10,7 @@ import { polysOf, inPolys, bbox } from './geo.js';
 import { pdfKarte, ringeZeichnen, linieZeichnen, punkt } from './berichte.js';
 import { ARTEN, JAGD_ZUSTAND, SYMBOLE } from './map/punkte.js';
 import { passtFlurstueck } from './profi.js';
-import { wegeImAusschnitt, wegStil } from './map/waldwege.js';
+import { amtlicheWegeEbenen } from './map/waldwege.js';
 
 const GRUEN = [27, 77, 46], GRAU = [90, 100, 90];
 const FARBE_TYP = { kanzel: [122, 63, 32], bock: [196, 98, 30], erdsitz: [95, 110, 60] };
@@ -71,7 +71,7 @@ export async function openJagdkarte() {
       h('fieldset', {}, h('legend', {}, 'Hintergrund'), seg()),
       h('fieldset', {}, h('legend', {}, 'Weitere Ebenen'),
         check('gassen', 'Rückegassen und Lagerplätze', 'aus deiner Erschließung'),
-        check('wege', 'Wege (Waldwegenetz)', 'Fahrwege, Rückewege, Pfade und Straßen aus OpenStreetMap'),
+        check('wege', 'Wege (Geoportal Thüringen)', 'Straßen und Fahrwege (ATKIS), Erholungswege von ThüringenForst'),
         check('habitat', 'Habitatbäume')),
       h('fieldset', {}, h('legend', {}, 'Beschriftung'),
         check('beschriftung', 'Bezeichnung an jeder Einrichtung', 'der eingetragene Name, z. B. „Eichenkanzel“'),
@@ -100,18 +100,10 @@ async function erstellen(w) {
   const kw = mitListe ? 560 : R - L, kh = 470;
   doc.text(L, 40, 'Revierkarte – jagdliche Einrichtungen', { bold: true, size: 16, farbe: GRUEN });
   doc.text(L, 55, `${flst.map((p) => `Flurstück ${p.nr}, ${p.gemarkung}`).join(' · ').slice(0, 150)} · ${jagd.length} ${jagd.length === 1 ? 'Einrichtung' : 'Einrichtungen'} · Stand ${new Date().toLocaleDateString('de-DE')}`, { size: 9, farbe: GRAU });
-  const k = await pdfKarte(doc, { x: L, y: 66, w: kw, h: kh, pts, basemap: w.basemap, rand: 24 });
-  // Wege zuerst (unten), dann Flurstücke, Gassen, Punkte
-  if (w.wege) {
-    const pad = 0.004;
-    const wege = await wegeImAusschnitt(s0 - pad, w0 - pad, n0 + pad, e0 + pad);
-    const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-    if (wege) {
-      const st = wege.map((x) => [x, wegStil(x.tags)]);
-      for (const [x, t] of st) linieImRahmen(doc, k, x.pts, { w: t.w * 0.55 + 1.4, farbe: rgb(t.rand) });
-      for (const [x, t] of st) linieImRahmen(doc, k, x.pts, { w: t.w * 0.55, farbe: rgb(t.farbe), strich: t.strich ? t.strich.split(' ').map((v) => Number(v) * 0.6) : null });
-    } else w.wegeFehler = true;
-  }
+  const wegeWms = w.wege ? (await amtlicheWegeEbenen()).map((e) => ({ ...e, fein: 1.5 })) : [];
+  if (w.wege && !wegeWms.length) w.wegeFehler = true;
+  const k = await pdfKarte(doc, { x: L, y: 66, w: kw, h: kh, pts, basemap: w.basemap, rand: 24, wms: wegeWms });
+  if (wegeWms.some((e) => e.fehler)) w.wegeFehler = true;
   polysAlle.forEach((pl) => ringeZeichnen(doc, k.tr, pl, { stroke: [246, 211, 45], w: 2 }));
   if (w.gassen) {
     const E = s.erschliessung || {};
@@ -140,9 +132,9 @@ async function erstellen(w) {
   let y = 66 + kh + 14, x0 = L;
   for (const [t, l] of ARTEN.jagd.typen) { doc.bild(x0, y - 9, 11, 11, await sym('jagd', t)); doc.text(x0 + 14, y, l, { size: 8 }); x0 += 24 + l.length * 4.4; }
   if (w.habitat) { doc.bild(x0, y - 9, 11, 11, await sym('habitat', 'stehend')); doc.text(x0 + 14, y, 'Habitatbaum', { size: 8 }); x0 += 70; }
-  doc.text(x0, y, `grau = gesperrt · gelb = Flurstück${w.wege ? ' · Wege: gelb = Fahrweg, orange = Rückeweg, weiß gestrichelt = Pfad' : ''}${w.gassen ? ' · braun gestrichelt = Rückegasse' : ''}`, { size: 8, farbe: GRAU });
+  doc.text(x0, y, `grau = gesperrt · gelb = Flurstück${w.gassen ? ' · braun gestrichelt = Rückegasse' : ''}`, { size: 8, farbe: GRAU });
   y += 13;
-  doc.text(L, y, `Hintergrund: ${KARTEN_QUELLE[w.basemap]}${w.wege ? (w.wegeFehler ? ' · Wege konnten nicht geladen werden' : ' · Wege © OpenStreetMap-Mitwirkende (ODbL)') : ''}`, { size: 7, farbe: GRAU });
+  doc.text(L, y, `Hintergrund: ${KARTEN_QUELLE[w.basemap]}${w.wege ? (w.wegeFehler ? ' · Wege konnten nicht geladen werden' : ' · Wege © GDI-Th (ATKIS Basis-DLM) / ThüringenForst') : ''}`, { size: 7, farbe: GRAU });
   // Liste rechts neben der Karte
   if (mitListe) {
     const lx = L + kw + 16, lr = R;

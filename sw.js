@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v3.14.3';
+const VERSION = 'v3.15.0';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -60,9 +60,20 @@ self.addEventListener('message', (e) => {
   if (!port || !e.data?.typ) return;
   if (e.data.typ === 'OFFLINE_SAVE') e.waitUntil(offlineSpeichern(e.data.urls || [], port));
   else if (e.data.typ === 'OFFLINE_INFO') e.waitUntil(caches.open(OFFLINE).then((c) => c.keys()).then((k) => port.postMessage({ anzahl: k.length, mb: Math.round(k.length * 0.025) })));
+  else if (e.data.typ === 'OFFLINE_SYNC') e.waitUntil(offlineAbgleichen(e.data.urls || [], port));
   else if (e.data.typ === 'OFFLINE_CLEAR') e.waitUntil(caches.delete(OFFLINE).then(() => port.postMessage({ ok: true })));
 });
-async function offlineSpeichern(urls, port) {
+/** Aktualisieren: Kacheln, die zu keiner Fläche mehr gehören, entfernen – fehlende (neue Flächen) nachladen */
+async function offlineAbgleichen(urls, port) {
+  const cache = await caches.open(OFFLINE);
+  const soll = new Set(urls.map((u) => tileKey(new URL(u))));
+  let entfernt = 0;
+  for (const req of await cache.keys()) if (!soll.has(req.url)) { await cache.delete(req); entfernt++; }
+  const vorher = (await cache.keys()).length;
+  await offlineSpeichern(urls, port, { entfernt, vorher });
+}
+
+async function offlineSpeichern(urls, port, extra = {}) {
   const cache = await caches.open(OFFLINE);
   const liste = [...urls];
   let fertig = 0, fehler = 0;
@@ -82,7 +93,7 @@ async function offlineSpeichern(urls, port) {
     }
   };
   await Promise.all(Array.from({ length: 4 }, arbeiter));
-  port.postMessage({ ok: true, fehler, gesamt: urls.length });
+  port.postMessage({ ok: true, fehler, gesamt: urls.length, ...extra, neu: extra.vorher != null ? (await cache.keys()).length - extra.vorher : undefined });
 }
 
 self.addEventListener('fetch', (e) => {

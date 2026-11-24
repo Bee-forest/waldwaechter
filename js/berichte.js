@@ -1,6 +1,6 @@
 // Ausgaben für andere: Unternehmer-Auftrag (PDF mit Karte, Zufahrt, Rückegassen, Lagerplatz, Rettungspunkt),
 // Waldbericht (PDF für Förster, Erben oder Verkauf) und GeoJSON-Export. Dazu Offline-Karten für die eigenen Flächen.
-import { h, toast } from './ui.js';
+import { h, fill, toast, confirmDialog } from './ui.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { Pdf, herunterladen } from './pdf.js';
@@ -244,32 +244,60 @@ const swNachricht = (msg) => new Promise((ok, fehler) => {
 export const offlineSpeichern = (urls, onFortschritt) => swNachricht({ typ: 'OFFLINE_SAVE', urls, onFortschritt });
 export const offlineInfo = () => swNachricht({ typ: 'OFFLINE_INFO' }).catch(() => ({ anzahl: 0 }));
 export const offlineLoeschen = () => swNachricht({ typ: 'OFFLINE_CLEAR' });
+export const offlineAbgleichen = (urls, onFortschritt) => swNachricht({ typ: 'OFFLINE_SYNC', urls, onFortschritt });
 
-/** Karte im Profil: Offline-Karten und Export */
+/** Karte im Profil: Offline-Karten (speichern, aktualisieren, löschen) und Export */
 export function exportKarte() {
-  const status = h('p', { class: 'muted', 'aria-live': 'polite' }, 'Prüfe gespeicherte Offline-Karten …');
-  const zeigeInfo = () => offlineInfo().then((i) => { status.textContent = i.anzahl ? `${i.anzahl.toLocaleString('de-DE')} Kartenkacheln offline gespeichert${i.mb ? ` (ca. ${i.mb} MB)` : ''}.` : 'Noch keine Offline-Karten gespeichert.'; });
-  zeigeInfo();
-  const speichernBtn = h('button', { class: 'btn btn-primary', onclick: async () => {
+  const status = h('div', { class: 'offline-status', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Prüfe gespeicherte Offline-Karten …'));
+  const knoepfe = h('div', { class: 'form' });
+  const MAX = 6000;
+  let laeuft = false;
+  const eigeneIds = () => store.get().parcels.filter(passtFlurstueck).map((p) => p.id);
+  async function zeichne() {
+    const i = await offlineInfo();
+    const st = store.get().settings?.offline;
+    const jetzt = eigeneIds();
+    const neu = st ? jetzt.filter((id) => !(st.flaechen || []).includes(id)).length : 0;
+    const weg = st ? (st.flaechen || []).filter((id) => !jetzt.includes(id)).length : 0;
+    const hg = store.get().settings?.basemap === 'osm' ? 'osm' : 'dop';
+    const anderesHg = st && st.basemap !== hg;
+    fill(status, i.anzahl
+      ? [h('p', {}, h('strong', {}, `${i.anzahl.toLocaleString('de-DE')} Kartenkacheln offline`), i.mb ? ` (ca. ${i.mb} MB)` : ''),
+          st ? h('p', { class: 'muted' }, `Stand ${datum(st.stand)} · ${st.flaechen?.length || 0} Flächen · ${st.basemap === 'osm' ? 'OSM-Karte' : 'Luftbild'}`) : null,
+          neu || weg || anderesHg ? h('p', { class: 'warn-line' }, [neu ? `${neu} neue ${neu === 1 ? 'Fläche ist' : 'Flächen sind'} noch nicht offline.` : '', weg ? `${weg} ${weg === 1 ? 'Fläche wurde' : 'Flächen wurden'} entfernt.` : '', anderesHg ? `Gerade ist ${hg === 'osm' ? 'die OSM-Karte' : 'das Luftbild'} eingestellt – beim Aktualisieren wird dieser Hintergrund gespeichert.` : ''].filter(Boolean).join(' ') + ' Tippe auf „Aktualisieren“.') : h('p', { class: 'ok-line' }, 'Alle Flächen sind offline verfügbar.')]
+      : [h('p', { class: 'muted' }, 'Noch keine Offline-Karten gespeichert.')]);
+    fill(knoepfe,
+      !i.anzahl ? h('button', { class: 'btn btn-primary', disabled: laeuft, onclick: () => speichern(false) }, 'Karten meiner Flächen offline speichern')
+        : h('button', { class: `btn ${neu || weg || anderesHg ? 'btn-primary' : ''}`, disabled: laeuft, onclick: () => speichern(true) }, 'Offline-Karten aktualisieren'),
+      i.anzahl ? h('button', { class: 'btn btn-danger-ghost', disabled: laeuft, onclick: async () => {
+        if (!(await confirmDialog(`Alle ${i.anzahl.toLocaleString('de-DE')} offline gespeicherten Kartenkacheln löschen? Ohne Netz siehst du dann keine Karte mehr.`, { ok: 'Löschen', danger: true }))) return;
+        await offlineLoeschen().catch(() => {});
+        store.update((x) => { delete x.settings.offline; });
+        toast('Offline-Karten gelöscht'); zeichne();
+      } }, 'Offline-Karten löschen') : null,
+      h('p', { class: 'hint' }, 'Speichert den eingestellten Hintergrund (Luftbild oder Karte) mit Flurstücksgrenzen für alle deine Flächen bis Zoomstufe 18 – für Gebiete ohne Netz. Am besten im WLAN. „Aktualisieren“ lädt nur nach, was für neue Flächen fehlt, und entfernt Kacheln von Flächen, die du gelöscht hast.'));
+  }
+  async function speichern(abgleich) {
     const { urls, flaechen, basemap } = await offlineKacheln();
     if (!flaechen) { toast('Noch keine Flächen gespeichert.'); return; }
-    const MAX = 6000;
     if (urls.length > MAX) toast(`Sehr viele Kacheln – gespeichert werden die ersten ${MAX.toLocaleString('de-DE')}.`);
-    speichernBtn.disabled = true;
+    laeuft = true; await zeichne();
+    const btn = knoepfe.querySelector('button');
     try {
-      const r = await offlineSpeichern(urls.slice(0, MAX), (f) => { speichernBtn.textContent = `Speichere … ${Math.round((f.fortschritt / f.gesamt) * 100)} %`; });
-      toast(r.fehler ? `Gespeichert, ${r.fehler} Kacheln fehlen` : `Karten für ${flaechen} Flächen offline gespeichert (${basemap === 'dop' ? 'Luftbild' : 'Karte'})`);
+      const fn = abgleich ? offlineAbgleichen : offlineSpeichern;
+      const r = await fn(urls.slice(0, MAX), (f) => { if (btn) btn.textContent = `${abgleich ? 'Aktualisiere' : 'Speichere'} … ${Math.round((f.fortschritt / f.gesamt) * 100)} %`; });
+      store.update((x) => { x.settings.offline = { stand: Date.now(), flaechen: eigeneIds(), basemap }; });
+      toast(abgleich ? `Aktualisiert: ${r.neu ?? 0} Kacheln neu, ${r.entfernt ?? 0} entfernt${r.fehler ? `, ${r.fehler} fehlen` : ''}` : r.fehler ? `Gespeichert, ${r.fehler} Kacheln fehlen` : `Karten für ${flaechen} Flächen offline gespeichert (${basemap === 'dop' ? 'Luftbild' : 'Karte'})`);
     } catch (e) { toast(e.message); }
-    speichernBtn.disabled = false; speichernBtn.textContent = 'Karten meiner Flächen offline speichern';
-    zeigeInfo();
-  } }, 'Karten meiner Flächen offline speichern');
+    laeuft = false; zeichne();
+  }
+  zeichne();
   return h('section', { class: 'card' },
     h('h2', {}, 'Offline-Karten und Export'),
     h('div', { class: 'form' },
       status,
-      speichernBtn,
-      h('p', { class: 'hint' }, 'Speichert den aktuellen Hintergrund (Luftbild oder Karte) mit Flurstücksgrenzen für alle deine Flächen bis Zoomstufe 18 – für Gebiete ohne Netz. Vorher im WLAN machen.'),
-      h('button', { class: 'btn', onclick: async () => { await offlineLoeschen().catch(() => {}); toast('Offline-Karten gelöscht'); zeigeInfo(); } }, 'Offline-Karten löschen'),
+      knoepfe,
+      h('hr', { class: 'trenner' }),
       h('button', { class: 'btn', onclick: () => waldbericht().catch(() => toast('Waldbericht konnte nicht erstellt werden.')) }, 'Waldbericht als PDF'),
       h('button', { class: 'btn', onclick: () => geojsonExport().catch(() => toast('Export fehlgeschlagen.')) }, 'Daten für den Förster (GeoJSON)'),
       h('p', { class: 'hint' }, 'Der Waldbericht fasst Flächen, Bestand, Maßnahmen und Tagebuch zusammen – z. B. für den Förster, Erben oder einen Verkauf. GeoJSON öffnet jedes GIS (z. B. QGIS) mit Flurstücken, Maßnahmenflächen, Rückegassen und Punkten.')));

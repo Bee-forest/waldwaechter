@@ -312,3 +312,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .jk-check small { color: var(--ink-2); font-weight: 400; }
 .page-body .leaflet-container canvas, .page-body .leaflet-container svg { max-width: none !important; }
 .wege-amtlich { filter: saturate(1.3) contrast(1.1); }
+.offline-status p { margin: 0 0 4px; } .trenner { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }

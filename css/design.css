@@ -251,3 +251,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .ordner-leiste-fremd .ordner-knopf, .ordner-leiste-fremd .ordner-zurueck { color: #fff; }
 .ordner-leiste-alle { background: var(--surface-2); }
 .ordner-zurueck { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,.18); font-size: 20px; line-height: 1; cursor: pointer; color: var(--ink); }
+.facts.facts-kurz > .wide { grid-column: 1 / -1; }
+.facts.facts-kurz dd { overflow-wrap: anywhere; }

@@ -922,6 +922,9 @@ async function renderInfo() {
       h('div', {}, h('dt', {}, p.flaecheAmtlich ? 'Größe (amtlich)' : 'Größe'), h('dd', { class: 'big' }, formatHa(ha))),
       h('div', {}, h('dt', {}, 'Gemeinde'), h('dd', {}, isAlkis ? p.gemeinde : `${p.gemeinde}, OT ${p.ortsteil}`)),
       m ? h('div', {}, h('dt', {}, 'Kategorie'), h('dd', {}, h('span', { class: 'kat-punkt', style: `--c:${CATEGORIES[m.category]?.color || '#888'}` }), CATEGORIES[m.category]?.label || '–')) : null,
+      p.lage ? h('div', { class: 'wide' }, h('dt', {}, 'Lage'), h('dd', {}, p.lage)) : null,
+      p.nutzungText ? h('div', { class: 'wide' }, h('dt', {}, 'Nutzung (ALKIS)'), h('dd', {}, p.nutzungText)) : null,
+      p.standort ? h('div', { class: 'wide' }, h('dt', {}, 'Standort'), h('dd', {}, p.standort)) : null,
     ),
     m ? h('div', { class: 'info-actions info-actions-oben' },
       h('button', { class: 'btn btn-primary', onclick: () => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId: p.id } })) }, 'Maßnahme planen'),
@@ -968,11 +971,6 @@ async function renderInfo() {
           : 'Für dieses Flurstück sind keine Schutzgebiete, Biotope oder Pflichten hinterlegt.'),
       isAlkis ? h('p', { class: 'hint' }, 'Flurstücksdaten: ALKIS, © GDI-Th. Keine amtliche Auskunft.') : null,
     ),
-    klapp('details', 'Lage und Nutzung', h('dl', { class: 'facts' },
-      p.lage ? h('div', { class: 'wide' }, h('dt', {}, 'Lage'), h('dd', {}, p.lage)) : null,
-      p.nutzungText ? h('div', { class: 'wide' }, h('dt', {}, 'Tatsächliche Nutzung (ALKIS)'), h('dd', {}, p.nutzungText)) : null,
-      p.standort ? h('div', { class: 'wide' }, h('dt', {}, 'Standort'), h('dd', {}, p.standort)) : null,
-      h('div', { class: 'wide' }, h('dt', {}, 'Angetippter Punkt'), h('dd', { class: 'mono' }, `${latlng[0].toFixed(5)} N, ${latlng[1].toFixed(5)} O`))), p.nutzungText || ''),
     h('p', { class: 'info-quellen' }, isAlkis
       ? 'Flurstücksdaten: ALKIS, © GDI-Th. Standort, Bestand, Waldfunktionen, Rettungspunkte: © GDI-Th / ThüringenForst. Keine amtliche Auskunft.'
       : 'Demo-Daten. Keine amtliche Auskunft.'),

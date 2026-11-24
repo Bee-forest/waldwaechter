@@ -10,6 +10,7 @@ import { polysOf, inPolys, bbox } from './geo.js';
 import { pdfKarte, ringeZeichnen, linieZeichnen, punkt } from './berichte.js';
 import { ARTEN, JAGD_ZUSTAND, SYMBOLE } from './map/punkte.js';
 import { passtFlurstueck } from './profi.js';
+import { wegeImAusschnitt, wegStil } from './map/waldwege.js';
 
 const GRUEN = [27, 77, 46], GRAU = [90, 100, 90];
 const FARBE_TYP = { kanzel: [122, 63, 32], bock: [196, 98, 30], erdsitz: [95, 110, 60] };
@@ -30,7 +31,6 @@ async function symbolBild(art, typ, grau = false) {
 }
 const zustandText = (k) => JAGD_ZUSTAND.find(([x]) => x === k)?.[1] || '–';
 
-/** Waldwege (OSM: track, path, service, unclassified) im Ausschnitt; null bei Fehler */
 /** Linie in feine Stücke teilen und nur die Teile im Kartenrahmen zeichnen (auch wenn die Endpunkte außerhalb liegen) */
 function linieImRahmen(doc, k, pts, stil) {
   let lauf = [];
@@ -44,18 +44,6 @@ function linieImRahmen(doc, k, pts, stil) {
     }
   }
   ende();
-}
-
-async function osmWege([s, w, n, e]) {
-  const q = `[out:json][timeout:20];way["highway"~"^(track|path|service|unclassified|residential|tertiary|secondary)$"](${s},${w},${n},${e});out geom;`;
-  try {
-    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
-    const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q), signal: ctl.signal });
-    clearTimeout(t);
-    if (!r.ok) return null;
-    const j = await r.json();
-    return (j.elements || []).filter((x) => x.geometry).map((x) => ({ typ: x.tags?.highway, pts: x.geometry.map((g) => [g.lat, g.lon]) }));
-  } catch { return null; }
 }
 
 export async function openJagdkarte() {
@@ -83,7 +71,7 @@ export async function openJagdkarte() {
       h('fieldset', {}, h('legend', {}, 'Hintergrund'), seg()),
       h('fieldset', {}, h('legend', {}, 'Weitere Ebenen'),
         check('gassen', 'Rückegassen und Lagerplätze', 'aus deiner Erschließung'),
-        check('wege', 'Wege', 'Waldwege und Straßen aus OpenStreetMap'),
+        check('wege', 'Wege (Waldwegenetz)', 'Fahrwege, Rückewege, Pfade und Straßen aus OpenStreetMap'),
         check('habitat', 'Habitatbäume')),
       h('fieldset', {}, h('legend', {}, 'Beschriftung'),
         check('beschriftung', 'Bezeichnung an jeder Einrichtung', 'der eingetragene Name, z. B. „Eichenkanzel“'),
@@ -116,12 +104,13 @@ async function erstellen(w) {
   // Wege zuerst (unten), dann Flurstücke, Gassen, Punkte
   if (w.wege) {
     const pad = 0.004;
-    const wege = await osmWege([s0 - pad, w0 - pad, n0 + pad, e0 + pad]);
-    if (wege) for (const x of wege) {
-      const breit = /secondary|tertiary|unclassified|residential/.test(x.typ);
-      linieImRahmen(doc, k, x.pts, { w: breit ? 2.4 : 1.4, farbe: breit ? [255, 255, 255] : [250, 240, 200], strich: x.typ === 'path' ? [3, 2] : null });
-    }
-    else w.wegeFehler = true;
+    const wege = await wegeImAusschnitt(s0 - pad, w0 - pad, n0 + pad, e0 + pad);
+    const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    if (wege) {
+      const st = wege.map((x) => [x, wegStil(x.tags)]);
+      for (const [x, t] of st) linieImRahmen(doc, k, x.pts, { w: t.w * 0.55 + 1.4, farbe: rgb(t.rand) });
+      for (const [x, t] of st) linieImRahmen(doc, k, x.pts, { w: t.w * 0.55, farbe: rgb(t.farbe), strich: t.strich ? t.strich.split(' ').map((v) => Number(v) * 0.6) : null });
+    } else w.wegeFehler = true;
   }
   polysAlle.forEach((pl) => ringeZeichnen(doc, k.tr, pl, { stroke: [246, 211, 45], w: 2 }));
   if (w.gassen) {
@@ -151,7 +140,7 @@ async function erstellen(w) {
   let y = 66 + kh + 14, x0 = L;
   for (const [t, l] of ARTEN.jagd.typen) { doc.bild(x0, y - 9, 11, 11, await sym('jagd', t)); doc.text(x0 + 14, y, l, { size: 8 }); x0 += 24 + l.length * 4.4; }
   if (w.habitat) { doc.bild(x0, y - 9, 11, 11, await sym('habitat', 'stehend')); doc.text(x0 + 14, y, 'Habitatbaum', { size: 8 }); x0 += 70; }
-  doc.text(x0, y, `grau = gesperrt · gelb = Flurstück${w.gassen ? ' · braun gestrichelt = Rückegasse · braun = Lagerplatz' : ''}`, { size: 8, farbe: GRAU });
+  doc.text(x0, y, `grau = gesperrt · gelb = Flurstück${w.wege ? ' · Wege: gelb = Fahrweg, orange = Rückeweg, weiß gestrichelt = Pfad' : ''}${w.gassen ? ' · braun gestrichelt = Rückegasse' : ''}`, { size: 8, farbe: GRAU });
   y += 13;
   doc.text(L, y, `Hintergrund: ${KARTEN_QUELLE[w.basemap]}${w.wege ? (w.wegeFehler ? ' · Wege konnten nicht geladen werden' : ' · Wege © OpenStreetMap-Mitwirkende (ODbL)') : ''}`, { size: 7, farbe: GRAU });
   // Liste rechts neben der Karte

@@ -310,3 +310,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .jk-check input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--primary); }
 .jk-check span { display: grid; gap: 1px; }
 .jk-check small { color: var(--ink-2); font-weight: 400; }
+.page-body .leaflet-container canvas, .page-body .leaflet-container svg { max-width: none !important; }

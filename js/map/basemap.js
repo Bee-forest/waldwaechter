@@ -1,4 +1,5 @@
 import { store } from '../store.js';
+import { createWegeLayer } from './waldwege.js';
 import { createOrtsnamenLayer } from './ortsnamen.js';
 // Kartengrundlagen: Basiskarten, Kategoriefarben, OSM-Objektlayer (Overpass).
 /* global L */
@@ -85,6 +86,17 @@ export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = 
   }
   refreshAlkis();
   refreshLabels();
+
+  // Waldwegenetz (Ebene „Wege“) – in allen Karten, wenn eingeschaltet
+  let wegeLyr = null;
+  const wegeAbgleich = () => {
+    const an = !!store.get().settings?.layers?.wege;
+    if (an && !wegeLyr) wegeLyr = createWegeLayer().addTo(map);
+    else if (!an && wegeLyr) { map.removeLayer(wegeLyr); wegeLyr = null; }
+  };
+  wegeAbgleich();
+  const wegeAbo = store.subscribe(wegeAbgleich);
+  map.on('unload', () => wegeAbo());
 
   const api = {
     map,

@@ -17,7 +17,7 @@ const kartenLink = ([lat, lng]) => `https://www.google.com/maps/search/?api=1&qu
 const dateiname = (s) => s.replace(/[^\wäöüÄÖÜß-]+/g, '_');
 
 /** Kartenrahmen mit Hintergrund; liefert tr([lat,lng]) → [x,y] auf der Seite */
-async function pdfKarte(doc, { x, y, w, h, pts, rand = 18, basemap = 'osm' }) {
+export async function pdfKarte(doc, { x, y, w, h, pts, rand = 18, basemap = 'osm' }) {
   const c = centroid(pts);
   const P = makeProjector(c);
   const XY = pts.map(P.toXY);
@@ -38,9 +38,9 @@ async function pdfKarte(doc, { x, y, w, h, pts, rand = 18, basemap = 'osm' }) {
   const drin = (ll) => { const [a, b] = tr(ll); return a >= x && a <= x + w && b >= y && b <= y + h; };
   return { tr, drin, hg };
 }
-const ringeZeichnen = (doc, tr, polys, stil) => doc.polygon(polys.flat().map((r) => r.map(tr)), stil);
-const linieZeichnen = (doc, tr, pts, stil) => { for (let i = 0; i + 1 < pts.length; i++) { const [a, b] = tr(pts[i]), [c, d] = tr(pts[i + 1]); doc.linie(a, b, c, d, stil); } };
-function punkt(doc, [x, y], farbe, r = 4) { doc.polygon([Array.from({ length: 12 }, (_, i) => [x + r * Math.cos((i * Math.PI) / 6), y + r * Math.sin((i * Math.PI) / 6)])], { fill: farbe, stroke: [255, 255, 255], w: 1.2 }); }
+export const ringeZeichnen = (doc, tr, polys, stil) => doc.polygon(polys.flat().map((r) => r.map(tr)), stil);
+export const linieZeichnen = (doc, tr, pts, stil) => { for (let i = 0; i + 1 < pts.length; i++) { const [a, b] = tr(pts[i]), [c, d] = tr(pts[i + 1]); doc.linie(a, b, c, d, stil); } };
+export function punkt(doc, [x, y], farbe, r = 4) { doc.polygon([Array.from({ length: 12 }, (_, i) => [x + r * Math.cos((i * Math.PI) / 6), y + r * Math.sin((i * Math.PI) / 6)])], { fill: farbe, stroke: [255, 255, 255], w: 1.2 }); }
 
 class Schreiber {
   constructor(doc) { this.doc = doc; this.y = 50; this.L = 50; this.R = 545; }

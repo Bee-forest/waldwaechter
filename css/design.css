@@ -302,3 +302,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .foto-wahl-gruppe { display: grid; gap: 8px; }
 .foto-wahl-gruppe .eyebrow { margin: 4px 0 0; }
 .foto-wahl .type-text { display: grid; gap: 2px; } .foto-wahl .type-text small { color: var(--ink-2); }
+.punkt-symbol span svg { width: var(--sym, 20px); height: var(--sym, 20px); }
+.jagdkarte-form fieldset { border: 0; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; }
+.jagdkarte-form legend { font-weight: 800; margin-bottom: 4px; }
+.jk-flst { max-height: 34vh; overflow: auto; }
+.jk-check { display: grid !important; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-weight: 600; }
+.jk-check input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--primary); }
+.jk-check span { display: grid; gap: 1px; }
+.jk-check small { color: var(--ink-2); font-weight: 400; }

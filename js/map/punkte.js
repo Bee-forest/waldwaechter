@@ -47,9 +47,13 @@ function speichere(fn) {
   store.update((s) => { s.punkte = s.punkte || {}; s.punkte.habitat ||= []; s.punkte.jagd ||= []; fn(s.punkte); });
 }
 
-export function punktIcon(art, typ) {
+/** Symbolgröße je Zoomstufe: nah groß, weiter weg deutlich kleiner (ab Zoom 14 nur noch ein Punkt) */
+export const punktGroesse = (z) => (z >= 18 ? 36 : z >= 17 ? 30 : z >= 16 ? 24 : z >= 15 ? 18 : 12);
+export function punktIcon(art, typ, groesse = 36) {
   const a = ARTEN[art];
-  return L.divIcon({ className: `punkt-symbol punkt-${a.form}`, html: `<span aria-hidden="true" style="background:${a.farbe}">${SYMBOLE[typ] || SYMBOLE[a.typen[0][0]]}</span>`, iconSize: [36, 36], iconAnchor: [18, 18] });
+  const g = groesse, rand = g >= 24 ? 3 : 2;
+  const inhalt = g >= 18 ? (SYMBOLE[typ] || SYMBOLE[a.typen[0][0]]) : '';
+  return L.divIcon({ className: `punkt-symbol punkt-${a.form}`, html: `<span aria-hidden="true" style="background:${a.farbe};width:${g}px;height:${g}px;border-width:${rand}px;--sym:${Math.round(g * 0.58)}px">${inhalt}</span>`, iconSize: [g, g], iconAnchor: [g / 2, g / 2] });
 }
 
 // ---------- Dialoge ----------
@@ -123,7 +127,7 @@ export function createPunktLayers(map, { klickbar = () => true, verschiebbar = f
       gruppen[art].clearLayers();
       for (const x of d[art] || []) {
         if (!x.at) continue;
-        const m = L.marker(x.at, { icon: punktIcon(art, x.typ), title: punktTitel(art, x), zIndexOffset: 350, draggable: verschiebbar });
+        const m = L.marker(x.at, { icon: punktIcon(art, x.typ, punktGroesse(map.getZoom())), title: punktTitel(art, x), zIndexOffset: 350, draggable: verschiebbar });
         if (verschiebbar) m.on('dragend', () => { const ll = m.getLatLng(); speichere((p) => { const y = p[art].find((z) => z.id === x.id); if (y) y.at = [Number(ll.lat.toFixed(7)), Number(ll.lng.toFixed(7))]; }); toast(`${ARTEN[art].titel} verschoben`); });
         m.bindPopup(() => punktPopup(art, x, { schliessen: () => map.closePopup(), nurAnsehen }));
         m.on('click', (e) => { if (!klickbar()) { L.DomEvent.stop(e); m.closePopup(); } });
@@ -133,7 +137,10 @@ export function createPunktLayers(map, { klickbar = () => true, verschiebbar = f
   }
   zeichne();
   const ab = store.subscribe(zeichne);
-  return { ...gruppen, entfernen: ab };
+  let letzte = punktGroesse(map.getZoom());
+  const beiZoom = () => { const g = punktGroesse(map.getZoom()); if (g !== letzte) { letzte = g; zeichne(); } };
+  map.on('zoomend', beiZoom);
+  return { ...gruppen, entfernen: () => { ab(); map.off('zoomend', beiZoom); } };
 }
 
 // ---------- Bearbeiten ----------
@@ -164,7 +171,8 @@ export function openPunktEditor({ center, zoom = 17, art = 'habitat' } = {}) {
     fill(leiste,
       h('p', { class: 'draw-status' }, `Tippe in die Karte, wo ${art === 'habitat' ? 'ein Habitatbaum steht oder liegt' : 'eine jagdliche Einrichtung steht'} – dann öffnet sich das Formular. Vorhandene Punkte antippen zum Bearbeiten oder Löschen, gedrückt halten und ziehen zum Verschieben.`),
       h('p', { class: 'muted' }, `Eingetragen: ${zaehle}`),
-      h('div', { class: 'punkt-legende' }, A.typen.map(([k, l]) => h('span', {}, h('span', { class: `punkt-mini punkt-${A.form}`, style: `background:${A.farbe}`, html: SYMBOLE[k] }), l))));
+      h('div', { class: 'punkt-legende' }, A.typen.map(([k, l]) => h('span', {}, h('span', { class: `punkt-mini punkt-${A.form}`, style: `background:${A.farbe}`, html: SYMBOLE[k] }), l))),
+      art === 'jagd' ? h('button', { type: 'button', class: 'btn btn-block', onclick: () => import('../jagdkarte.js').then((x) => x.openJagdkarte()) }, 'Revierkarte als PDF erstellen') : null);
   }
   render();
   const abo = store.subscribe(render);

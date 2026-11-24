@@ -148,15 +148,18 @@ export async function waldbericht() {
   const s = store.get();
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
-  const mine = s.parcels.filter((p) => byId[p.id] && passtFlurstueck(p)).map((p) => byId[p.id]);
-  if (!mine.length) { toast('Noch keine Flächen gespeichert.'); return; }
+  // nur Waldflurstücke (Kategorie „Wald“) – Landwirtschaft, Gewässer und Bebautes gehören nicht in den Waldbericht
+  const eigene = s.parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
+  const mine = eigene.filter((p) => (p.category || 'Wald') === 'Wald').map((p) => byId[p.id]);
+  if (!eigene.length) { toast('Noch keine Flächen gespeichert.'); return; }
+  if (!mine.length) { toast('Keine Waldflurstücke vorhanden – der Waldbericht enthält nur Flächen der Kategorie „Wald“.'); return; }
   toast('Waldbericht wird erstellt …');
   const { MEASURE_TYPES } = await import('./measures.js');
   const doc = new Pdf();
   const W = new Schreiber(doc);
   const pr = s.profile || {};
   const gesamt = mine.reduce((a, p) => a + amtlicheFlaecheHa(p), 0);
-  W.titel('Waldbericht', `${pr.name ? `${pr.name} · ` : ''}${mine.length} Flurstücke, ${formatHa(gesamt)} · Stand ${datum(Date.now())}`);
+  W.titel('Waldbericht', `${pr.name ? `${pr.name} · ` : ''}${mine.length} Waldflurstücke, ${formatHa(gesamt)} · Stand ${datum(Date.now())}`);
   W.absatz('Zusammenstellung aus der WaldWächter-App: Flächen, Bestand, Maßnahmen und Tagebuch. Flurstücksdaten ALKIS © GDI-Th; keine amtliche Auskunft.', { size: 9, farbe: GRAU });
   const basemap = s.settings?.basemap === 'dop' ? 'dop' : 'osm';
   for (const p of mine) {

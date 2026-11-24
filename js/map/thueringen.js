@@ -29,15 +29,28 @@ export function dopLayer() {
   ]);
 }
 
-// Der Dienst zeichnet Flurstücke nur bis Maßstab 1:10.000. In Web-Mercator
-// entspricht das in Thüringen erst Zoomstufe 16 (Zoom 15 ≈ 1:17.000).
-export const ALKIS_MIN_ZOOM = 16;
+// Der Dienst zeichnet Flurstücke nur bis Maßstab 1:10.000 – in Web-Mercator erst ab Zoomstufe 16.
+// Damit die Grenzen schon früher erscheinen, holen wir bei Zoom 15 bzw. 14 Kacheln mit doppelter bzw.
+// vierfacher Pixelzahl: der Dienst „sieht“ dann den Maßstab von Zoom 16 und zeichnet die Grenzen;
+// der Browser verkleinert die Kachel auf die normale Größe.
+export const ALKIS_MIN_ZOOM = 14;
+const AlkisWMS = L.TileLayer.WMS.extend({
+  getTileUrl(coords) {
+    const f = coords.z >= 16 ? 1 : 2 ** (16 - coords.z);
+    const w = this.wmsParams.width, hh = this.wmsParams.height;
+    this.wmsParams.width = w * f; this.wmsParams.height = hh * f;
+    const url = L.TileLayer.WMS.prototype.getTileUrl.call(this, coords);
+    this.wmsParams.width = w; this.wmsParams.height = hh;
+    return url;
+  },
+});
+const alkisWms = (url, opts) => new AlkisWMS(url, { layers: 'adv_alkis_flurstuecke', format: 'image/png', transparent: true, version: '1.3.0', attribution: TH_ATTR, maxZoom: 21, minZoom: ALKIS_MIN_ZOOM, ...opts });
 
 /** ALKIS-Flurstücksgrenzen mit Nummern; auf dem Luftbild in Gelb. */
 export function alkisLayer(onAerial) {
   return onAerial
-    ? wms(TH.alkisGelb, 'adv_alkis_flurstuecke', { minZoom: ALKIS_MIN_ZOOM, opacity: 0.95 })
-    : wms(TH.alkis, 'adv_alkis_flurstuecke', { minZoom: ALKIS_MIN_ZOOM, opacity: 0.85 });
+    ? alkisWms(TH.alkisGelb, { opacity: 0.95, className: 'alkis-kacheln' })
+    : alkisWms(TH.alkis, { opacity: 0.85, className: 'alkis-kacheln' });
 }
 
 // ---------- WFS: Flurstücke abfragen ----------

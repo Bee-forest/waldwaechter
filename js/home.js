@@ -1233,7 +1233,7 @@ function openLayerSheet() {
       setWahl,
       h('p', { class: 'sheet-label' }, 'Oder einzeln wählen'),
       box('Flurstücke',
-        sw('alkis', 'Flurstücksgrenzen (ALKIS)', { color: '#F6D32D', note: 'ab Zoomstufe 16', onchange: (e) => {
+        sw('alkis', 'Flurstücksgrenzen (ALKIS)', { color: '#F6D32D', note: 'ab Zoomstufe 14', onchange: (e) => {
           store.update((st) => { st.settings.layers.alkis = e.target.checked; });
           base.setAlkis(e.target.checked);
         } }),

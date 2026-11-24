@@ -98,7 +98,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 @media (min-width: 600px) { .dialog { border-radius: 28px; margin-bottom: 24px; } }
 .dialog-title { font-size: 21px; }
 .scrim { background: rgba(16, 24, 19, .45); backdrop-filter: blur(2px); }
-#toast { border-radius: 999px; padding: 12px 20px; box-shadow: var(--shadow-lg); }
+#toast { border-radius: 14px; padding: 12px 16px; box-shadow: var(--shadow-lg); }
 
 /* ---------- Auswahlkacheln (Neue Maßnahme, Assistenten) ---------- */
 .type-tile { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); padding: 14px 40px 14px 16px; position: relative; min-height: 72px; transition: border-color .15s, transform .05s; }
@@ -236,7 +236,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .mdetail { max-width: 760px; margin: 0 auto; }
 
 /* ---------- Profil in drei Bereichen ---------- */
-.profil-bereiche { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; box-shadow: 0 6px 14px -10px rgba(0,0,0,.25); }
+.profil-bereiche { position: sticky; top: -16px; z-index: 5; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; box-shadow: 0 6px 14px -10px rgba(0,0,0,.25); }
 .profil-bereiche button { white-space: nowrap; min-height: 42px; font-size: 14px; padding: 4px 6px; }
 
 /* ---------- Ordner-Leiste (Profimodus): Farbe zeigt, wo man arbeitet ---------- */
@@ -253,3 +253,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .ordner-zurueck { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,.18); font-size: 20px; line-height: 1; cursor: pointer; color: var(--ink); }
 .facts.facts-kurz > .wide { grid-column: 1 / -1; }
 .facts.facts-kurz dd { overflow-wrap: anywhere; }
+.profil-bereiche { box-shadow: 0 -16px 0 6px var(--bg), 0 6px 14px -10px rgba(0,0,0,.25); }
+#toast { width: max-content; max-width: min(calc(100vw - 32px), 520px); font-size: 15px; line-height: 1.35; }

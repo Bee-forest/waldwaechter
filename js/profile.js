@@ -110,7 +110,6 @@ export async function openProfile() {
 
       ],
       einst: () => [
-      profiKarte(),
       erinnerungKarte(),
       h('section', { class: 'card' },
         h('h2', {}, 'Einstellungen'),
@@ -129,6 +128,7 @@ export async function openProfile() {
           !isStandalone() && isIOS() ? h('p', { class: 'hint' }, 'Auf dem iPhone: In Safari auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen.') : null,
         ),
       ),
+      profiKarte(),
       ],
       daten: () => [
       exportKarte(),

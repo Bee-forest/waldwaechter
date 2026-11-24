@@ -345,6 +345,7 @@ function ladeBesonderheiten(parcel) {
     drawParcels();
     const host = document.getElementById('besonderheiten');
     if (host && selected?.parcel.id === parcel.id) fill(host, ...besonderheitenListe(parcel));
+    if (aktAchten?.id === parcel.id) aktAchten.a.update?.();
   });
 }
 
@@ -378,6 +379,50 @@ const geoFrame = (title, src, height = 200) => h('iframe', { class: 'wms-info', 
 
 /** Aufklappbare Themen-Kachel in der Infobox; die Kurzinfo steht auch im zugeklappten Zustand da */
 const KLAPP = new Set(); // aufgeklappte Kacheln bleiben beim Wechsel des Flurstücks offen
+let aktAchten = null;
+/** „Worauf achten?“: alle Hinweise zur Fläche als kurze, klare Liste – wichtigstes zuerst */
+function achtenZeichnen(p, achten, host) {
+  const geo = achten.geo;
+  const featBereit = FEAT.has(p.id);
+  const punkte = [];
+  if (geo && !geo.fehler) {
+    const gesehen = new Set();
+    for (const x of geo.schutz) {
+      if (gesehen.has(x.short)) continue; gesehen.add(x.short);
+      punkte.push({ stufe: x.level, marke: x.short, kurz: x.label, titel: x.props?.siteName ? `${x.label} „${umlaut(x.props.siteName)}“` : x.label, text: x.text,
+        aktion: h('button', { type: 'button', class: 'link-btn', onclick: () => zeigeVerordnung(x) }, 'Verordnung ansehen') });
+    }
+    for (const x of geo.funktion) punkte.push({ stufe: 1, marke: x.icon || '•', kurz: x.label, titel: x.label, text: x.text });
+  }
+  const typen = {};
+  for (const f of featuresOf(p)) (typen[f.type] ||= []).push(f);
+  for (const [t, list] of Object.entries(typen)) {
+    if (t === 'nsg' || t === 'waldfunktion') continue; // schon oben aus dem Geoportal
+    const namen = [...new Set(list.map((x) => x.name).filter(Boolean))].slice(0, 3);
+    punkte.push({ stufe: t === 'vsp' ? 2 : 2, marke: t === 'vsp' ? '⚠' : t === 'lrt' ? 'LRT' : '◆', kurz: t === 'vsp' ? 'Verkehrssicherung' : FEATURE_TYPES[t] || list[0].title,
+      titel: `${FEATURE_TYPES[t] || list[0].title}${namen.length ? `: ${namen.join(', ')}` : list.length > 1 ? ` (${list.length} Stellen)` : ''}`, text: list[0].text,
+      aktion: t === 'vsp' ? h('button', { type: 'button', class: 'link-btn', disabled: hatVerkehrssicherung(p.id), onclick: (e) => { erinnereVerkehrssicherung(p); e.currentTarget.disabled = true; e.currentTarget.textContent = 'Im Maßnahmenplan'; toast('Verkehrssicherung im Maßnahmenplan'); } },
+        hatVerkehrssicherung(p.id) ? 'Bereits im Maßnahmenplan' : 'An Kontrollen erinnern') : null });
+  }
+  punkte.sort((x, y) => y.stufe - x.stufe);
+  const laedt = !geo || !featBereit;
+  const relevant = punkte.filter((x) => x.stufe > 0);
+  fill(host,
+    punkte.length ? h('ul', { class: 'achten-punkte' }, punkte.map((x) => h('li', { class: `achten-stufe-${x.stufe}` },
+      h('span', { class: 'achten-marke', 'aria-hidden': 'true' }, x.marke),
+      h('div', {}, h('strong', {}, x.titel), h('p', {}, x.text), x.aktion || null))))
+      : laedt || geo?.fehler ? null
+      : h('p', { class: 'ok-line' }, h('span', { html: icon.check }), 'Kein Schutzgebiet, kein kartiertes Biotop und keine Verkehrssicherungspflicht – hier gilt die normale, ordnungsgemäße Forstwirtschaft.'),
+    laedt ? h('p', { class: 'muted' }, 'Weitere Angaben werden noch geladen …') : null,
+    geo?.fehler ? h('p', { class: 'muted' }, 'Schutzgebiete und Waldfunktionen sind gerade nicht abrufbar – unten unter „Einzelheiten“ steht die Rohauskunft.') : null,
+    h('div', { class: 'achten-immer' }, h('strong', {}, 'Gilt überall: '),
+      'Zwischen März und August brüten Vögel – Holzernte möglichst im Herbst und Winter, Horst- und Höhlenbäume stehen lassen. Bei Unsicherheit vorher den Revierförster fragen.'));
+  achten.block.setKurz(laedt && !punkte.length ? 'Wird geprüft …'
+    : geo?.fehler && !punkte.length ? 'Geoportal gerade nicht erreichbar'
+    : relevant.length ? `${relevant.length} ${relevant.length === 1 ? 'Punkt' : 'Punkte'}: ${relevant.slice(0, 3).map((x) => x.kurz).join(', ')}${relevant.length > 3 ? ' …' : ''}`
+    : 'Nichts Besonderes – normale Bewirtschaftung');
+}
+
 function klapp(key, titel, inhalt, vorschau = null) {
   const kurz = h('span', { class: 'klapp-kurz' }, vorschau || '');
   const el = h('details', { class: 'info-block klapp', open: KLAPP.has(key) || undefined, ontoggle: (e) => { if (e.target.open) KLAPP.add(key); else KLAPP.delete(key); } },
@@ -782,7 +827,7 @@ function geoInfoBlock(latlng, parcelId = null, polys = null, achten = null) {
     fill(B.zust, ...g.zust);
     const kb = (pf ? pf.text : null) || (parcelId ? store.get().bestandKorrektur?.[parcelId]?.haupt?.art : null);
     K.standort.setKurz(`${kb || b ? `${kb || b.art || b.text} · ` : ''}${g.vorschau.standort}`);
-    K.schutz.setKurz(g.vorschau.schutz);
+    if (achten) { achten.geo = { schutz: info.schutz, funktion: info.funktion }; achten.update?.(); } else K.schutz.setKurz(g.vorschau.schutz);
     K.zust.setKurz(g.vorschau.zust);
     const sp = info.standort || {};
     standortFertig(info.standort || null);
@@ -805,7 +850,8 @@ function geoInfoBlock(latlng, parcelId = null, polys = null, achten = null) {
     fill(B.schutz, h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar. Hier die Rohdaten-Auskunft:'), geoFrame('Schutzgebiete am Punkt', INFO_SOURCES.schutz(latlng), 160));
     fill(B.zust, h('p', { class: 'muted' }, 'Das Geoportal ist gerade nicht erreichbar.'));
     fill(B.bzt, h('p', { class: 'muted' }, 'Ohne Standortskarte (Geoportal nicht erreichbar) ist keine Baumartenempfehlung möglich.'));
-    [K.standort, K.bzt, K.schutz, K.zust].forEach((k) => k.setKurz('nicht erreichbar'));
+    [K.standort, K.bzt, K.zust, ...(achten ? [] : [K.schutz])].forEach((k) => k.setKurz('nicht erreichbar'));
+    if (achten) { achten.geo = { fehler: true }; achten.update?.(); }
     bztFertig(null); standortFertig(null);
   });
   return [K.schutz, K.empfehlung, K.standort, K.gelaende, K.bzt, K.zust];
@@ -943,14 +989,19 @@ async function renderInfo() {
         } }, h('span', { html: icon.plus }), 'Fläche hinzufügen'),
       );
 
-  // Schutzgebiete, Waldfunktionen, Biotope, Verkehrssicherung (und Wanderwege) in einem Reiter
+  // Schutzgebiete, Waldfunktionen, Biotope, Verkehrssicherung (und Wanderwege) in einem Reiter:
+  // oben eine klare Liste „Das musst du hier beachten“, die Einzelheiten aufklappbar darunter
   const schutzHost = h('div', { class: 'geo-grid', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Lade Schutzgebiete und Waldfunktionen …'));
-  const achten = isAlkis ? { host: schutzHost, block: klapp('achten', 'Worauf achten?', [
-    h('h4', { class: 'achten-titel' }, 'Schutzgebiete und Waldfunktionen'), schutzHost,
-    h('h4', { class: 'achten-titel' }, istProfi() ? 'Verkehrssicherung, Biotope, Wanderwege' : 'Verkehrssicherung und Biotope'),
-    h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …')),
-    istProfi() ? wanderwegeTeil(p) : null,
-    h('p', { class: 'hint' }, 'Am angetippten Punkt laut Geoportal Thüringen (© GDI-Th / ThüringenForst / TLUBN). Ohne Gewähr – im Zweifel beim Forstamt nachfragen.')], 'Lädt …') } : null;
+  const achtenListe = h('div', { class: 'achten-liste', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Prüfe Schutzgebiete, Biotope und Pflichten …'));
+  const achten = isAlkis ? { host: schutzHost, geo: null, block: klapp('achten', 'Worauf achten?', [
+    achtenListe,
+    h('details', { class: 'bzt-mehr' }, h('summary', {}, 'Einzelheiten und Quellen'),
+      h('h4', { class: 'achten-titel' }, 'Schutzgebiete und Waldfunktionen'), schutzHost,
+      h('h4', { class: 'achten-titel' }, istProfi() ? 'Verkehrssicherung, Biotope, Wanderwege' : 'Verkehrssicherung und Biotope'),
+      h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …')),
+      istProfi() ? wanderwegeTeil(p) : null,
+      h('p', { class: 'hint' }, 'Am angetippten Punkt bzw. auf dem Flurstück laut Geoportal Thüringen (© GDI-Th / ThüringenForst / TLUBN). Ohne Gewähr – im Zweifel beim Forstamt nachfragen.'))], 'Wird geprüft …') } : null;
+  if (achten) { achten.update = () => achtenZeichnen(p, achten, achtenListe); aktAchten = { id: p.id, a: achten }; }
   fill(box, 
     h('div', { class: 'info-head' },
       h('div', {},

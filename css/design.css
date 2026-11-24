@@ -288,3 +288,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .gassen-box .btn-row { margin-top: 8px; }
 .gassen-box label { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-weight: 600; }
 .gassen-box input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--primary); }
+.achten-punkte { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.achten-punkte li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.achten-punkte li p { margin: 2px 0 4px; font-size: 14.5px; color: var(--ink-2); }
+.achten-marke { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 12.5px; background: var(--surface-2); color: var(--ink); }
+.achten-stufe-3 { border-color: color-mix(in srgb, var(--signal) 45%, transparent) !important; }
+.achten-stufe-3 .achten-marke { background: var(--signal); color: #fff; }
+.achten-stufe-2 .achten-marke { background: #F3D9C6; color: #8A3B12; }
+.achten-stufe-1 .achten-marke { background: var(--primary-soft); color: var(--primary); }
+.achten-immer { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--primary-soft); font-size: 14px; }

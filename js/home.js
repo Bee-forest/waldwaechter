@@ -243,8 +243,8 @@ function drawParcels() {
   const myList = store.get().parcels;
   for (const p of ALL) {
     const m = myList.find((x) => x.id === p.id);
-    if (m && !passtFlurstueck(m)) { // Fläche aus einem anderen Ordner: nur dünn umrandet
-      allParcelsLayer.addLayer(L.polygon(polysOf(p), { color: '#6B7A70', weight: 1.5, dashArray: '2 5', fillOpacity: 0, interactive: false }));
+    if (m && !passtFlurstueck(m)) { // Fläche aus einem anderen Ordner: im Profimodus dünn umrandet, sonst gar nicht
+      if (istProfi()) allParcelsLayer.addLayer(L.polygon(polysOf(p), { color: '#6B7A70', weight: 1.5, dashArray: '2 5', fillOpacity: 0, interactive: false }));
     } else if (m) {
       const c = CATEGORIES[m.category] || CATEGORIES.Wald;
       catGroups[m.category]?.addLayer(L.polygon(polysOf(p), { color: c.color, weight: 2, fillColor: c.color, fillOpacity: 0.38, interactive: false }));
@@ -1031,7 +1031,7 @@ async function renderInfo() {
     catSection,
     istProfi() && m ? ordnerAuswahl(m, { beiAenderung: () => renderInfo() }) : null,
     // Ohne Profimodus: Fläche liegt noch in einem Ordner (aus dem Profimodus) → mit einem Tipp zu den eigenen Flächen
-    !istProfi() && m?.ordnerId ? h('div', { class: 'lrt-hinweis' }, h('p', {}, `Diese Fläche liegt im Ordner „${ordnerName(m.ordnerId)}“ und wird deshalb nur grau umrandet angezeigt.`),
+    !istProfi() && m?.ordnerId ? h('div', { class: 'lrt-hinweis' }, h('p', {}, `Diese Fläche liegt im Ordner „${ordnerName(m.ordnerId)}“ und wird deshalb außerhalb des Profimodus in der Karte nicht angezeigt.`),
       h('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: () => { store.update((st) => { const x = st.parcels.find((y) => y.id === m.id); if (x) x.ordnerId = null; }); toast('Zu deinen eigenen Flächen verschoben'); renderInfo(); } }, 'Zu meinen eigenen Flächen')) : null,
     istProfi() ? eigentuemerBlock(p) : null,
     isAlkis ? rescueBlock(latlng) : null,

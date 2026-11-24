@@ -60,7 +60,7 @@ export const schutzgebieteInFlaeche = (sel, o = {}) => natura2000InFlaeche(sel, 
 export const STRENG = ['ffh_geb', 'spa', 'nsg', 'nationalpark', 'biosreserv'];
 export const strengeGebiete = (g) => (g || []).filter((x) => STRENG.includes(x.layer));
 /** Maßnahmen, die in den Bestand eingreifen (Fällung, Pflege) */
-export const EINGRIFF = ['durchforstung', 'holzernte_df', 'pflege'];
+export const EINGRIFF = ['durchforstung', 'holzernte_df', 'holzernte_bs', 'pflege', 'raeumung', 'mulchen', 'bodenverwundung'];
 /** Schutzgebiete einer Maßnahme (GPS-Durchforstung: aus dem Assistenten, sonst aus der Hintergrundprüfung) */
 export const gebieteVon = (m) => m?.thinning?.natura2000 || m?.schutzgebiete || [];
 /** Braucht dieser Termin eine Verträglichkeits-Vorprüfung? */

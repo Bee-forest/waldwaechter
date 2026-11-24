@@ -73,7 +73,7 @@ export const FOERDER = {
       'Jungwuchs- und Dickungspflege (Mischungs- und Standraumregulierung bis 7 cm BHD) nur über die Richtlinie Teil A. Wertastung wird nicht gefördert.',
     ],
   },
-  holzernte_df: {
+  holzernte_bs: {
     gegenstand: 'Bodenschonende Holzernte mit Rückepferd oder Seilkran',
     bedingungen: [
       'Nur über die Richtlinie Teil A (A 2.4) und nur beim Einsatz von Rückepferden oder Seilkran – befristet bis 31.12.2026.',
@@ -422,10 +422,10 @@ export async function openFoerderantrag({ antragId, schritt = null, nurLesen = f
         pi('Geplante Arbeiten (werden im Antrag verbal angegeben)', 'vorhaben', { placeholder: 'z. B. Mahd verdämmender Vegetation' }));
       if (x.pflegeArt === 'jungwuchs' || x.pflegeArt === 'dickung') extra.push(pi('Mittelhöhe des Bestands (m)', 'mittelhoehe', { inputmode: 'decimal' }));
     }
-    if (m.type === 'holzernte_df' && k === 'pferd') extra.push(
+    if (['holzernte_df', 'holzernte_bs'].includes(m.type) && k === 'pferd') extra.push(
       auswahl('Art des Rückens', 'pferdArt', [['abfuhr', 'abfuhrbereites Rücken bis zum Polterplatz'], ['vorliefern', 'Vorliefern oder Anrücken im Bestand']], x, render),
       pi('Holzmenge (fm)', 'fm', { inputmode: 'decimal', placeholder: det.menge || '' }));
-    if (m.type === 'holzernte_df' && k === 'seilkran') extra.push(pi(`Mehrausgaben gegenüber dem Standardverfahren (${d.ust === 'regel' ? 'netto' : 'brutto'}, €)`, 'mehrkosten', { inputmode: 'decimal' }));
+    if (['holzernte_df', 'holzernte_bs'].includes(m.type) && k === 'seilkran') extra.push(pi(`Mehrausgaben gegenüber dem Standardverfahren (${d.ust === 'regel' ? 'netto' : 'brutto'}, €)`, 'mehrkosten', { inputmode: 'decimal' }));
     const post = berechne(prog(), d, [m], ctx);
     return h('section', { class: 'antrag-massnahme' },
       h('h3', {}, t),

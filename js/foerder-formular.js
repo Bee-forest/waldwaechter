@@ -66,7 +66,7 @@ export function kategorie(m, x = {}) {
       const a = x.pflegeArt || m.pflege?.art || ({ Freischneiden: 'sicherung', Jungwuchspflege: 'jungwuchs', Jungbestandspflege: 'dickung', Wertastung: 'wertastung', 'Kulturpflege (Sicherung der Kultur)': 'sicherung', 'Dickungspflege (Jungbestandspflege)': 'dickung', 'Wertästung': 'wertastung' })[det.art] || 'sicherung';
       return a === 'wertastung' ? null : a;
     }
-    case 'holzernte_df': return det.verfahren === 'Rückepferd' ? 'pferd' : det.verfahren === 'Seilkran' ? 'seilkran' : null;
+    case 'holzernte_df': case 'holzernte_bs': return det.verfahren === 'Rückepferd' ? 'pferd' : det.verfahren === 'Seilkran' ? 'seilkran' : null;
     default: return null;
   }
 }

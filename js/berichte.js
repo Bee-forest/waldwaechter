@@ -52,18 +52,34 @@ class Schreiber {
 }
 
 // ---------- Unternehmer-Auftrag ----------
-export async function unternehmerAuftrag(measureId) {
+// Arbeitsanweisung je Maßnahme (fachliche Standards, kurz für den Auftragnehmer)
+const SICHERHEIT = 'Arbeitssicherheit nach DGUV-Regeln (PSA, Schnittschutz, nie allein mit Motorsäge); Rettungspunkt siehe unten.';
+const HOLZERNTE = ['Befahrung nur auf den Rückegassen – keine Fahrten in den Bestand.', 'Markierte Bäume (Habitat- und Z-Bäume) und Grenzsteine schonen; keine Rücke- und Fällschäden am verbleibenden Bestand.', 'Holz nur am Lagerplatz poltern, nicht an stehende Bäume; Wege und Gräben frei halten und nach Abschluss wiederherstellen.', 'Bei Nässe oder Frostaufgang Arbeit unterbrechen, um tiefe Spuren zu vermeiden.'];
+const ANWEISUNG = {
+  raeumung: ['Schlagabraum nicht verbrennen; je nach Auftrag in Schwaden legen oder abfahren.', 'Oberboden nicht abschieben, nicht flächig befahren; Stubben bleiben stehen.', 'Vorhandene Naturverjüngung, Totholz und Habitatbäume erhalten.'],
+  bodenverwundung: ['Nur den Oberboden aufreißen, Humus nicht abschieben.', 'Verwundeter Anteil wie vereinbart; Naturverjüngung aussparen.', 'Nicht bei Nässe arbeiten.'],
+  mulchen: ['Nur die vereinbarten Streifen mulchen; Zwischenstreifen bleiben stehen.', 'Mulchtiefe gering halten, Mineralboden nicht großflächig freilegen.', 'Vorhandene Verjüngung und Grenzsteine schonen; auf Bodenbrüter achten.'],
+  pflanzung: ['Wurzeln nie austrocknen lassen (Pflanzensack, Schatten); Pflanzen am Tag der Lieferung setzen.', 'Pflanzverfahren und -verband laut Pflanzplan; Wurzeln nicht stauchen, Pflanzen fest antreten.', 'Herkunftsnachweis (Lieferschein) aufbewahren.'],
+  saat: ['Saatgut kühl und feucht lagern; Saattiefe je Baumart (Eicheln 3–5 cm, Buchecker 2–3 cm).', 'Saatplätze bzw. -streifen markieren.', 'Herkunftsnachweis aufbewahren.'],
+  zaunbau: ['Zaun straff spannen, Bodenabschluss dicht (Untergrabungsschutz), Tore schließbar.', 'Zaunverlauf laut Karte; Grenzabstand beachten.'],
+  einzelschutz: ['Schutz senkrecht und fest am Stab, Pflanze mittig; Stäbe an der Wetterseite.'],
+  pflege: ['Nur so viel eingreifen wie nötig; Zielbaumarten und Mischung erhalten.', 'Geschnittenes Material bleibt auf der Fläche.', 'Gepflanzte Bäume vorher markieren und nicht beschädigen.'],
+  holzernte_df: HOLZERNTE, durchforstung: HOLZERNTE,
+  holzernte_bs: [...HOLZERNTE, 'Verfahren wie vereinbart (Seilkran, Rückepferd, Seilwinde oder Bänder) – Befahrung auf das notwendige Maß beschränken.'],
+};
+
+export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) {
   const s = store.get();
   const m = s.measures.find((x) => x.id === measureId);
   if (!m) return;
-  toast('Auftrag wird erstellt …');
+  if (!anhaengen) toast('Arbeitsauftrag wird erstellt …');
   const { MEASURE_TYPES } = await import('./measures.js');
   const all = await source.allParcels();
   const p = all.find((x) => x.id === m.parcelId) || null;
   const fl = flaecheVon(m, p);
   const polys = fl?.polys?.length ? fl.polys : p ? polysOf(p) : [];
   const mitte = polys.length ? centroid(polys[0][0]) : m.schaden?.pos || null;
-  if (!mitte) { toast('Für diese Maßnahme ist keine Fläche hinterlegt.'); return; }
+  if (!mitte) { if (!anhaengen) toast('Für diese Maßnahme ist keine Fläche hinterlegt – bitte zuerst eine Fläche hinterlegen.'); return; }
   const E = s.erschliessung || { gassen: [], lager: [] };
   const nahe = (ll, r) => Math.abs(ll[0] - mitte[0]) < r && Math.abs(ll[1] - mitte[1]) < r * 1.6;
   const gassen = (E.gassen || []).filter((g) => g.line?.some((ll) => nahe(ll, 0.012)));
@@ -74,7 +90,7 @@ export async function unternehmerAuftrag(measureId) {
   const doc = new Pdf();
   const W = new Schreiber(doc);
   const typ = MEASURE_TYPES[m.type]?.label || m.type;
-  W.titel(`Auftrag: ${typ}`, `Erstellt am ${datum(Date.now())} mit der WaldWächter-App`);
+  W.titel(`Arbeitsauftrag: ${typ}`, `Erstellt am ${datum(Date.now())} mit der WaldWächter-App`);
   W.kopf('Auftraggeber');
   W.zeile('Name', pr.name || '–'); W.zeile('Telefon', pr.telefon || '–'); W.zeile('E-Mail', pr.email || '–');
   if (pr.strasse || pr.ort) W.zeile('Anschrift', [pr.strasse, pr.ort].filter(Boolean).join(', '));
@@ -86,6 +102,10 @@ export async function unternehmerAuftrag(measureId) {
   for (const [k, v] of Object.entries(m.details || {})) { if (v === '' || v == null) continue; const f = T?.fields?.find((x) => x[0] === k); if (f) W.zeile(f[1].replace(/ \(.*\)/, ''), String(v)); }
   if (m.thinning?.plan) W.zeile('Durchforstung', `${m.thinning.plan.methode === 'f4' ? `${Math.round(m.thinning.plan.planung?.budget || 0)} m³ Menge laut Durchforstungshilfe` : `${m.thinning.plan.total} Bäume Entnahme geplant`}; Bäume sind ausgezeichnet`);
   if (m.note) W.zeile('Hinweise', m.note);
+  const sg = m.thinning?.natura2000 || m.schutzgebiete || [];
+  if (sg.length) W.zeile('Schutzgebiet', `${sg.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')} – Verordnung beachten${['ffh_geb', 'spa', 'nsg'].some((l) => sg.some((g) => g.layer === l)) ? '; Brut- und Setzzeit 1.3.–30.9. beachten' : ''}.`);
+  W.kopf('Arbeitsanweisung');
+  [...(ANWEISUNG[m.type] || []), SICHERHEIT].forEach((t) => W.absatz(`• ${t}`, { size: 10 }));
   W.kopf('Zufahrt, Lagerplatz und Rettung');
   W.zeile('Treffpunkt / Fläche', `${mitte[0].toFixed(5)} N, ${mitte[1].toFixed(5)} O – ${kartenLink(mitte)}`);
   lager.slice(0, 3).forEach((l, i) => W.zeile(i ? '' : 'Lagerplatz', `${l.name || `Lagerplatz ${i + 1}`}: ${l.at[0].toFixed(5)} N, ${l.at[1].toFixed(5)} O${l.befahrbar ? ` · ${l.befahrbar}` : ''}${l.lkw ? ' · LKW kann wenden' : ''}${l.text ? ` · ${l.text}` : ''}`));
@@ -111,7 +131,16 @@ export async function unternehmerAuftrag(measureId) {
   W.y += 24;
   doc.linie(W.L, W.y, W.L + 200, W.y); doc.linie(W.R - 200, W.y, W.R, W.y); W.y += 12;
   doc.text(W.L, W.y, 'Ort, Datum, Auftraggeber', { size: 8, farbe: GRAU }); doc.text(W.R - 200, W.y, 'Ort, Datum, Auftragnehmer', { size: 8, farbe: GRAU });
-  herunterladen(doc.blob(), `Auftrag_${dateiname(typ)}${p ? `_${dateiname(`${p.gemarkung}_${p.nr}`)}` : ''}.pdf`, { titel: 'Auftrag ist fertig' });
+  const name = `Arbeitsauftrag_${dateiname(typ)}${p ? `_${dateiname(`${p.gemarkung}_${p.nr}`)}` : ''}.pdf`;
+  const blob = doc.blob();
+  // Am Auftrag ablegen (Verlauf und Anhänge) – der jeweils neueste ersetzt den alten
+  const anhangId = `auftrag-${m.id}`;
+  try {
+    const { dateiSpeichern } = await import('./dateien.js');
+    await dateiSpeichern(anhangId, blob);
+    store.update((st) => { const x = st.measures.find((y) => y.id === m.id); if (!x) return; x.anhaenge = (x.anhaenge || []).filter((a) => a.typ !== 'auftrag'); x.anhaenge.push({ id: anhangId, typ: 'auftrag', titel: 'Arbeitsauftrag mit Karte (PDF)', erstellt: Date.now(), datei: anhangId, name }); x.auftragStand = Date.now(); });
+  } catch { /* Speicher voll: nur herunterladen */ }
+  if (!anhaengen) herunterladen(blob, name, { titel: 'Arbeitsauftrag ist fertig' });
 }
 
 // ---------- Waldbericht ----------

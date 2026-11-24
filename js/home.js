@@ -22,7 +22,7 @@ import { createFlurnummernLayer } from './map/flurnummern.js';
 import { createErschliessungLayers, openErschliessungEditor } from './map/erschliessung.js';
 import { createHangneigungLayer, analysiereFlaeche, befahrbarkeit, KLASSEN as NEIGUNG, grad as neigGrad } from './map/hangneigung.js';
 import { createPunktLayers, openPunktEditor, HABITAT_FARBE, JAGD_FARBE } from './map/punkte.js';
-import { ordnerEigentuemerAnwenden, ordnerLeiste, passtFlurstueck, ordnerAuswahl, ordnerFuerNeu, ordnerListe, ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo } from './profi.js';
+import { ordnerEigentuemerAnwenden, ordnerLeiste, passtFlurstueck, ordnerAuswahl, ordnerFuerNeu, ordnerListe, ladeRevierleiter, revierleiterVon, istProfi, eigentuemerInhalt, eigentuemerVon, etName, revierKontakt, revierKontaktBearbeiten, kontaktLinks, eigentuemerAbo, ordnerName } from './profi.js';
 import { queryPoint, naechsterStandort, explainStandort, NAEHRKRAFT, WASSER_SKALA, umlaut } from './map/geoinfo.js';
 
 export const FEATURE_TYPES = {
@@ -835,7 +835,7 @@ function renderWmsInfo(latlng) {
   const wasHidden = box.hidden;
   box.hidden = false;
   box.scrollTop = 0;
-  requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  // nicht automatisch zur Infobox scrollen – die Karte bleibt im Blick; das „i“ in der Karte springt hin
 }
 
 /** Von außen (Profil-Liste, Suche): zum Flurstück springen und auswählen. */
@@ -903,6 +903,9 @@ async function renderInfo() {
     ),
     catSection,
     istProfi() && m ? ordnerAuswahl(m, { beiAenderung: () => renderInfo() }) : null,
+    // Ohne Profimodus: Fläche liegt noch in einem Ordner (aus dem Profimodus) → mit einem Tipp zu den eigenen Flächen
+    !istProfi() && m?.ordnerId ? h('div', { class: 'lrt-hinweis' }, h('p', {}, `Diese Fläche liegt im Ordner „${ordnerName(m.ordnerId)}“ und wird deshalb nur grau umrandet angezeigt.`),
+      h('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: () => { store.update((st) => { const x = st.parcels.find((y) => y.id === m.id); if (x) x.ordnerId = null; }); toast('Zu deinen eigenen Flächen verschoben'); renderInfo(); } }, 'Zu meinen eigenen Flächen')) : null,
     istProfi() ? eigentuemerBlock(p) : null,
     isAlkis ? rescueBlock(latlng) : null,
     isAlkis ? geoInfoBlock(latlng, p.id, polysOf(p)) : null,
@@ -949,7 +952,7 @@ async function renderInfo() {
   const wasHidden = box.hidden;
   box.hidden = false;
   box.scrollTop = 0;
-  requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  // nicht automatisch zur Infobox scrollen – die Karte bleibt im Blick; das „i“ in der Karte springt hin
 }
 
 export async function removeParcel(id) {

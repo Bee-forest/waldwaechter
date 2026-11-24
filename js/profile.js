@@ -166,6 +166,23 @@ export async function openProfile() {
         h('ul', { class: 'mat-kurz et-nicht' }, r.eigene.slice(0, 80).map((t) => h('li', {}, t))), r.eigene.length > 80 ? h('p', { class: 'muted' }, `… und ${r.eigene.length - 80} weitere.`) : null) : null),
       actions: [{ label: 'OK', value: true, primary: true }] });
   }
+  /** Profimodus aus: Flächen, die in Ordnern liegen, wären nur grau umrandet – fragen, welche davon eigene sind */
+  async function profiAusFragen() {
+    const st = store.get();
+    const inOrdnern = st.parcels.filter((p) => p.ordnerId);
+    if (!inOrdnern.length) return;
+    const ordner = (st.ordner || []).map((o) => ({ ...o, n: inOrdnern.filter((p) => p.ordnerId === o.id).length })).filter((o) => o.n);
+    const gewaehlt = new Set(ordner.length === 1 ? [ordner[0].id] : []);
+    const v = await dialog({ title: 'Welche Flächen gehören dir?',
+      body: h('div', { class: 'form' },
+        h('p', {}, `Ohne Profimodus zeigt die Karte nur deine eigenen Flächen farbig. ${inOrdnern.length === 1 ? '1 Flurstück liegt' : `${inOrdnern.length} Flurstücke liegen`} in Ordnern und wären nur grau umrandet.`),
+        h('p', { class: 'hint' }, 'Hake die Ordner an, deren Flächen dir selbst gehören – sie kommen zu deinen eigenen Flächen. Die anderen bleiben in ihren Ordnern und erscheinen wieder, wenn du den Profimodus einschaltest.'),
+        ordner.map((o) => h('label', { class: 'check-row' }, h('input', { type: 'checkbox', checked: gewaehlt.has(o.id), onchange: (e) => { if (e.target.checked) gewaehlt.add(o.id); else gewaehlt.delete(o.id); } }), h('span', {}, `${o.name} (${o.n} Flurstück${o.n === 1 ? '' : 'e'})`)))),
+      actions: [{ label: 'Nichts ändern', value: false }, { label: 'Zu meinen Flächen', value: true, primary: true }] });
+    if (!v || !gewaehlt.size) return;
+    store.update((x) => { for (const p of x.parcels) if (gewaehlt.has(p.ordnerId)) p.ordnerId = null; });
+    toast('Flächen zu deinen eigenen Flächen verschoben');
+  }
   /** Tabelle(n) löschen – mit den Ordnern ihrer Waldbesitzer und deren Flurstücken */
   async function tabelleLoeschen(ids, titel, text) {
     const f = tabellenFolgen(ids);
@@ -219,7 +236,7 @@ export async function openProfile() {
       h('div', { class: 'profi-kopf' },
         h('h2', {}, 'Profimodus'),
         h('label', { class: 'switch-row compact' }, h('span', { class: 'switch-label' }, an ? 'an' : 'aus'),
-          h('input', { type: 'checkbox', role: 'switch', checked: an, 'aria-label': 'Profimodus', onchange: (e) => { store.update((st) => { st.settings.profi = e.target.checked; }); render(); toast(e.target.checked ? 'Profimodus an' : 'Profimodus aus'); } }))),
+          h('input', { type: 'checkbox', role: 'switch', checked: an, 'aria-label': 'Profimodus', onchange: async (e) => { const an = e.target.checked; store.update((st) => { st.settings.profi = an; }); render(); toast(an ? 'Profimodus an' : 'Profimodus aus'); if (!an) profiAusFragen(); } }))),
       h('p', { class: 'hint' }, 'Für Betreuer, FBG und Dienstleister: Ordner je Eigentümer mit getrennten Maßnahmen und Finanzen, Eigentümer je Flurstück (Excel-Import) und Wanderwege in der Flurstücks-Info.'),
       an ? h('div', { class: 'form' },
         h('p', { class: 'sheet-label' }, 'Eigentümer'),

@@ -58,6 +58,7 @@ export async function openMassnahmeBearbeiten(measureId) {
     });
     toast('Änderungen gespeichert');
     page.close();
+    import('./berichte.js').then((b) => b.unternehmerAuftrag(m.id, { anhaengen: true })).catch(() => {});
     // Termin jetzt in der Brut- und Setzzeit eines Schutzgebiets? Gleich nachfragen.
     import('./schutzgebiete.js').then(async ({ vorpruefungNoetig }) => {
       const neu = store.get().measures.find((y) => y.id === m.id);
@@ -178,6 +179,7 @@ export async function openProtokoll(measureId, { abschliessen = false } = {}) {
       h('h2', { class: 'step-title' }, 'Auffälligkeiten'),
       h('label', {}, 'Was ist aufgefallen?', h('textarea', { rows: 3, placeholder: 'z. B. Kronen nicht aufgearbeitet, Gasse 3 stark zerfahren, sehr sauber gearbeitet …', value: s.auffaellig, oninput: (e) => { s.auffaellig = e.target.value; } })),
       h('label', {}, 'Nacharbeit / Vereinbarungen', h('textarea', { rows: 2, placeholder: 'z. B. Weg bis 15.12. wieder herrichten, 10 % Abzug vereinbart', value: s.nacharbeit, oninput: (e) => { s.nacharbeit = e.target.value; } })),
+      h('button', { type: 'button', class: 'btn btn-block', onclick: () => openFlaecheHinterlegen(m.id) }, m.flaeche?.ring ? `Durchgeführte Fläche ändern (${formatHa(m.flaeche.ha)})` : 'Durchgeführte Fläche hinterlegen'),
       h('button', { type: 'button', class: 'btn btn-block', onclick: () => openFotos(`m:${m.id}`, `${MEASURE_TYPES[m.type]?.label || 'Maßnahme'} – Fotos nachher`, { hinweis: 'Fotos von Schäden oder vom Ergebnis als „nachher“ ablegen.' }) },
         `Fotos${fotoAnzahl(`m:${m.id}`) ? ` (${fotoAnzahl(`m:${m.id}`)})` : ''}`),
       h('div', { class: 'btn-row protokoll-aktionen' },
@@ -215,4 +217,39 @@ export function unternehmerUebersicht() {
     map.set(k.toLowerCase(), e);
   }
   return [...map.values()].map((e) => ({ ...e, schnitt: e.bewertet ? e.summe / e.bewertet : null })).sort((a, b) => (b.schnitt ?? 0) - (a.schnitt ?? 0));
+}
+
+/** Fläche einer Maßnahme hinterlegen oder ändern – in jedem Stand, auch beim Durchführen und danach
+ *  (Teilfläche einzeichnen oder mit GPS ablaufen). Danach wird der Arbeitsauftrag mit Karte neu erstellt. */
+export async function openFlaecheHinterlegen(measureId) {
+  const m = store.get().measures.find((x) => x.id === measureId);
+  if (!m) return;
+  const all = await source.allParcels();
+  const byId = Object.fromEntries(all.map((p) => [p.id, p]));
+  const mine = store.get().parcels.filter((p) => byId[p.id] && (passtFlurstueck(p) || p.id === m.parcelId));
+  const flHost = h('div', { class: 'flaeche-host' });
+  let wahl = null, parcelId = m.parcelId || mine[0]?.id || null, page = null;
+  const zeige = (id, start = null) => { wahl?.entferne(); wahl = null; flHost.replaceChildren(); if (id && byId[id]) { wahl = flaechenWahl(byId[id], start); flHost.append(wahl.el); } };
+  const body = h('div', { class: 'form' },
+    h('p', { class: 'hint' }, m.status === 'fertig' ? 'Halte fest, auf welcher Fläche die Maßnahme tatsächlich durchgeführt wurde.' : 'Lege fest, wo die Maßnahme durchgeführt wird – ganzes Flurstück oder Teilfläche. Du kannst die Fläche auch vor Ort mit GPS ablaufen.'),
+    h('label', {}, 'Flurstück', h('select', { onchange: (e) => { parcelId = e.target.value || null; zeige(parcelId); } },
+      mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${formatHa(amtlicheFlaecheHa(byId[p.id]))})`)))),
+    flHost,
+    h('button', { type: 'button', class: 'btn btn-primary btn-block btn-large', onclick: () => {
+      if (!parcelId) { toast('Bitte ein Flurstück wählen.'); return; }
+      const fl = wahl?.wert();
+      if (wahl && !fl) { toast('Bitte mindestens 3 Eckpunkte einzeichnen.'); return; }
+      store.update((s) => {
+        const x = s.measures.find((y) => y.id === m.id); if (!x) return;
+        x.parcelId = parcelId;
+        if (fl?.modus === 'teil') x.flaeche = { ring: fl.ring, ha: fl.ha, ...(m.status === 'fertig' ? { ist: true } : {}) };
+        else delete x.flaeche;
+        x.geaendert = Date.now();
+      });
+      toast('Fläche gespeichert');
+      page.close();
+      import('./berichte.js').then((b) => b.unternehmerAuftrag(m.id, { anhaengen: true })).catch(() => {});
+    } }, 'Fläche speichern'));
+  page = openPage('Fläche der Maßnahme', h('div', { class: 'new-measure' }, body), { onClose: () => wahl?.entferne() });
+  if (parcelId) zeige(parcelId, m.parcelId === parcelId ? m.flaeche?.ring || null : null);
 }

@@ -62,7 +62,7 @@ const katDef = (b) => KATEGORIEN[b.bereich]?.[b.art]?.find((x) => x.k === b.kat)
 export const katLabel = (b) => katDef(b)?.l || 'Sonstiges';
 
 // Maßnahme → Ausgabenkategorie im Wald
-const MASSNAHME_KAT = { pflanzung: 'pflanzung', zaunbau: 'wildschutz', einzelschutz: 'wildschutz', pflege: 'pflege', durchforstung: 'holzernte', holzernte_df: 'holzernte', polter: 'holzernte', verkehrssicherung: 'vsp', sonstiges: 'sonstiges' };
+const MASSNAHME_KAT = { pflanzung: 'pflanzung', zaunbau: 'wildschutz', einzelschutz: 'wildschutz', pflege: 'pflege', durchforstung: 'holzernte', holzernte_df: 'holzernte', holzernte_bs: 'holzernte', raeumung: 'pflanzung', bodenverwundung: 'pflanzung', mulchen: 'pflanzung', saat: 'pflanzung', polter: 'holzernte', verkehrssicherung: 'vsp', sonstiges: 'sonstiges' };
 
 // ---------- Daten ----------
 const fin = () => store.get().finanzen || { buchungen: [], quote: 25 };
@@ -104,7 +104,7 @@ export function waldPlanung() {
   return { q, erloes, soll, invest, offen: Math.max(0, soll - invest), ab };
 }
 const geplanteWaldkosten = () => (store.get().measures || []).filter(passtEintrag).filter((m) => m.status !== 'fertig' && Number(m.kosten) > 0 && ['pflanzung', 'pflege', 'zaunbau', 'einzelschutz'].includes(m.type));
-const holzernteOhneErloes = () => (store.get().measures || []).filter(passtEintrag).filter((m) => ['durchforstung', 'holzernte_df', 'polter'].includes(m.type) && m.status === 'fertig'
+const holzernteOhneErloes = () => (store.get().measures || []).filter(passtEintrag).filter((m) => ['durchforstung', 'holzernte_df', 'holzernte_bs', 'polter'].includes(m.type) && m.status === 'fertig'
   && !buchungen().some((b) => b.measureId === m.id && b.art === 'einnahme'));
 const massnahmenMitKosten = () => (store.get().measures || []).filter(passtEintrag).filter((m) => m.status === 'fertig' && Number(m.kosten) > 0 && !buchungen().some((b) => b.measureId === m.id && b.art === 'ausgabe'));
 

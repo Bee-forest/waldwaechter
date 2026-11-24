@@ -88,7 +88,7 @@ function vorbelegen(m, k) {
   const ffh = (m?.thinning?.natura2000 || m?.schutzgebiete || k.natura2000 || []).filter((g) => !['lsg', 'naturpark'].includes(g.layer));
   const d = m?.details || {};
   const p = store.get().parcels.find((x) => x.id === m?.parcelId);
-  const art = m?.type === 'pflege' ? (d.art || 'Pflege') : m?.type === 'holzernte_df' ? 'Durchforstung' : 'Durchforstung';
+  const art = m?.type === 'pflege' ? (d.art || 'Pflege') : ({ holzernte_df: 'Holzernte', holzernte_bs: `Bodenschonende Holzernte${d.verfahren ? ` (${d.verfahren})` : ''}`, raeumung: 'Flächenräumung', mulchen: 'Streifenweises Mulchen', bodenverwundung: 'Bodenverwundung' })[m?.type] || 'Durchforstung';
   return {
     massnahme: pl?.eingriffe?.anzahl > 1 ? `Durchforstung, Eingriff ${pl.eingriffe.nr} von ${pl.eingriffe.anzahl}` : art,
     flaeche: m?.thinning?.label || (p ? `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}` : ''),

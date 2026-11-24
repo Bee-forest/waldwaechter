@@ -59,10 +59,22 @@ export async function brutzeitDialog(m) {
   else if (w === 'pruefung') import('./vertraeglichkeit.js').then((v) => v.openVertraeglichkeit(m.id));
 }
 
+// Frisch gebuchte Maßnahme: Arbeitsauftrag mit Karte gleich erstellen und anhängen (Verlauf und Anhänge).
+// Wartet kurz auf die Schutzgebietsprüfung, damit Schutzgebiete im Auftrag stehen.
+const versucht = new Set();
+const auftragFaellig = (m) => !m.auftragStand && !m.serie && !versucht.has(m.id) && !['schaden', 'holzverkauf', 'polter'].includes(m.type)
+  && Date.now() - (m.createdAt || 0) < 10 * 60 * 1000 && (m.parcelId || m.flaeche?.ring);
+function auftraegeErstellen() {
+  for (const m of store.get().measures.filter(auftragFaellig)) {
+    versucht.add(m.id);
+    setTimeout(() => import('./berichte.js').then((b) => b.unternehmerAuftrag(m.id, { anhaengen: true })).catch(() => {}), m.schutzKey || m.type === 'durchforstung' ? 0 : 6000);
+  }
+}
+
 export function schutzpruefungStarten() {
   let t = null;
   const anstossen = () => { clearTimeout(t); t = setTimeout(pruefeAlle, 800); };
-  store.subscribe(() => { if (store.get().measures.some(zuPruefen)) anstossen(); });
+  store.subscribe(() => { if (store.get().measures.some(zuPruefen)) anstossen(); if (store.get().measures.some(auftragFaellig)) auftraegeErstellen(); });
   window.addEventListener('online', anstossen);
   anstossen();
 }

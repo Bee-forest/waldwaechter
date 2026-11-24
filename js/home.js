@@ -1,6 +1,6 @@
 // Reiter 1: Startseite mit Karte, Flurstücksauswahl und Infobox.
 /* global L */
-import { h, fill, icon, dialog, confirmDialog, toast, alleSeitenSchliessen } from './ui.js';
+import { h, fill, icon, dialog, openPage, confirmDialog, toast, alleSeitenSchliessen } from './ui.js';
 import { createFotopunktLayer, FOTOPUNKT_FARBE } from './map/fotopunkte.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
@@ -1035,74 +1035,60 @@ function gemarkungFeld() {
   return h('label', { class: 'gem-feld' }, 'Gemarkung', h('div', { class: 'vorschlag-wrap' }, input, liste));
 }
 
-// Schnellsuche: eigene Flächen, Orte, Maßnahmen und (Profimodus) Waldbesitzer-Ordner
-let orteP = null;
-const ladeOrte = () => (orteP ||= fetch('data/orte.json').then((r) => (r.ok ? r.json() : null)).then((d) => d?.orte || []).catch(() => []));
-async function schnellTreffer(q) {
-  const n = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss');
-  const w = n(q).trim();
-  if (w.length < 2) return [];
-  const st = store.get();
-  const out = [];
-  const all = Object.fromEntries((ALL || []).map((p) => [p.id, p]));
-  for (const p of st.parcels) {
-    const t = `${p.gemarkung} ${p.flur} ${p.nr} ${p.gemeinde || ''} ${p.lage || ''}`;
-    if (n(t).includes(w) || n(`${p.gemarkung} ${p.nr}`).includes(w)) out.push({ art: 'Meine Fläche', titel: `Flurstück ${p.nr}, ${p.gemarkung}`, text: `Flur ${p.flur}${p.lage ? ` · ${p.lage}` : ''}`, los: () => focusParcel(p.id) });
-  }
-  for (const m of st.measures || []) {
-    const name = m.type === 'pflege' && m.details?.art ? m.details.art : MEASURE_TYPES[m.type]?.label || '';
-    const p = all[m.parcelId];
-    if (n(`${name} ${m.note || ''} ${p ? `${p.gemarkung} ${p.nr}` : ''}`).includes(w)) out.push({ art: 'Maßnahme', titel: name, text: `${p ? `${p.gemarkung}, Flst. ${p.nr}` : 'ohne Fläche'}${m.status === 'fertig' ? ' · erledigt' : ''}`, los: () => window.dispatchEvent(new CustomEvent('ww:massnahme-oeffnen', { detail: m.id })) });
-  }
-  if (istProfi()) for (const o of ordnerListe()) if (n(o.name).includes(w)) out.push({ art: 'Waldbesitzer', titel: o.name, text: 'Ordner öffnen', los: () => store.update((x) => { x.settings.ordnerAktiv = o.id; }) });
-  const orte = (await ladeOrte()).filter((o) => n(o[2]).startsWith(w)).slice(0, 6);
-  for (const o of orte) out.push({ art: 'Ort', titel: o[2], text: 'Karte hierhin', los: () => map.flyTo([o[0], o[1]], Math.max(map.getZoom(), 14)) });
-  return out.slice(0, 14);
-}
-
 function openSearch() {
-  dialog({
-    title: 'Suchen',
-    body: (close) => {
-      const results = h('ul', { class: 'search-results', 'aria-live': 'polite' });
-      const schnell = h('ul', { class: 'search-results schnell-treffer', 'aria-live': 'polite' });
-      let lauf = 0;
-      const schnellFeld = h('input', { type: 'search', placeholder: 'Ort, Flurstück, Maßnahme, Waldbesitzer …', 'aria-label': 'Schnellsuche', autofocus: true, oninput: async (e) => {
-        const nr = ++lauf;
-        const t = await schnellTreffer(e.target.value);
-        if (nr !== lauf) return;
-        fill(schnell, ...(e.target.value.trim().length < 2 ? [] : t.length ? t.map((x) => h('li', {}, h('button', { class: 'result', type: 'button', onclick: () => { close(null); x.los(); } },
-          h('strong', {}, x.titel), h('span', {}, `${x.art} · ${x.text}`)))) : [h('li', { class: 'muted' }, 'Nichts gefunden. Für ein beliebiges Flurstück unten Gemarkung und Nummer eingeben.')]));
-      } });
-      const form = h('form', { class: 'form', onsubmit: async (e) => {
-        e.preventDefault();
-        const fd = new FormData(form);
-        const q = { gemarkung: String(fd.get('gemarkung') || '').trim(), flur: String(fd.get('flur') || '').trim(), nr: String(fd.get('nr') || '').trim() };
-        if (!q.gemarkung || !q.nr) { fill(results, h('li', { class: 'muted' }, 'Gib mindestens Gemarkung und Flurstücksnummer an.')); return; }
-        fill(results, h('li', { class: 'muted' }, 'Suche im Liegenschaftskataster …'));
-        let list;
-        try { list = await source.search(q); } catch {
-          fill(results, h('li', { class: 'muted' }, 'Das Geoportal Thüringen ist gerade nicht erreichbar. Versuch es später erneut oder tippe das Flurstück in der Karte an.'));
-          return;
-        }
-        fill(results, ...(list.length
-          ? list.slice(0, 30).map((p) => h('li', {}, h('button', { class: 'result', type: 'button', onclick: () => { close(null); focusParcel(p.id); } },
-              h('strong', {}, `Flurstück ${p.nr}`), h('span', {}, `${p.gemarkung}, Flur ${p.flur}, ${formatHa(amtlicheFlaecheHa(p))}${p.lage ? `, ${p.lage}` : ''}`))))
-          : [h('li', { class: 'muted' }, 'Kein Flurstück gefunden. Prüfe Gemarkung, Flur und Nummer.')]));
-      } },
-        gemarkungFeld(),
-        h('div', { class: 'form-row' },
-          h('label', {}, 'Flur', h('input', { name: 'flur', inputmode: 'numeric', placeholder: '4' })),
-          h('label', {}, 'Flurstück', h('input', { name: 'nr', placeholder: '112 oder 112/2' })),
-        ),
-        h('button', { class: 'btn btn-primary btn-block', type: 'submit' }, h('span', { html: icon.search }), 'Suchen'),
-      );
-      return h('div', {}, schnellFeld, schnell,
-        h('details', { class: 'such-genau' }, h('summary', {}, 'Beliebiges Flurstück im Kataster suchen'), form, results,
-          h('p', { class: 'hint' }, 'Daten aus dem Liegenschaftskataster Thüringen (ALKIS, © GDI-Th).')));
-    },
-    actions: [{ label: 'Schließen', value: null }],
-  });
+  // Direkt die Kataster-Suche; eigene Flächen werden farbig hervorgehoben.
+  // Als ganze Seite: die Felder stehen oben und werden von der Tastatur nicht verdeckt.
+  let seite = null;
+  const meine = () => new Map(store.get().parcels.filter(passtFlurstueck).map((x) => [x.id, x]));
+  const zeile = (p, eigen) => {
+    const kat = eigen ? CATEGORIES[eigen.category] : null;
+    return h('li', {}, h('button', { class: `result ${eigen ? 'result-eigen' : ''}`, type: 'button', style: kat ? `--kat:${kat.color}` : null,
+      onclick: () => { seite?.close(); focusParcel(p.id); } },
+      h('span', { class: 'result-kopf' }, h('strong', {}, `Flurstück ${p.nr}`), eigen ? h('span', { class: 'result-marke' }, h('span', { class: 'kat-punkt', style: `--c:${kat?.color || '#888'}` }), `Meine Fläche · ${kat?.label || ''}`) : null),
+      h('span', {}, `${p.gemarkung}, Flur ${p.flur}${amtlicheFlaecheHa(p) ? `, ${formatHa(amtlicheFlaecheHa(p))}` : ''}${p.lage ? `, ${p.lage}` : ''}`)));
+  };
+  const eigeneListe = h('ul', { class: 'search-results' });
+  const results = h('ul', { class: 'search-results', 'aria-live': 'polite' });
+  // Eigene Flächen, die zur Eingabe passen – sofort, ohne Netz
+  const eigeneZeigen = (ohne = new Set()) => {
+    const fd = new FormData(form);
+    const g = gemNorm(String(fd.get('gemarkung') || '')), fl = String(fd.get('flur') || '').trim().replace(/^0+(?=\d)/, ''), nr = String(fd.get('nr') || '').trim();
+    if (!g && !nr) { fill(eigeneListe); return; }
+    const m = meine();
+    const t = [...m.values()].filter((x) => !ohne.has(x.id) && (!g || gemNorm(x.gemarkung || '').startsWith(g)) && (!fl || String(x.flur || '').replace(/^0+(?=\d)/, '') === fl) && (!nr || String(x.nr || '').startsWith(nr))).slice(0, 20);
+    fill(eigeneListe, t.length ? [h('li', { class: 'such-zwischen' }, 'Deine Flächen'), ...t.map((x) => zeile(x, x))] : []);
+  };
+  const form = h('form', { class: 'form', oninput: () => eigeneZeigen(), onsubmit: async (e) => {
+    e.preventDefault();
+    document.activeElement?.blur?.(); // Tastatur zu, damit die Treffer zu sehen sind
+    const fd = new FormData(form);
+    const q = { gemarkung: String(fd.get('gemarkung') || '').trim(), flur: String(fd.get('flur') || '').trim(), nr: String(fd.get('nr') || '').trim() };
+    if (!q.gemarkung || !q.nr) { fill(results, h('li', { class: 'muted' }, 'Gib mindestens Gemarkung und Flurstücksnummer an.')); return; }
+    fill(results, h('li', { class: 'muted' }, 'Suche im Liegenschaftskataster …'));
+    let list;
+    try { list = await source.search(q); } catch {
+      fill(results, h('li', { class: 'muted' }, 'Das Geoportal Thüringen ist gerade nicht erreichbar. Deine eigenen Flächen siehst du oben; andere Flurstücke kannst du in der Karte antippen.'));
+      return;
+    }
+    const m = meine();
+    // eigene Flächen zuerst und farbig
+    list = [...list].sort((x, y) => (m.has(y.id) - m.has(x.id)));
+    eigeneZeigen(new Set(list.map((x) => x.id)));
+    fill(results, ...(list.length
+      ? [h('li', { class: 'such-zwischen' }, `${list.length} ${list.length === 1 ? 'Treffer' : 'Treffer'} im Kataster`), ...list.slice(0, 30).map((p) => zeile(p, m.get(p.id)))]
+      : [h('li', { class: 'muted' }, 'Kein Flurstück gefunden. Prüfe Gemarkung, Flur und Nummer.')]));
+  } },
+    gemarkungFeld(),
+    h('div', { class: 'form-row' },
+      h('label', {}, 'Flur', h('input', { name: 'flur', inputmode: 'numeric', placeholder: 'z. B. 4' })),
+      h('label', {}, 'Flurstück', h('input', { name: 'nr', placeholder: '112 oder 112/2', enterkeyhint: 'search' })),
+    ),
+    h('button', { class: 'btn btn-primary btn-block', type: 'submit' }, h('span', { html: icon.search }), 'Im Kataster suchen'),
+  );
+  seite = openPage('Flurstück suchen', h('div', { class: 'such-seite' }, form, eigeneListe, results,
+    h('p', { class: 'hint' }, 'Daten aus dem Liegenschaftskataster Thüringen (ALKIS, © GDI-Th). Deine eigenen Flächen sind farbig markiert.')));
+  setTimeout(() => seite.el.querySelector('input[name=gemarkung]')?.focus(), 250);
+  seite.el.addEventListener('focusin', (e) => { if (e.target.matches('input')) setTimeout(() => e.target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 300); });
 }
 
 function openLegend(key) {

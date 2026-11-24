@@ -140,17 +140,22 @@ export async function initHome(root) {
   const kartenHoehe = () => {
     const wrap = root.querySelector('.map-wrap'), card = root.querySelector('.map-card');
     if (!wrap || !card || !wrap.offsetParent) return;
+    if (matchMedia('(orientation: landscape) and (max-height: 540px)').matches) { document.documentElement.style.removeProperty('--map-h'); return; }
     const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
-    const unten = tab && tab.top > innerHeight / 2 ? innerHeight - tab.top : 0; // Tab-Leiste unten (nicht als Seitenleiste)
-    const oben = wrap.getBoundingClientRect().top + (root.scrollTop || 0) + scrollY;
-    const rest = card.getBoundingClientRect().bottom - wrap.getBoundingClientRect().bottom;
-    document.documentElement.style.setProperty('--map-abzug', `${Math.round(oben + rest + unten + 12)}px`);
+    const unterkante = tab && tab.top > innerHeight / 2 ? tab.top : innerHeight; // Tab-Leiste unten (nicht als Seitenleiste)
+    const sy = (root.scrollTop || 0) + scrollY; // Messung so, als wäre ganz oben
+    const freiraum = unterkante - 12 - (card.getBoundingClientRect().bottom + sy);
+    const neu = Math.max(220, Math.min(720, Math.round(wrap.getBoundingClientRect().height + freiraum)));
+    document.documentElement.style.setProperty('--map-h', `${neu}px`);
     map?.invalidateSize();
   };
   requestAnimationFrame(() => requestAnimationFrame(kartenHoehe));
   setTimeout(kartenHoehe, 700); document.fonts?.ready.then(kartenHoehe);
   addEventListener('resize', () => setTimeout(kartenHoehe, 150));
   addEventListener('orientationchange', () => setTimeout(kartenHoehe, 300));
+  setTimeout(kartenHoehe, 2000);
+  addEventListener('ww:navigate', (e) => { if (e.detail === 'home') setTimeout(kartenHoehe, 120); });
+  visualViewport?.addEventListener('resize', () => setTimeout(kartenHoehe, 150));
   L.control.zoom({ position: 'topleft', zoomInTitle: 'Hineinzoomen', zoomOutTitle: 'Herauszoomen' }).addTo(map);
   renderBaseSwitch();
   // Fachebenen (Standortkarte, Schutzgebiete, …)

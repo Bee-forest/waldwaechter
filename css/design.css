@@ -270,5 +270,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 
 /* Startseite: Karte passt mit Kopf und Knöpfen auf den ersten Bildschirm */
 @media not ((orientation: landscape) and (max-height: 540px)) {
-  .map-wrap { height: clamp(220px, calc(100dvh - var(--map-abzug, 480px)), 640px); min-height: 0; }
+  .map-wrap { height: var(--map-h, min(50dvh, 480px)); min-height: 0; }
 }

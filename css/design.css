@@ -139,3 +139,48 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 /* Fokusrahmen ruhiger, nur bei Tastaturbedienung deutlich */
 :focus-visible { outline: 2px solid var(--primary-2); outline-offset: 2px; }
 .page-head .icon-btn:focus-visible { outline-offset: -2px; }
+
+/* ---------- Startseite: „Das steht an“ ---------- */
+.aufgaben { padding: 14px 14px 8px; }
+.aufgaben-kopf { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 4px 8px; }
+.aufgaben-kopf h2 { font-size: 17px; }
+.aufgaben-liste { list-style: none; margin: 0; padding: 0; display: grid; }
+.aufgaben-liste li + li { border-top: 1px solid var(--line); }
+.aufgabe { width: 100%; display: grid; grid-template-columns: 12px minmax(0, 1fr) 18px; align-items: center; gap: 12px; padding: 11px 4px; border: 0; background: none; text-align: left; cursor: pointer; color: var(--ink); border-radius: 12px; }
+.aufgabe:hover { background: var(--surface-2); }
+.aufgabe-punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); }
+.aufgabe-warnung .aufgabe-punkt { background: var(--signal); box-shadow: 0 0 0 4px var(--signal-soft); }
+.aufgabe-protokoll .aufgabe-punkt { background: var(--ok); }
+.aufgabe-wanze .aufgabe-punkt { background: #C9A227; }
+.aufgabe-text { display: grid; gap: 1px; min-width: 0; }
+.aufgabe-text strong { font-size: 15.5px; overflow-wrap: anywhere; }
+.aufgabe-text small { color: var(--ink-2); font-size: 13.5px; }
+.aufgabe .chev, .naechste-massnahme .chev { color: var(--ink-3); display: grid; place-items: center; }
+.aufgabe .chev svg, .naechste-massnahme .chev svg { width: 18px; height: 18px; }
+
+/* ---------- Flurstücks-Info kompakt ---------- */
+.facts.facts-kurz { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; padding: 12px 14px; }
+.facts.facts-kurz dd.big { font-size: 22px; }
+.kat-punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 6px; vertical-align: 1px; }
+.info-actions.info-actions-oben { margin: 12px 0 0; padding: 0; border: 0; display: grid; gap: 10px; }
+.info-actions-oben > .btn-primary { min-height: 52px; }
+.info-actions-oben .info-mehr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.info-actions-oben .btn-danger-ghost { justify-self: start; min-height: 40px; padding: 4px 6px; font-size: 14px; }
+.naechste-massnahme { width: 100%; margin-top: 12px; display: grid; grid-template-columns: minmax(0, 1fr) 18px; grid-template-areas: 'e c' 't c' 's c'; align-items: center; gap: 1px 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); text-align: left; cursor: pointer; color: var(--ink); }
+.naechste-massnahme .eyebrow { grid-area: e; }
+.naechste-massnahme strong { grid-area: t; font-size: 16px; }
+.naechste-massnahme small { grid-area: s; color: var(--ink-2); }
+.naechste-massnahme .chev { grid-area: c; }
+
+/* ---------- Ebenen: Voreinstellungen ---------- */
+.layer-sets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 6px; }
+.layer-set { display: grid; gap: 2px; text-align: left; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); cursor: pointer; color: var(--ink); }
+.layer-set small { color: var(--ink-2); font-size: 12.5px; }
+.layer-set[aria-checked='true'] { border-color: var(--primary); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.pill-btn span[html], .pill-btn > span:first-child svg { width: 18px; height: 18px; }
+
+/* ---------- Suche ---------- */
+.schnell-treffer:empty { display: none; }
+.such-genau { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.such-genau summary { cursor: pointer; font-weight: 700; color: var(--primary); margin-bottom: 12px; }
+.measure.measure-blink { box-shadow: 0 0 0 3px var(--primary); transition: box-shadow .3s; }

@@ -13,7 +13,7 @@ import { besonderheiten } from './map/besonderheiten.js';
 import { lrtCode, lrtHinweis, lrtWichtig, biotopWichtig } from './map/lrt.js';
 import { zeigeVerordnung } from './schutzgebiete.js';
 import { BAUMARTEN_FARBEN } from './map/baumartenkarte.js';
-import { erinnereVerkehrssicherung, hatVerkehrssicherung } from './measures.js';
+import { erinnereVerkehrssicherung, hatVerkehrssicherung, MEASURE_TYPES } from './measures.js';
 import { bestandAt, bestandInFlaeche, oberhoeheFlaeche, KORREKTUR_ARTEN, SCHICHTEN, korrAlter, pflanzungAm } from './map/bestand.js';
 import { bestandsprofil, phaseVon, durchforstungStatus, PHASEN as ENTW_PHASEN } from './empfehlung.js';
 import { empfehlung, empfehlungMitErsatz, bztName, GRUPPEN, BAUMARTEN_KURZ, eichenHinweis } from './bzt.js';
@@ -82,8 +82,11 @@ export async function initHome(root) {
   const head = h('header', { class: 'card app-head' });
   const chips = h('div', { class: 'cat-chips', role: 'group', 'aria-label': 'Kategorien ein- und ausblenden' });
   const baseSwitch = h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Basiskarte' });
+  const streifen = h('div', { class: 'aufgaben-host' });
+  import('./aufgaben.js').then((x) => streifen.append(x.aufgabenStreifen()));
   root.append(
     head,
+    streifen,
     h('section', { class: 'card map-card', 'aria-label': 'Karte Thüringen' },
       h('div', { class: 'map-card-head' },
         h('h2', {}, 'Karte Thüringen'),
@@ -97,7 +100,7 @@ export async function initHome(root) {
         ),
       ),
       h('div', { class: 'map-actions' },
-        h('button', { class: 'pill-btn', onclick: openLayerSheet }, 'Weitere Layer', h('span', { class: 'plus' }, '+')),
+        h('button', { class: 'pill-btn', onclick: openLayerSheet }, h('span', { html: icon.layers }), 'Ebenen'),
         h('button', { class: 'pill-btn', onclick: openSearch }, h('span', { html: icon.search }), 'Flurstück suchen'),
       ),
       chips,
@@ -848,6 +851,19 @@ export async function focusParcel(id) {
   await select(p, centroid(p.ring));
 }
 
+/** Nächste offene Maßnahme dieser Fläche – ein Tipp öffnet sie */
+function naechsteMassnahme(parcelId) {
+  const offen = (store.get().measures || []).filter((x) => x.parcelId === parcelId && x.status !== 'fertig' && !x.serie)
+    .sort((a, b) => (a.date || 9e15) - (b.date || 9e15));
+  if (!offen.length) return null;
+  const x = offen[0];
+  return h('button', { type: 'button', class: 'naechste-massnahme', onclick: () => window.dispatchEvent(new CustomEvent('ww:massnahme-oeffnen', { detail: x.id })) },
+    h('span', { class: 'eyebrow' }, offen.length > 1 ? `Nächste von ${offen.length} offenen Maßnahmen` : 'Offene Maßnahme'),
+    h('strong', {}, x.type === 'pflege' && x.details?.art ? x.details.art : MEASURE_TYPES[x.type]?.label || 'Maßnahme'),
+    h('small', {}, x.date ? new Date(x.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' }) : 'ohne Termin'),
+    h('span', { class: 'chev', html: icon.chevron }));
+}
+
 async function renderInfo() {
   const { parcel: p, latlng } = selected;
   const box = document.getElementById('infobox');
@@ -865,8 +881,7 @@ async function renderInfo() {
 
   let pick = m?.category || p.nutzung;
   const catSection = m
-    ? h('div', { class: 'info-block' }, h('h3', {}, 'Kategorie'),
-        catChips(m.category, (k) => { store.update((s) => { s.parcels.find((x) => x.id === p.id).category = k; }); renderInfo(); }))
+    ? klapp('kategorie', 'Kategorie ändern', catChips(m.category, (k) => { store.update((s) => { s.parcels.find((x) => x.id === p.id).category = k; }); renderInfo(); }), CATEGORIES[m.category]?.label || '')
     : h('div', { class: 'info-block add-block' },
         h('h3', {}, 'Zu meinen Flächen hinzufügen'),
         (() => {
@@ -893,14 +908,21 @@ async function renderInfo() {
       ),
       h('button', { class: 'icon-btn', 'aria-label': 'Infobox schließen', html: icon.close, onclick: clearSelection }),
     ),
-    h('dl', { class: 'facts' },
+    h('dl', { class: 'facts facts-kurz' },
       h('div', {}, h('dt', {}, p.flaecheAmtlich ? 'Größe (amtlich)' : 'Größe'), h('dd', { class: 'big' }, formatHa(ha))),
       h('div', {}, h('dt', {}, 'Gemeinde'), h('dd', {}, isAlkis ? p.gemeinde : `${p.gemeinde}, OT ${p.ortsteil}`)),
-      p.lage ? h('div', { class: 'wide' }, h('dt', {}, 'Lage'), h('dd', {}, p.lage)) : null,
-      p.nutzungText ? h('div', { class: 'wide' }, h('dt', {}, 'Tatsächliche Nutzung (ALKIS)'), h('dd', {}, p.nutzungText)) : null,
-      p.standort ? h('div', { class: 'wide' }, h('dt', {}, 'Standort'), h('dd', {}, p.standort)) : null,
-      h('div', { class: 'wide' }, h('dt', {}, 'Angetippter Punkt'), h('dd', { class: 'mono' }, `${latlng[0].toFixed(5)} N, ${latlng[1].toFixed(5)} O`)),
+      m ? h('div', {}, h('dt', {}, 'Kategorie'), h('dd', {}, h('span', { class: 'kat-punkt', style: `--c:${CATEGORIES[m.category]?.color || '#888'}` }), CATEGORIES[m.category]?.label || '–')) : null,
     ),
+    m ? h('div', { class: 'info-actions info-actions-oben' },
+      h('button', { class: 'btn btn-primary', onclick: () => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId: p.id } })) }, 'Maßnahme planen'),
+      h('div', { class: 'info-mehr' },
+        h('button', { class: 'btn btn-small', onclick: () => import('./historie.js').then((x) => x.openHistorieFlurstueck(p.id)) }, 'Flurstückhistorie'),
+        h('button', { class: 'btn btn-small', onclick: () => import('./grenzfinder.js').then((x) => x.openNavigation({ titel: `Grenzfinder · Flst. ${p.nr}`, parcel: p })) }, 'Grenze finden'),
+        h('button', { class: 'btn btn-small', onclick: () => import('./schaden.js').then((x) => x.openSchadensmeldung({ parcelId: p.id })) }, 'Schaden melden'),
+        h('button', { class: 'btn btn-small', onclick: () => import('./schaden.js').then((x) => x.openHolzVerkaufen({ parcelId: p.id })) }, 'Holz verkaufen')),
+      h('button', { class: 'btn btn-danger-ghost', onclick: () => removeParcel(p.id) }, h('span', { html: icon.trash }), 'Entfernen'),
+    ) : null,
+    naechsteMassnahme(p.id),
     catSection,
     istProfi() && m ? ordnerAuswahl(m, { beiAenderung: () => renderInfo() }) : null,
     // Ohne Profimodus: Fläche liegt noch in einem Ordner (aus dem Profimodus) → mit einem Tipp zu den eigenen Flächen
@@ -936,15 +958,11 @@ async function renderInfo() {
           : 'Für dieses Flurstück sind keine Schutzgebiete, Biotope oder Pflichten hinterlegt.'),
       isAlkis ? h('p', { class: 'hint' }, 'Flurstücksdaten: ALKIS, © GDI-Th. Keine amtliche Auskunft.') : null,
     ),
-    m ? h('div', { class: 'info-actions' },
-      h('button', { class: 'btn btn-primary', onclick: () => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId: p.id } })) }, 'Maßnahme planen'),
-      h('div', { class: 'info-mehr' },
-        h('button', { class: 'btn btn-small', onclick: () => import('./historie.js').then((x) => x.openHistorieFlurstueck(p.id)) }, 'Flurstückhistorie'),
-        h('button', { class: 'btn btn-small', onclick: () => import('./grenzfinder.js').then((x) => x.openNavigation({ titel: `Grenzfinder · Flst. ${p.nr}`, parcel: p })) }, 'Grenze finden'),
-        h('button', { class: 'btn btn-small', onclick: () => import('./schaden.js').then((x) => x.openSchadensmeldung({ parcelId: p.id })) }, 'Schaden melden'),
-        h('button', { class: 'btn btn-small', onclick: () => import('./schaden.js').then((x) => x.openHolzVerkaufen({ parcelId: p.id })) }, 'Holz verkaufen')),
-      h('button', { class: 'btn btn-danger-ghost', onclick: () => removeParcel(p.id) }, h('span', { html: icon.trash }), 'Entfernen'),
-    ) : null,
+    klapp('details', 'Lage und Nutzung', h('dl', { class: 'facts' },
+      p.lage ? h('div', { class: 'wide' }, h('dt', {}, 'Lage'), h('dd', {}, p.lage)) : null,
+      p.nutzungText ? h('div', { class: 'wide' }, h('dt', {}, 'Tatsächliche Nutzung (ALKIS)'), h('dd', {}, p.nutzungText)) : null,
+      p.standort ? h('div', { class: 'wide' }, h('dt', {}, 'Standort'), h('dd', {}, p.standort)) : null,
+      h('div', { class: 'wide' }, h('dt', {}, 'Angetippter Punkt'), h('dd', { class: 'mono' }, `${latlng[0].toFixed(5)} N, ${latlng[1].toFixed(5)} O`))), p.nutzungText || ''),
     h('p', { class: 'info-quellen' }, isAlkis
       ? 'Flurstücksdaten: ALKIS, © GDI-Th. Standort, Bestand, Waldfunktionen, Rettungspunkte: © GDI-Th / ThüringenForst. Keine amtliche Auskunft.'
       : 'Demo-Daten. Keine amtliche Auskunft.'),
@@ -1006,11 +1024,45 @@ function gemarkungFeld() {
   return h('label', { class: 'gem-feld' }, 'Gemarkung', h('div', { class: 'vorschlag-wrap' }, input, liste));
 }
 
+// Schnellsuche: eigene Flächen, Orte, Maßnahmen und (Profimodus) Waldbesitzer-Ordner
+let orteP = null;
+const ladeOrte = () => (orteP ||= fetch('data/orte.json').then((r) => (r.ok ? r.json() : null)).then((d) => d?.orte || []).catch(() => []));
+async function schnellTreffer(q) {
+  const n = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss');
+  const w = n(q).trim();
+  if (w.length < 2) return [];
+  const st = store.get();
+  const out = [];
+  const all = Object.fromEntries((ALL || []).map((p) => [p.id, p]));
+  for (const p of st.parcels) {
+    const t = `${p.gemarkung} ${p.flur} ${p.nr} ${p.gemeinde || ''} ${p.lage || ''}`;
+    if (n(t).includes(w) || n(`${p.gemarkung} ${p.nr}`).includes(w)) out.push({ art: 'Meine Fläche', titel: `Flurstück ${p.nr}, ${p.gemarkung}`, text: `Flur ${p.flur}${p.lage ? ` · ${p.lage}` : ''}`, los: () => focusParcel(p.id) });
+  }
+  for (const m of st.measures || []) {
+    const name = m.type === 'pflege' && m.details?.art ? m.details.art : MEASURE_TYPES[m.type]?.label || '';
+    const p = all[m.parcelId];
+    if (n(`${name} ${m.note || ''} ${p ? `${p.gemarkung} ${p.nr}` : ''}`).includes(w)) out.push({ art: 'Maßnahme', titel: name, text: `${p ? `${p.gemarkung}, Flst. ${p.nr}` : 'ohne Fläche'}${m.status === 'fertig' ? ' · erledigt' : ''}`, los: () => window.dispatchEvent(new CustomEvent('ww:massnahme-oeffnen', { detail: m.id })) });
+  }
+  if (istProfi()) for (const o of ordnerListe()) if (n(o.name).includes(w)) out.push({ art: 'Waldbesitzer', titel: o.name, text: 'Ordner öffnen', los: () => store.update((x) => { x.settings.ordnerAktiv = o.id; }) });
+  const orte = (await ladeOrte()).filter((o) => n(o[2]).startsWith(w)).slice(0, 6);
+  for (const o of orte) out.push({ art: 'Ort', titel: o[2], text: 'Karte hierhin', los: () => map.flyTo([o[0], o[1]], Math.max(map.getZoom(), 14)) });
+  return out.slice(0, 14);
+}
+
 function openSearch() {
   dialog({
-    title: 'Flurstück suchen',
+    title: 'Suchen',
     body: (close) => {
       const results = h('ul', { class: 'search-results', 'aria-live': 'polite' });
+      const schnell = h('ul', { class: 'search-results schnell-treffer', 'aria-live': 'polite' });
+      let lauf = 0;
+      const schnellFeld = h('input', { type: 'search', placeholder: 'Ort, Flurstück, Maßnahme, Waldbesitzer …', 'aria-label': 'Schnellsuche', autofocus: true, oninput: async (e) => {
+        const nr = ++lauf;
+        const t = await schnellTreffer(e.target.value);
+        if (nr !== lauf) return;
+        fill(schnell, ...(e.target.value.trim().length < 2 ? [] : t.length ? t.map((x) => h('li', {}, h('button', { class: 'result', type: 'button', onclick: () => { close(null); x.los(); } },
+          h('strong', {}, x.titel), h('span', {}, `${x.art} · ${x.text}`)))) : [h('li', { class: 'muted' }, 'Nichts gefunden. Für ein beliebiges Flurstück unten Gemarkung und Nummer eingeben.')]));
+      } });
       const form = h('form', { class: 'form', onsubmit: async (e) => {
         e.preventDefault();
         const fd = new FormData(form);
@@ -1034,7 +1086,9 @@ function openSearch() {
         ),
         h('button', { class: 'btn btn-primary btn-block', type: 'submit' }, h('span', { html: icon.search }), 'Suchen'),
       );
-      return h('div', {}, form, results, h('p', { class: 'hint' }, 'Daten aus dem Liegenschaftskataster Thüringen (ALKIS, © GDI-Th).'));
+      return h('div', {}, schnellFeld, schnell,
+        h('details', { class: 'such-genau' }, h('summary', {}, 'Beliebiges Flurstück im Kataster suchen'), form, results,
+          h('p', { class: 'hint' }, 'Daten aus dem Liegenschaftskataster Thüringen (ALKIS, © GDI-Th).')));
     },
     actions: [{ label: 'Schließen', value: null }],
   });
@@ -1073,9 +1127,27 @@ function openLayerSheet() {
   const groups = [...new Set(OVERLAYS.map((o) => o.group))];
   const box = (titel, ...inhalt) => h('section', { class: 'layer-box' }, h('h3', { class: 'layer-box-titel' }, titel), inhalt);
   const punktBearbeiten = (art, label) => h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openPunktEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()), art }); } }, label);
+  // Voreinstellungen: ein Tipp schaltet passende Ebenen an und die übrigen Fachebenen aus
+  const FACH = ['flurnummern', 'grenzpunkte', 'rettung', 'baumarten', 'standort', 'waldfunktionen', 'schaden', 'schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'gassen', 'lager', 'hangneigung', 'habitat', 'jagd', 'fotopunkte'];
+  const SETS = [
+    ['einfach', 'Einfach', 'Flurstücke und eigene Flächen', ['fotopunkte']],
+    ['natur', 'Naturschutz', 'Schutzgebiete, Biotope, Habitatbäume', ['schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'habitat']],
+    ['holz', 'Holzernte', 'Gassen, Lager, Hangneigung, Rettung', ['gassen', 'lager', 'hangneigung', 'rettung', 'baumarten']],
+    ['wald', 'Waldinfo', 'Baumarten, Standort, Waldfunktionen', ['baumarten', 'standort', 'waldfunktionen', 'schaden']],
+  ];
+  const aktivSet = () => SETS.find(([, , , an]) => FACH.every((k) => !!s.layers[k] === an.includes(k)))?.[0];
+  const setWahl = h('div', { class: 'layer-sets', role: 'radiogroup', 'aria-label': 'Voreinstellung' }, SETS.map(([k, l, t, an]) => h('button', { type: 'button', role: 'radio', class: 'layer-set', 'aria-checked': String(aktivSet() === k),
+    onclick: () => {
+      store.update((st) => { for (const f of FACH) st.settings.layers[f] = an.includes(f); st.settings.layers.alkis = true; });
+      base.setAlkis(true);
+      document.querySelector('.scrim:not(.closing)')?.click();
+      toast(`Ansicht „${l}“`);
+    } }, h('strong', {}, l), h('small', {}, t))));
   dialog({
-    title: 'Weitere Layer',
+    title: 'Ebenen',
     body: h('div', { class: 'layer-sheet' },
+      setWahl,
+      h('p', { class: 'sheet-label' }, 'Oder einzeln wählen'),
       box('Flurstücke',
         sw('alkis', 'Flurstücksgrenzen (ALKIS)', { color: '#F6D32D', note: 'ab Zoomstufe 16', onchange: (e) => {
           store.update((st) => { st.settings.layers.alkis = e.target.checked; });

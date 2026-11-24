@@ -98,6 +98,20 @@ let tagWahl = null;
 
 let root;
 
+// Maßnahme von überall öffnen (Startseite, Suche, Flurstücks-Info)
+function openMassnahmeDetail(id) {
+  const m = (store.get().measures || []).find((x) => x.id === id);
+  if (!m) return;
+  window.dispatchEvent(new CustomEvent('ww:navigate', { detail: 'massnahmen' }));
+  setTimeout(() => {
+    const li = document.querySelector(`li.measure[data-mid="${CSS.escape(id)}"]`);
+    if (li) { li.scrollIntoView({ block: 'center', behavior: 'smooth' }); li.classList.add('measure-blink'); setTimeout(() => li.classList.remove('measure-blink'), 1800); }
+    else if (m.status === 'fertig') openProtokoll(id);
+    else if (m.type !== 'durchforstung') openMassnahmeBearbeiten(id);
+  }, 120);
+}
+window.addEventListener('ww:massnahme-oeffnen', (e) => openMassnahmeDetail(e.detail));
+
 export function initMeasures(el) {
   root = el;
   render();
@@ -279,7 +293,7 @@ function measureCard(m, byId) {
       return f ? `${f[1].replace(/ \(.*\)/, '')}: ${v}${einheit && !/je /.test(einheit) ? ` ${einheit}` : ''}` : null;
     }).filter(Boolean);
 
-  return h('li', { class: `measure measure-${m.status}` },
+  return h('li', { class: `measure measure-${m.status}`, 'data-mid': m.id },
     h('div', { class: 'measure-top' },
       h('strong', { class: 'measure-type' }, MEASURE_TYPES[m.type]?.label || m.type),
       h('span', { class: `badge badge-${m.status}` }, STATUS[m.status]),

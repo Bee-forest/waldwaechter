@@ -11,7 +11,7 @@ export const HABITAT_FARBE = '#2E7D32';
 export const JAGD_FARBE = '#5D4037';
 
 const svg = (inhalt) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inhalt}</svg>`;
-const SYMBOLE = {
+export const SYMBOLE = {
   // stehender Baum: Krone auf Stamm
   stehend: svg('<circle cx="12" cy="9" r="6.5" fill="#fff" fill-opacity=".35"/><path d="M12 15.5V22M12 18l-3-2.5M12 17l2.5-2"/>'),
   // liegender Stamm mit Schnittfläche (Jahresringe) auf dem Boden

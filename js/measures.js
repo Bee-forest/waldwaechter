@@ -98,17 +98,42 @@ let tagWahl = null;
 
 let root;
 
-// Maßnahme von überall öffnen (Startseite, Suche, Flurstücks-Info)
-function openMassnahmeDetail(id) {
-  const m = (store.get().measures || []).find((x) => x.id === id);
-  if (!m) return;
-  window.dispatchEvent(new CustomEvent('ww:navigate', { detail: 'massnahmen' }));
-  setTimeout(() => {
-    const li = document.querySelector(`li.measure[data-mid="${CSS.escape(id)}"]`);
-    if (li) { li.scrollIntoView({ block: 'center', behavior: 'smooth' }); li.classList.add('measure-blink'); setTimeout(() => li.classList.remove('measure-blink'), 1800); }
-    else if (m.status === 'fertig') openProtokoll(id);
-    else if (m.type !== 'durchforstung') openMassnahmeBearbeiten(id);
-  }, 120);
+// ---------- Detailseite einer Maßnahme: Planen → Durchführen → Abschließen ----------
+const SCHRITTE = [['geplant', 'Planen'], ['arbeit', 'Durchführen'], ['fertig', 'Abschließen']];
+function schrittLeiste(m) {
+  const i = SCHRITTE.findIndex(([k]) => k === m.status);
+  const ganzFertig = m.status === 'fertig' && (m.protokoll || m.serie || m.type === 'schaden');
+  return h('ol', { class: 'schritte', 'aria-label': 'Fortschritt' }, SCHRITTE.map(([, l], j) =>
+    h('li', { class: j < i || (j === i && ganzFertig) ? 'fertig' : j === i ? 'aktiv' : '', 'aria-current': j === i ? 'step' : null },
+      h('span', { class: 'schritt-nr' }, j < i || (j === i && ganzFertig) ? '✓' : String(j + 1)), h('span', {}, l))));
+}
+function naechsterSchrittText(m) {
+  if (m.serie) { const nt = naechsterTermin(m); return nt ? `Nächste Kontrolle am ${nt.date.toLocaleDateString('de-DE')}.` : 'Kontrolltermine im Jahresrhythmus.'; }
+  if (m.status === 'geplant') return m.date ? `Termin am ${fmtDate(m.date)}. Arbeitsauftrag an den Unternehmer geben; wenn es losgeht, auf „Begonnen“ tippen.` : 'Lege einen Termin fest und gib den Arbeitsauftrag weiter.';
+  if (m.status === 'arbeit') return 'Läuft gerade. Fotos festhalten – und wenn alles fertig ist, „Erledigt“ tippen.';
+  if (m.type === 'schaden') return 'Abgeschlossen.';
+  return m.protokoll ? 'Abgeschlossen und protokolliert.' : 'Fertig – jetzt kurz das Abschlussprotokoll ausfüllen (Schäden, Unternehmer).';
+}
+async function openMassnahmeDetail(id) {
+  const m0 = store.get().measures.find((x) => x.id === id);
+  if (!m0) return;
+  const body = h('div', { class: 'mdetail' });
+  let unsub = null;
+  const seite = openPage(MEASURE_TYPES[m0.type]?.label || 'Maßnahme', body, { onClose: () => unsub?.() });
+  const draw = async () => {
+    const m = store.get().measures.find((x) => x.id === id);
+    if (!m) { seite.close(); return; }
+    const all = await source.allParcels();
+    const byId = Object.fromEntries(all.map((p) => [p.id, p]));
+    const y = seite.el.querySelector('.page-body')?.scrollTop;
+    fill(body,
+      schrittLeiste(m),
+      h('p', { class: 'mdetail-hinweis' }, naechsterSchrittText(m)),
+      h('ul', { class: 'measure-list mdetail-karte' }, measureCard(m, byId)));
+    if (y != null) seite.el.querySelector('.page-body').scrollTop = y;
+  };
+  unsub = store.subscribe(draw);
+  draw();
 }
 window.addEventListener('ww:massnahme-oeffnen', (e) => openMassnahmeDetail(e.detail));
 
@@ -136,16 +161,50 @@ async function render() {
         h('h1', {}, 'Maßnahmen'),
         h('p', { class: 'muted' }, list.length ? `${offen.length} offen · ${list.length - offen.length} abgeschlossen` : 'Plane und dokumentiere Maßnahmen auf deinen Flächen.')),
       h('button', { class: 'btn btn-primary btn-block btn-large', onclick: () => openNewMeasure() }, h('span', { html: icon.plus }), 'Neue Maßnahme beginnen'),
+      h('div', { class: 'schnell-chips', role: 'group', 'aria-label': 'Schnell anlegen' },
+        [['pflanzung', 'Pflanzung'], ['zaunbau', 'Zaun'], ['pflege', 'Pflege'], ['holzernte_df', 'Holzernte'], ['schaden', 'Schaden melden']].map(([k, l]) =>
+          h('button', { type: 'button', class: 'chip', onclick: () => openNewMeasure({ typ: k }) }, l))),
       h('button', { class: 'btn btn-block historie-btn', onclick: () => openFlurstueckHistorie() }, h('span', { html: icon.map || icon.list || '' }), 'Flurstückhistorie')),
     kalender(list, byId),
-    h('section', { class: 'kachel' },
-      h('h2', { class: 'kachel-titel' }, 'Offene Maßnahmen'),
-      offen.length
-        ? h('ul', { class: 'measure-list' }, offen.map((m) => measureCard(m, byId)))
-        : list.length ? h('p', { class: 'muted' }, 'Alle Maßnahmen sind abgeschlossen. Erledigte Maßnahmen findest du im Maßnahmenplan und in der Flurstückhistorie.')
-        : h('div', { class: 'empty with-bug' }, h('div', { class: 'empty-bug', html: WANZE_SVG }),
-            h('p', {}, 'Noch keine Maßnahmen. Starte mit einer Pflanzung, einem Zaunbau oder der geführten Durchforstung.'))),
+    listenKachel(list, byId),
   );
+}
+
+// ---------- Liste: kompakte Zeilen mit Filter ----------
+let listFilter = 'offen';
+function listenKachel(list, byId) {
+  const offen = list.filter((m) => m.status !== 'fertig');
+  const fertig = list.filter((m) => m.status === 'fertig').sort((a, b) => (b.finishedAt || b.date || 0) - (a.finishedAt || a.date || 0));
+  const zeigen = listFilter === 'offen' ? offen : listFilter === 'erledigt' ? fertig : [...offen, ...fertig];
+  return h('section', { class: 'kachel' },
+    h('div', { class: 'liste-kopf' },
+      h('h2', { class: 'kachel-titel' }, 'Meine Maßnahmen'),
+      h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Filter' },
+        [['offen', `Offen ${offen.length}`], ['erledigt', `Erledigt ${fertig.length}`], ['alle', 'Alle']].map(([k, l]) =>
+          h('button', { role: 'radio', 'aria-checked': String(listFilter === k), onclick: () => { listFilter = k; render(); } }, l)))),
+    zeigen.length
+      ? h('ul', { class: 'mzeilen' }, zeigen.map((m) => zeile(m, byId)))
+      : list.length ? h('p', { class: 'muted' }, listFilter === 'offen' ? 'Alles erledigt – keine offenen Maßnahmen.' : 'Noch nichts abgeschlossen.')
+      : h('div', { class: 'empty with-bug' }, h('div', { class: 'empty-bug', html: WANZE_SVG }),
+          h('p', {}, 'Noch keine Maßnahmen. Starte mit einer Pflanzung, einem Zaunbau oder der geführten Durchforstung.')));
+}
+function zeile(m, byId) {
+  const nt = naechsterTermin(m);
+  const datum = m.status === 'fertig' ? (m.finishedAt || m.date) : nt?.date?.getTime?.() ?? m.date;
+  const ueberfaellig = m.status !== 'fertig' && datum && datum < new Date().setHours(0, 0, 0, 0);
+  const offenesProtokoll = m.status === 'fertig' && !m.protokoll && !m.serie && m.type !== 'schaden';
+  const warn = vorpruefungNoetig(m);
+  return h('li', { 'data-mid': m.id },
+    h('button', { type: 'button', class: `mzeile mzeile-${m.status}`, onclick: () => openMassnahmeDetail(m.id) },
+      h('i', { class: `dot dot-${m.type}` }),
+      h('span', { class: 'mzeile-text' },
+        h('strong', {}, MEASURE_TYPES[m.type]?.label || m.type),
+        h('small', {}, wo(m, byId)),
+        warn ? h('small', { class: 'mzeile-warn' }, 'Vorprüfung fehlt') : offenesProtokoll ? h('small', { class: 'mzeile-warn' }, 'Protokoll fehlt') : null),
+      h('span', { class: 'mzeile-rechts' },
+        h('span', { class: `badge badge-${m.status}` }, STATUS[m.status]),
+        h('small', { class: ueberfaellig ? 'ueberfaellig' : '' }, datum ? new Date(datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : 'ohne Termin')),
+      h('span', { class: 'chev', html: icon.chevron })));
 }
 
 // ---------- Maßnahmenplan: Tages-, Wochen- oder Monatsansicht ----------
@@ -217,7 +276,7 @@ function kalender(list, byId) {
       ? zeigen.sort((a, b) => a.date - b.date).map((e) => h('li', { class: `cal-item ${e.done ? 'done' : ''}` },
           h('i', { class: `dot dot-${e.m.type}` }),
           h('span', { class: 'cal-date' }, e.date.toLocaleDateString('de-DE', { weekday: ansicht === 'monat' ? undefined : 'short', day: '2-digit', month: '2-digit' })),
-          h('span', { class: 'cal-text' }, h('strong', {}, e.m.type === 'verkehrssicherung' ? `Verkehrssicherung: ${e.label}` : e.label), h('small', {}, wo(e.m, byId))),
+          h('button', { type: 'button', class: 'cal-text', onclick: () => openMassnahmeDetail(e.m.id) }, h('strong', {}, e.m.type === 'verkehrssicherung' ? `Verkehrssicherung: ${e.label}` : e.label), h('small', {}, wo(e.m, byId))),
           e.m.serie && !e.done ? h('button', { class: 'btn btn-small', onclick: () => { store.update((s) => { const x = s.measures.find((y) => y.id === e.m.id); x.erledigt = { ...(x.erledigt || {}), [e.key]: Date.now() }; }); toast('Kontrolle als erledigt vermerkt'); } }, 'Erledigt') : null,
           e.done && !e.m.serie && e.m.type !== 'schaden' ? h('button', { class: `btn btn-small ${e.m.protokoll ? '' : 'btn-primary'}`, title: 'Abschlussprotokoll', onclick: () => openProtokoll(e.m.id) }, e.m.protokoll ? 'Protokoll' : 'Protokoll ausfüllen') : null,
           e.done && (e.m.serie || e.m.type === 'schaden') ? h('span', { class: 'badge badge-fertig' }, 'Erledigt') : null,

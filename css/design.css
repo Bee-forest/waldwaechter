@@ -184,3 +184,53 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .such-genau { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .such-genau summary { cursor: pointer; font-weight: 700; color: var(--primary); margin-bottom: 12px; }
 .measure.measure-blink { box-shadow: 0 0 0 3px var(--primary); transition: box-shadow .3s; }
+
+/* ---------- Maßnahmen: Schnell anlegen, kompakte Liste ---------- */
+.schnell-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.schnell-chips .chip { min-height: 38px; padding: 4px 14px; border-width: 1px; font-size: 14px; }
+.schnell-chips .chip:hover { border-color: var(--primary); color: var(--primary); }
+.liste-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 8px; }
+.liste-kopf .kachel-titel { margin: 0; }
+.mzeilen { list-style: none; margin: 0; padding: 0; display: grid; }
+.mzeilen li + li { border-top: 1px solid var(--line); }
+.mzeile { width: 100%; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 16px; align-items: center; gap: 12px; padding: 12px 4px; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; border-radius: 12px; font: inherit; }
+.mzeile:hover { background: var(--surface-2); }
+.mzeile .dot { width: 10px; height: 10px; }
+.mzeile-fertig .mzeile-text strong { color: var(--ink-2); }
+.mzeile-text { display: grid; gap: 1px; min-width: 0; }
+.mzeile-text strong { font-size: 15.5px; }
+.mzeile-text small { color: var(--ink-2); font-size: 13.5px; overflow-wrap: anywhere; }
+.mzeile-text small.mzeile-warn { color: var(--signal); font-weight: 700; }
+.mzeile-rechts { display: grid; justify-items: end; gap: 3px; }
+.mzeile-rechts small { color: var(--ink-2); font-size: 12.5px; white-space: nowrap; }
+.mzeile-rechts small.ueberfaellig { color: var(--signal); font-weight: 700; }
+.mzeile .chev { color: var(--ink-3); display: grid; place-items: center; }
+.mzeile .chev svg { width: 16px; height: 16px; }
+.cal-text { border: 0; background: none; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.dot-raeumung, .dot-bodenverwundung, .dot-mulchen { background: #9C7A4A; }
+.dot-saat { background: #7FA34A; }
+.dot-einzelschutz { background: #A0602A; }
+.dot-pflege { background: #3F7F5E; }
+.dot-holzernte_df, .dot-holzernte_bs { background: #1F4D3A; }
+.dot-polter, .dot-holzverkauf { background: #6B5B3E; }
+.dot-schaden { background: var(--signal); }
+
+/* ---------- Maßnahme: Detailseite ---------- */
+.schritte { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; counter-reset: s; }
+.schritte li { display: grid; justify-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--ink-3); position: relative; text-align: center; }
+.schritte li::before { content: ''; position: absolute; top: 15px; left: calc(-50% + 18px); right: calc(50% + 18px); height: 2px; background: var(--line); }
+.schritte li:first-child::before { display: none; }
+.schritte li.fertig::before, .schritte li.aktiv::before { background: var(--primary); }
+.schritt-nr { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 2px solid var(--line); color: var(--ink-3); font-size: 14px; position: relative; z-index: 1; }
+.schritte li.aktiv { color: var(--primary); }
+.schritte li.aktiv .schritt-nr { border-color: var(--primary); color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
+.schritte li.fertig { color: var(--ink); }
+.schritte li.fertig .schritt-nr { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mdetail-hinweis { margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: var(--primary-soft); color: var(--ink); font-size: 15px; }
+.mdetail-karte { margin: 0; }
+.mdetail-karte > .measure { box-shadow: none; }
+.liste-kopf .segmented { flex: 1 1 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.liste-kopf .segmented button { white-space: nowrap; min-height: 40px; padding: 4px 6px; font-size: 14px; }
+.cal-top { gap: 8px; }
+.cal-ansicht { width: auto !important; padding: 0 10px; gap: 6px; display: inline-flex; align-items: center; }
+.mdetail { max-width: 760px; margin: 0 auto; }

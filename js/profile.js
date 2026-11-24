@@ -32,6 +32,7 @@ export async function openProfile() {
     if (changed) render();
   })();
   const page = openPage('Mein Profil', body);
+  let bereich = 'ich';
 
   function render() {
     const s = store.get();
@@ -51,7 +52,9 @@ export async function openProfile() {
     const field = (label, key, attrs = {}) => h('label', {}, label,
       h('input', { value: s.profile[key] || '', ...attrs, onchange: (e) => store.update((st) => { st.profile[key] = e.target.value.trim(); }) }));
 
-    fill(body, 
+    const BEREICHE = [['ich', 'Ich & FBG'], ['einst', 'Einstellungen'], ['daten', 'Daten']];
+    const inhalt = {
+      ich: () => [
       h('section', { class: 'card summary' },
         h('div', { class: 'summary-total' }, h('span', { class: 'summary-ha' }, formatHa(total)), h('span', {}, `${list.length} ${list.length === 1 ? 'Flurstück' : 'Flurstücke'} insgesamt${anyAmtlich ? ' (amtliche Fläche)' : ''}`)),
         total > 0 ? h('div', { class: 'summary-bar', 'aria-hidden': 'true' },
@@ -81,7 +84,10 @@ export async function openProfile() {
         ),
       ),
 
-      profiKarte(),
+      h('section', { class: 'card' },
+        h('h2', {}, 'Meine Ziele'),
+        h('p', {}, s.settings.ziele ? `Besonders wichtig: ${zieleText(s.settings.ziele)}` : 'Noch nicht festgelegt. Deine Ziele gewichten die Empfehlungen zu deinen Flächen.'),
+        h('button', { class: 'btn', onclick: () => zieleAbfrage() }, s.settings.ziele ? 'Ziele ändern' : 'Ziele festlegen')),
       (() => {
         const u = unternehmerUebersicht();
         return u.length ? h('section', { class: 'card' },
@@ -102,18 +108,13 @@ export async function openProfile() {
         ),
       ),
 
+      ],
+      einst: () => [
+      profiKarte(),
       erinnerungKarte(),
-
-      h('section', { class: 'card' },
-        h('h2', {}, 'Meine Ziele'),
-        h('p', {}, s.settings.ziele ? `Besonders wichtig: ${zieleText(s.settings.ziele)}` : 'Noch nicht festgelegt. Deine Ziele gewichten die Empfehlungen zu deinen Flächen.'),
-        h('button', { class: 'btn', onclick: () => zieleAbfrage() }, s.settings.ziele ? 'Ziele ändern' : 'Ziele festlegen')),
-      exportKarte(),
       h('section', { class: 'card' },
         h('h2', {}, 'Einstellungen'),
         h('div', { class: 'form' },
-          h('button', { class: 'btn', onclick: datenSichern }, 'Daten sichern (Datei)'),
-          h('p', { class: 'hint' }, 'Speichert alle Flächen, Maßnahmen und Einstellungen als Datei – zur Sicherung oder um ein Problem nachzustellen.'),
           h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Darstellung' },
             [['auto', 'Automatisch'], ['light', 'Hell'], ['dark', 'Dunkel']].map(([k, l]) => h('button', {
               role: 'radio', 'aria-checked': String(s.settings.theme === k),
@@ -126,12 +127,28 @@ export async function openProfile() {
           h('button', { class: 'btn', onclick: () => { page.close(); startTour(); } }, 'Einführung noch einmal zeigen'),
           canInstall() ? h('button', { class: 'btn btn-primary', onclick: installApp }, h('span', { html: icon.download }), 'App installieren') : null,
           !isStandalone() && isIOS() ? h('p', { class: 'hint' }, 'Auf dem iPhone: In Safari auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen.') : null,
+        ),
+      ),
+      ],
+      daten: () => [
+      exportKarte(),
+      h('section', { class: 'card' },
+        h('h2', {}, 'Sichern und Zurücksetzen'),
+        h('div', { class: 'form' },
+          h('button', { class: 'btn', onclick: datenSichern }, 'Daten sichern (Datei)'),
+          h('p', { class: 'hint' }, 'Speichert alle Flächen, Maßnahmen und Einstellungen als Datei – zur Sicherung oder um ein Problem nachzustellen.'),
           h('button', { class: 'btn btn-danger-ghost', onclick: async () => {
             if (await confirmDialog('Alle Daten auf diesem Gerät löschen?', { ok: 'Alles löschen', danger: true, body: 'Flächen, Maßnahmen und Einstellungen werden entfernt.' })) { store.reset(); applyTheme(); render(); toast('Alle Daten gelöscht'); }
           } }, 'Alle Daten löschen'),
-        ),
-      ),
+        )),
       h('p', { class: 'hint center' }, 'Karten und Flurstücke: Geoportal Thüringen (© GDI-Th, dl-de/by-2-0), TopPlusOpen (© BKG), OpenStreetMap.'),
+      ],
+    };
+    fill(body,
+      h('div', { class: 'segmented profil-bereiche', role: 'tablist', 'aria-label': 'Bereiche' },
+        BEREICHE.map(([k, l]) => h('button', { role: 'tab', 'aria-selected': String(bereich === k), 'aria-checked': String(bereich === k),
+          onclick: () => { bereich = k; render(); page.el.querySelector('.page-body').scrollTop = 0; } }, l))),
+      inhalt[bereich](),
     );
   }
 

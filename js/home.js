@@ -888,11 +888,21 @@ async function renderInfo() {
           const chips = catChips(pick, (k) => { pick = k; chips.querySelectorAll('.chip').forEach((c, i) => c.setAttribute('aria-checked', String(Object.keys(CATEGORIES)[i] === k))); });
           return chips;
         })(),
-        h('button', { class: 'btn btn-primary btn-block', onclick: () => {
+        h('button', { class: 'btn btn-primary btn-block', onclick: async () => {
           // Geometrie und Sachdaten mitspeichern, damit die Fläche auch offline verfügbar ist
           const e = istProfi() ? eigentuemerVon(p) : null;
           const passend = e && etName(e) ? ordnerListe().find((o) => o.name.toLowerCase() === etName(e).toLowerCase()) : null;
-          const ordnerId = istProfi() ? (passend?.id || ordnerFuerNeu()) : null;
+          let ordnerId = istProfi() ? (passend?.id || ordnerFuerNeu()) : null;
+          // Rückfrage, wenn die Fläche in einem fremden Ordner landen würde
+          if (ordnerId) {
+            const w = await dialog({
+              title: 'Wohin speichern?',
+              body: h('p', {}, `Du arbeitest gerade im Ordner „${ordnerName(ordnerId)}“. Gehört Flurstück ${p.nr} zu diesem Waldbesitzer oder ist es deine eigene Fläche?`),
+              actions: [{ label: 'Eigene Fläche', value: 'eigen' }, { label: `In „${ordnerName(ordnerId)}“`, value: 'ordner', primary: true }],
+            });
+            if (!w) return;
+            if (w === 'eigen') ordnerId = null;
+          }
           store.update((s) => { s.parcels.push({ ...p, category: pick, addedAt: Date.now(), ordnerId }); });
           if (ordnerId) ordnerEigentuemerAnwenden(ordnerId, [p.id]);
           say(`Flurstück ${p.nr} ist jetzt eine deiner Flächen. Du findest sie in deinem Profil.`);

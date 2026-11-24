@@ -396,10 +396,13 @@ export function ordnerLeiste() {
   const a = aktiverOrdner();
   const liste = ordnerListe();
   const name = a === 'eigen' ? 'Eigene Flächen' : a === 'alle' ? 'Alle Ordner' : liste.find((o) => o.id === a)?.name || 'Eigene Flächen';
-  return h('div', { class: 'ordner-leiste' },
-    h('span', { class: 'ordner-symbol', 'aria-hidden': 'true' }, '📁'),
+  const art = a === 'eigen' ? 'eigen' : a === 'alle' ? 'alle' : 'fremd';
+  const zeile = { eigen: 'Du siehst deine eigenen Flächen', alle: 'Alle Ordner zusammen', fremd: 'Du arbeitest im Ordner von' }[art];
+  return h('div', { class: `ordner-leiste ordner-leiste-${art}` },
+    h('span', { class: 'ordner-symbol', 'aria-hidden': 'true' }, art === 'eigen' ? '🌲' : '📁'),
     h('button', { type: 'button', class: 'ordner-knopf', 'aria-haspopup': 'dialog', 'aria-label': `Ordner wählen, gewählt: ${name}`, onclick: () => ordnerSuchen({ aktiv: a, mitSpezial: true }).then((v) => { if (v) ordnerWaehlen(v); }) },
-      h('span', { class: 'ordner-name' }, name), h('span', { class: 'ordner-zahl muted' }, liste.length ? `${liste.length} Ordner` : ''), h('span', { 'aria-hidden': 'true' }, '▾')));
+      h('span', { class: 'ordner-name' }, h('small', {}, zeile), h('strong', {}, name)), h('span', { class: 'ordner-zahl' }, liste.length ? `${liste.length} Ordner` : ''), h('span', { 'aria-hidden': 'true' }, '▾')),
+    art !== 'eigen' ? h('button', { type: 'button', class: 'ordner-zurueck', title: 'Zurück zu meinen eigenen Flächen', 'aria-label': 'Zurück zu meinen eigenen Flächen', onclick: () => ordnerWaehlen('eigen') }, '×') : null);
 }
 
 /**

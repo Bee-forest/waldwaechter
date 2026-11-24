@@ -380,7 +380,7 @@ const geoFrame = (title, src, height = 200) => h('iframe', { class: 'wms-info', 
 /** Aufklappbare Themen-Kachel in der Infobox; die Kurzinfo steht auch im zugeklappten Zustand da */
 const KLAPP = new Set(); // aufgeklappte Kacheln bleiben beim Wechsel des Flurstücks offen
 let aktAchten = null;
-/** „Worauf achten?“: alle Hinweise zur Fläche als kurze, klare Liste – wichtigstes zuerst */
+/** „Schutz und Auflagen“: alle Hinweise zur Fläche als kurze, klare Liste – wichtigstes zuerst */
 function achtenZeichnen(p, achten, host) {
   const geo = achten.geo;
   const featBereit = FEAT.has(p.id);
@@ -993,7 +993,7 @@ async function renderInfo() {
   // oben eine klare Liste „Das musst du hier beachten“, die Einzelheiten aufklappbar darunter
   const schutzHost = h('div', { class: 'geo-grid', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Lade Schutzgebiete und Waldfunktionen …'));
   const achtenListe = h('div', { class: 'achten-liste', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Prüfe Schutzgebiete, Biotope und Pflichten …'));
-  const achten = isAlkis ? { host: schutzHost, geo: null, block: klapp('achten', 'Worauf achten?', [
+  const achten = isAlkis ? { host: schutzHost, geo: null, block: klapp('achten', 'Schutz und Auflagen', [
     achtenListe,
     h('details', { class: 'bzt-mehr' }, h('summary', {}, 'Einzelheiten und Quellen'),
       h('h4', { class: 'achten-titel' }, 'Schutzgebiete und Waldfunktionen'), schutzHost,

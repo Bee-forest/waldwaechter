@@ -20,7 +20,30 @@ import { say, WANZE_SVG } from '../mascot.js';
 import * as F4 from './f4.js';
 import { bhdMitKamera } from './bhdkamera.js';
 import { kameraFeld, stopKamera } from './kamerafeld.js';
-import { computePlanF4 } from './plan.js';
+import { computePlanF4, GASSE_BREITE_STANDARD } from './plan.js';
+import { openErschliessungEditor } from '../map/erschliessung.js';
+
+// Rückegassen in der Planung: Abzug von der Fläche, eintragen oder aus dem Luftbild übernehmen
+let gassenNeu = () => {};
+function gassenKarte(plan, f, sel) {
+  const g = plan.gassen || { anzahl: 0 };
+  const editor = (modus) => {
+    const c = sel?.ring?.length ? sel.ring.reduce((a, p) => [a[0] + p[0] / sel.ring.length, a[1] + p[1] / sel.ring.length], [0, 0]) : null;
+    const flaeche = sel?.parcel || (sel?.polys || sel?.ring ? { id: sel.parcelId || 'auswahl', polys: sel.polys, ring: sel.ring } : null);
+    const seiten = document.querySelectorAll('.page').length;
+    openErschliessungEditor({ center: c, zoom: 17, modus, flaeche });
+    // nach dem Schließen des Editors neu rechnen
+    const t = setInterval(() => { if (document.querySelectorAll('.page').length <= seiten) { clearInterval(t); gassenNeu(); } }, 500);
+  };
+  return h('div', { class: 'calc-box gassen-box' },
+    h('strong', {}, g.anzahl ? `Rückegassen: ${g.anzahl} ${g.anzahl === 1 ? 'Gasse' : 'Gassen'}, ca. ${Math.round(g.laengeM).toLocaleString('de-DE')} m` : 'Rückegassen: noch keine eingetragen'),
+    g.anzahl ? h('small', {}, `Gassenfläche ca. ${formatHa(g.ha)} (Breite je Gasse wie eingetragen, sonst ${GASSE_BREITE_STANDARD} m). ${g.aktiv ? `Sie wird von der Bestandsfläche abgezogen – die Menge sinkt entsprechend.` : 'Wird derzeit nicht abgezogen.'}`)
+      : h('small', {}, 'Auf den Gassen stehen keine Bäume. Trägst du sie ein, rechnet die App die Menge nur für die Fläche zwischen den Gassen.'),
+    g.anzahl ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: g.aktiv, onchange: (e) => { f.gassenAbzug = e.target.checked; gassenNeu(); } }), ' Gassenfläche abziehen') : null,
+    h('div', { class: 'btn-row' },
+      h('button', { type: 'button', class: 'btn btn-small', onclick: () => editor('gasse') }, g.anzahl ? 'Gassen bearbeiten' : 'Gassen einzeichnen'),
+      h('button', { type: 'button', class: 'btn btn-small', onclick: () => editor('erkennen') }, 'Aus Luftbild übernehmen')));
+}
 import { standSpeichern, standLaden } from './speicher.js';
 import { dateiSpeichern, dateiLaden } from '../dateien.js';
 import { Pdf, herunterladen } from '../pdf.js';
@@ -549,6 +572,7 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
       // Folgeeingriff: bisher gezählte Menge aller früheren Eingriffe der Serie (m³/ha)
       if (f.eingriffNr > 1) f.bisherGezaehltHa = bisherGezaehltHa(f.eingriffNr);
       const plan = computePlanF4(st.sel, f, st.auto?.wald);
+      gassenNeu = () => renderParams();
       st.plan = plan;
       const pl = plan.planung;
       const kein = plan.wald?.status === 'kein';
@@ -568,12 +592,13 @@ export async function openThinningWizard({ parcelId, measureId } = {}) {
             h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.zielmenge, 1)), h('span', {}, 'm³/ha Zielmenge im Jahrzehnt')),
             h('div', {}, h('span', { class: 'pv-n' }, E), h('span', {}, E === 1 ? 'Eingriff im Jahrzehnt' : 'Eingriffe im Jahrzehnt')),
             h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.mengeHa, 1)), h('span', {}, 'm³/ha bei diesem Eingriff')),
-            h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.budget, 2)), h('span', {}, `m³ im Bestand (${formatHa(plan.areaHa)})`))),
+            h('div', {}, h('span', { class: 'pv-n' }, fmt(pl.budget, 2)), h('span', {}, `m³ im Bestand (${formatHa(pl.flaecheHa)}${plan.gassen?.abzugHa ? ' ohne Gassen' : ''})`))),
+          gassenKarte(plan, f, st.sel),
           h('div', { class: 'calc-box eingriffe-box' },
             h('strong', {}, E === 1 ? 'Ein Eingriff im Jahrzehnt' : `${E} Eingriffe im Jahrzehnt, Abstand ${fmt(pl.abstandJahre, 1)} Jahre`),
             h('small', {}, `Zielmenge ${fmt(pl.zielmenge, 1)} m³/ha → ${E} Eingriff${E > 1 ? 'e' : ''} (unter 40 m³/ha einer, 40 bis unter 100 zwei, ab 100 drei).`),
             nr === 1
-              ? h('small', {}, `Menge dieses Eingriffs: min(${F4.parameter().obergrenze_je_eingriff_m3ha}; ${fmt(pl.zielmenge, 1)} ÷ ${E}) = ${fmt(pl.mengeHa, 2)} m³/ha, im Bestand ${fmt(pl.mengeHa, 2)} × ${fmt(plan.areaHa, 2)} ha = ${fmt(pl.budget, 2)} m³.`)
+              ? h('small', {}, `Menge dieses Eingriffs: min(${F4.parameter().obergrenze_je_eingriff_m3ha}; ${fmt(pl.zielmenge, 1)} ÷ ${E}) = ${fmt(pl.mengeHa, 2)} m³/ha, im Bestand ${fmt(pl.mengeHa, 2)} × ${fmt(pl.flaecheHa, 2)} ha${plan.gassen?.abzugHa ? ' (ohne Gassen)' : ''} = ${fmt(pl.budget, 2)} m³.`)
               : h('small', {}, `Menge dieses Eingriffs: min(${F4.parameter().obergrenze_je_eingriff_m3ha}; (${fmt(pl.zielmenge, 1)} − ${fmt(f.bisherGezaehltHa, 1)} bisher gezählt) ÷ ${E - nr + 1}) = ${fmt(pl.mengeHa, 2)} m³/ha, im Bestand ${fmt(pl.budget, 2)} m³.`),
             E > 1 && nr < E ? h('small', {}, `Folgeeingriff: etwa ${folge.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })} – die App trägt ihn beim Start in den Maßnahmenkalender ein.`) : null,
             h('small', {}, `Mehr als ${F4.parameter().obergrenze_je_eingriff_m3ha} m³/ha je Eingriff lassen sich nicht auszeichnen – der Zähler sperrt.`)),

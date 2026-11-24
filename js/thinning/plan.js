@@ -1,5 +1,6 @@
 // Rechenkern der Durchforstungsmethode (ohne UI, gut testbar).
-import { areaHa, generateGrid, inPolys, polysOf, areaM2Polys } from '../geo.js';
+import { areaHa, generateGrid, inPolys, polysOf, areaM2Polys, distance } from '../geo.js';
+import { store } from '../store.js';
 import { imWald } from './wald.js';
 import { bestimme, DIMENSION, RASTER_M, amPunkt, QUALITAET_TEXT, AUSWAHL_TEXT } from './methode.js';
 
@@ -170,13 +171,41 @@ export function rasterF4(sel, wald, offsetRel, sz = null) {
  * Plan eines Eingriffs nach Fassung 4.
  * f: { art, nadel, ho, b, sz, eingriffNr, bisherGezaehltHa, offset? }
  */
+/** Rückegassen (Erschließung) in der Auswahl: Länge im Bestand × Breite (Standard 4 m) */
+export const GASSE_BREITE_STANDARD = 4;
+export function gassenInAuswahl(sel) {
+  const sh = Array.isArray(sel) ? { ring: sel } : sel;
+  const polys = polysOf(sh);
+  const clip = sh.clip?.length ? sh.clip : null;
+  const drin = (pt) => inPolys(pt, polys) && (!clip || inPolys(pt, clip));
+  let laenge = 0, m2 = 0, anzahl = 0;
+  for (const g of store.get().erschliessung?.gassen || []) {
+    const line = g.line || [];
+    let lg = 0;
+    for (let i = 1; i < line.length; i++) {
+      const d = distance(line[i - 1], line[i]);
+      const n = Math.max(1, Math.ceil(d / 2)); // alle ~2 m prüfen
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n;
+        const pt = [line[i - 1][0] + (line[i][0] - line[i - 1][0]) * t, line[i - 1][1] + (line[i][1] - line[i - 1][1]) * t];
+        if (drin(pt)) lg += d / n;
+      }
+    }
+    if (lg > 1) { anzahl++; laenge += lg; m2 += lg * (Number(g.breite) || GASSE_BREITE_STANDARD); }
+  }
+  return { anzahl, laengeM: laenge, ha: m2 / 10000 };
+}
+
 export function computePlanF4(sel, f, wald = null) {
   const { flaeche, ha, geoHa, sh, clip } = flaecheDerAuswahl(sel, wald);
   f.eingriffNr ??= 1;
   // Versatz in x und y zufällig zwischen 0 und Rasterabstand, je Eingriff neu – einmal gewählt bleibt er für diesen Eingriff fest
   f.offset ??= [Math.random(), Math.random()];
   const r = rasterF4(sel, wald, f.offset, f.sz);
-  const pl = planungF4({ art: f.art, nadel: f.nadel, ho: f.ho, b: f.b, sz: f.sz, flaecheHa: ha, eingriffNr: f.eingriffNr, bisherGezaehltHa: f.bisherGezaehltHa || 0 });
+  // Rückegassen: dort stehen keine Bäume – ihre Fläche wird von der Bestandsfläche abgezogen (abschaltbar)
+  const gassen = gassenInAuswahl(sel);
+  const abzug = f.gassenAbzug !== false && gassen.ha > 0 ? Math.min(gassen.ha, ha * 0.5) : 0;
+  const pl = planungF4({ art: f.art, nadel: f.nadel, ho: f.ho, b: f.b, sz: f.sz, flaecheHa: ha - abzug, eingriffNr: f.eingriffNr, bisherGezaehltHa: f.bisherGezaehltHa || 0 });
   const R = parameter().raster;
   return {
     methode: 'f4',
@@ -187,6 +216,7 @@ export function computePlanF4(sel, f, wald = null) {
     areaGeoHa: geoHa,
     wald: wald ? { status: wald.status, waldHa: wald.waldHa ?? null, gesamtHa: wald.gesamtHa ?? flaeche, quelle: wald.quelle || null } : null,
     planung: pl,
+    gassen: { ...gassen, abzugHa: abzug, aktiv: f.gassenAbzug !== false },
     eingriffe: { nr: f.eingriffNr, anzahl: pl.eingriffe, abstandJahre: pl.abstandJahre },
     raster: r.abstand, rasterVerkleinert: r.verkleinert, kreis: R.pruefkreis_m, ausweichen: R.ausweich_m,
     offset: f.offset,

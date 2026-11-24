@@ -170,11 +170,13 @@ export function bestandsprofil(o) {
   foerderRegeln().then((regeln) => {
     const fs = passendeFoerderung(regeln, [...new Set(liste.slice(0, 4).flatMap((a) => a.foerder))].concat(o.einartig ? ['mischung'] : []));
     if (!fs.length) return;
-    fill(foerderBox, h('div', { class: 'geo-card' }, h('p', { class: 'geo-kicker' }, 'Passende Förderung'),
+    // kurz: nur die Titel; Sätze, Bedingungen und Links aufklappbar
+    fill(foerderBox, h('details', { class: 'empf-foerder-kurz' },
+      h('summary', {}, h('span', { class: 'foerder-marke' }, '€'), h('span', {}, h('strong', {}, 'Förderung möglich: '), fs.map((t) => t.titel).join(', '))),
       h('ul', { class: 'empf-foerder-liste' }, fs.map((t) => h('li', {},
         h('strong', {}, t.titel), h('small', {}, `${regeln.programme[t.programm]?.name || t.programm}: ${t.satz}`), h('small', { class: 'muted' }, t.bedingung),
         h('a', { href: regeln.programme[t.programm]?.link, target: '_blank', rel: 'noopener' }, 'Richtlinie und Formulare')))),
-      h('p', { class: 'hint' }, `Fördersätze Stand ${new Date(regeln.stand).toLocaleDateString('de-DE')}${regeln.geprueft ? '' : ' – noch nicht von FBG oder Forstamt geprüft'}. Vor der Maßnahme beim Forstamt nachfragen; erst nach Bewilligung beginnen.`)));
+      h('p', { class: 'hint' }, `Stand ${new Date(regeln.stand).toLocaleDateString('de-DE')}${regeln.geprueft ? '' : ', noch nicht geprüft'}. Erst nach Bewilligung beginnen.`)));
   });
   const aufgabeEl = (a, i) => h('li', { class: i === 0 ? 'empf-top' : '' },
     h('strong', {}, a.titel), h('p', {}, a.text),

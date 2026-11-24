@@ -643,7 +643,7 @@ function bztKurz(r) {
   return `Hauptbaumarten: ${r.eintrag.B.join(', ') || '–'}`;
 }
 /** Baumartenempfehlung und Bestandeszieltypen aus dem Tabellenwerk */
-function bztKarte(r) {
+export function bztKarte(r) {
   if (r.status === 'ausserhalb') return h('p', { class: 'muted' }, 'Der Punkt liegt außerhalb der Thüringer Wuchseinheiten.');
   if (r.status !== 'ok') return h('div', {}, h('p', { class: 'muted' }, `Für die Standortseinheit ${r.einheit || r.gruppe} enthält das Tabellenwerk in der Wuchseinheit ${r.wuchseinheitName} keinen Eintrag (aufgeführt sind nur Standorte ab 1 % Flächenanteil).`),
     h('p', { class: 'hint' }, 'Frag beim Forstamt nach einer Empfehlung für diesen Standort.'));
@@ -652,18 +652,18 @@ function bztKarte(r) {
   const trefferText = r.treffer === 'genau' ? '' : r.treffer === 'zusatz'
     ? ` Für ${r.einheit} gilt der Eintrag ${r.code} (gleiche Standortseinheit mit Zusatzkennzeichen).`
     : ` Die Standortseinheit ${r.einheit || r.gruppe} steht nicht im Tabellenwerk; gezeigt wird die ähnlichste Einheit ${r.code} derselben Standortsgruppe ${r.gruppe || ''}.`;
+  // Einfache Ansicht: passende Baumarten mit Namen; Standort, Bestandeszieltypen und Hinweise aufklappbar
+  const namen = (liste) => (liste.length ? liste.map((k) => h('span', { class: 'ba-chip ba-chip-name', title: k }, BAUMARTEN_KURZ[k] || k)) : h('span', { class: 'muted' }, '–'));
   return h('div', { class: 'bzt' },
+    h('div', { class: 'geo-card bzt-einfach' },
+      h('p', { class: 'geo-kicker' }, 'Diese Baumarten passen hier'),
+      h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Als Hauptbaumart'), h('small', {}, ' prägt den Bestand')), h('div', { class: 'ba-chips' }, namen(e.B))),
+      h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Zum Mischen'), h('small', {}, ' gut beigemischt')), h('div', { class: 'ba-chips' }, namen(e.C))),
+      e.D.length ? h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Am Rand / einzeln'), h('small', {}, ' Nebenbaumarten')), h('div', { class: 'ba-chips' }, namen(e.D))) : null,
+      h('p', { class: 'hint' }, `Standort ${r.code}: ${e.name}. Reinbestände werden nicht empfohlen – am besten mehrere Arten mischen.`)),
+    h('details', { class: 'bzt-mehr' }, h('summary', {}, 'Mehr anzeigen: Anteile, Bestandeszieltypen, Standort'),
     h('div', { class: 'geo-card' },
-      h('p', { class: 'geo-kicker' }, 'Standort im Tabellenwerk'),
-      h('h4', {}, `${r.code}: ${e.name}`),
-      h('dl', { class: 'bestand-schichten' },
-        h('div', {}, h('dt', {}, 'Wuchseinheit'), h('dd', {}, r.ersatzWE ? `${r.ersatzWE.name} (${r.ersatzWE.wuchseinheit}), nächstgelegene mit Eintrag` : `${r.wuchseinheitName} (${r.wuchseinheit})`)),
-        h('div', {}, h('dt', {}, 'Klimabereich 2041–2070'), h('dd', {}, `${r.klimabereichTabelleName} (${r.klimabereichTabelle})`)),
-        e.boden ? h('div', {}, h('dt', {}, 'Häufiger Bodentyp'), h('dd', {}, e.boden)) : null),
-      r.ersatzWE ? h('p', { class: 'hint' }, `Die Wuchseinheit ${r.wuchseinheitName} hat für diesen Standort keinen Eintrag. Verwendet wird die nächstgelegene Wuchseinheit mit Eintrag: ${r.ersatzWE.name} (${r.ersatzWE.wuchseinheit}), ca. ${r.ersatzWE.abstand.toLocaleString('de-DE')} m entfernt.`) : null,
-      h('p', { class: 'muted' }, `Nährkraft und Wasserhaushalt werden über die Standortseinheit gemeinsam bewertet, dazu das künftige Klima.${trefferText}${r.klimabereichTabelle !== r.klimabereich && r.klimabereich !== '0' ? ` Am Punkt selbst liegt laut Karte Klimabereich ${r.klimabereich}; dafür enthält das Tabellenwerk hier keinen Eintrag.` : ''}`)),
-    h('div', { class: 'geo-card' },
-      h('p', { class: 'geo-kicker' }, 'Empfohlene Baumarten'),
+      h('p', { class: 'geo-kicker' }, 'Anteile laut Tabellenwerk'),
       h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Hauptbaumarten'), h('small', {}, ' 5/10 bis 8/10 der Fläche')), h('div', { class: 'ba-chips' }, arten(e.B))),
       h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Mischbaumarten'), h('small', {}, ' 2/10 bis 5/10')), h('div', { class: 'ba-chips' }, arten(e.C))),
       h('div', { class: 'ba-gruppe' }, h('p', {}, h('strong', {}, 'Nebenbaumarten'), h('small', {}, ' bis 2/10')), h('div', { class: 'ba-chips' }, arten(e.D))),
@@ -683,7 +683,16 @@ function bztKarte(r) {
         h('strong', {}, 'BZT: '), Object.values(r.andereWE.eintrag.bzt).flat().join(', ') || '–')) : null,
     r.nachbarn?.length ? h('details', { class: 'bzt-nachbar' }, h('summary', {}, `Nahe Grenze zu Klimabereich ${r.nachbarn.map((n) => n.klimabereich).join(', ')} – auch diese Empfehlung prüfen`),
       r.nachbarn.map((n) => h('p', {}, h('strong', {}, `${n.name} (${n.klimabereich}), ca. ${n.abstand.toLocaleString('de-DE')} m entfernt: `), `Hauptbaumarten ${n.eintrag.B.join(', ') || '–'}; Mischbaumarten ${n.eintrag.C.join(', ') || '–'}`))) : null,
-    h('p', { class: 'info-quellen' }, 'Quelle: ThüringenForst, Standortgerechte Baumarten- und Bestandeszieltypenwahl, Tabellenwerk (Anlage 6 DO Waldbau, Juni 2015). Klimabereiche aus der Karte im Anhang A, auf ca. 150 m genau verortet; Wuchseinheiten: Open Data ThüringenForst.'));
+    h('div', { class: 'geo-card' },
+      h('p', { class: 'geo-kicker' }, 'Standort im Tabellenwerk'),
+      h('h4', {}, `${r.code}: ${e.name}`),
+      h('dl', { class: 'bestand-schichten' },
+        h('div', {}, h('dt', {}, 'Wuchseinheit'), h('dd', {}, r.ersatzWE ? `${r.ersatzWE.name} (${r.ersatzWE.wuchseinheit}), nächstgelegene mit Eintrag` : `${r.wuchseinheitName} (${r.wuchseinheit})`)),
+        h('div', {}, h('dt', {}, 'Klimabereich 2041–2070'), h('dd', {}, `${r.klimabereichTabelleName} (${r.klimabereichTabelle})`)),
+        e.boden ? h('div', {}, h('dt', {}, 'Häufiger Bodentyp'), h('dd', {}, e.boden)) : null),
+      r.ersatzWE ? h('p', { class: 'hint' }, `Die Wuchseinheit ${r.wuchseinheitName} hat für diesen Standort keinen Eintrag. Verwendet wird die nächstgelegene Wuchseinheit mit Eintrag: ${r.ersatzWE.name} (${r.ersatzWE.wuchseinheit}), ca. ${r.ersatzWE.abstand.toLocaleString('de-DE')} m entfernt.`) : null,
+      h('p', { class: 'muted' }, `Nährkraft und Wasserhaushalt werden über die Standortseinheit gemeinsam bewertet, dazu das künftige Klima.${trefferText}${r.klimabereichTabelle !== r.klimabereich && r.klimabereich !== '0' ? ` Am Punkt selbst liegt laut Karte Klimabereich ${r.klimabereich}; dafür enthält das Tabellenwerk hier keinen Eintrag.` : ''}`)),
+      h('p', { class: 'info-quellen' }, 'Quelle: ThüringenForst, Standortgerechte Baumarten- und Bestandeszieltypenwahl, Tabellenwerk (Anlage 6 DO Waldbau, Juni 2015). Klimabereiche aus der Karte im Anhang A, auf ca. 150 m genau verortet; Wuchseinheiten: Open Data ThüringenForst.')));
 }
 
 let standortP = Promise.resolve(null);
@@ -743,17 +752,18 @@ function gelaendeBlock(latlng, polys) {
   return block;
 }
 
-function geoInfoBlock(latlng, parcelId = null, polys = null) {
+function geoInfoBlock(latlng, parcelId = null, polys = null, achten = null) {
   const lade = (t) => h('p', { class: 'muted' }, t);
   const B = { standort: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Standort und Bestand …')),
     bzt: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Baumartenempfehlung …')),
     schutz: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Schutzstatus und Waldfunktionen …')),
     zust: h('div', { class: 'geo-grid', 'aria-live': 'polite' }, lade('Lade Zuständigkeit …')) };
+  if (achten) B.schutz = achten.host;
   const quelle = h('p', { class: 'hint' }, 'Am angetippten Punkt laut Geoportal Thüringen (© GDI-Th / ThüringenForst / TLUBN). Ohne Gewähr – vor Maßnahmen im Zweifel beim Forstamt nachfragen.');
   const K = {
     standort: klapp('standort', 'Standort und Bestand', [B.standort, quelle.cloneNode(true)], 'Lädt …'),
     bzt: klapp('bzt', 'Baumartenempfehlung', B.bzt, 'Lädt …'),
-    schutz: klapp('schutz', 'Schutzstatus und Waldfunktionen', [B.schutz, quelle.cloneNode(true)], 'Lädt …'),
+    schutz: achten ? achten.block : klapp('schutz', 'Schutzstatus und Waldfunktionen', [B.schutz, quelle.cloneNode(true)], 'Lädt …'),
     zust: klapp('zust', 'Ansprechpartner', B.zust, 'Lädt …'),
     gelaende: gelaendeBlock(latlng, polys),
   };
@@ -798,7 +808,7 @@ function geoInfoBlock(latlng, parcelId = null, polys = null) {
     [K.standort, K.bzt, K.schutz, K.zust].forEach((k) => k.setKurz('nicht erreichbar'));
     bztFertig(null); standortFertig(null);
   });
-  return [K.empfehlung, K.standort, K.gelaende, K.bzt, K.schutz, K.zust];
+  return [K.schutz, K.empfehlung, K.standort, K.gelaende, K.bzt, K.zust];
 }
 
 /** Bestandsprofil und Handlungsempfehlung für ein Flurstück */
@@ -933,6 +943,14 @@ async function renderInfo() {
         } }, h('span', { html: icon.plus }), 'Fläche hinzufügen'),
       );
 
+  // Schutzgebiete, Waldfunktionen, Biotope, Verkehrssicherung (und Wanderwege) in einem Reiter
+  const schutzHost = h('div', { class: 'geo-grid', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Lade Schutzgebiete und Waldfunktionen …'));
+  const achten = isAlkis ? { host: schutzHost, block: klapp('achten', 'Worauf achten?', [
+    h('h4', { class: 'achten-titel' }, 'Schutzgebiete und Waldfunktionen'), schutzHost,
+    h('h4', { class: 'achten-titel' }, istProfi() ? 'Verkehrssicherung, Biotope, Wanderwege' : 'Verkehrssicherung und Biotope'),
+    h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …')),
+    istProfi() ? wanderwegeTeil(p) : null,
+    h('p', { class: 'hint' }, 'Am angetippten Punkt laut Geoportal Thüringen (© GDI-Th / ThüringenForst / TLUBN). Ohne Gewähr – im Zweifel beim Forstamt nachfragen.')], 'Lädt …') } : null;
   fill(box, 
     h('div', { class: 'info-head' },
       h('div', {},
@@ -966,7 +984,7 @@ async function renderInfo() {
       h('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: () => { store.update((st) => { const x = st.parcels.find((y) => y.id === m.id); if (x) x.ordnerId = null; }); toast('Zu deinen eigenen Flächen verschoben'); renderInfo(); } }, 'Zu meinen eigenen Flächen')) : null,
     istProfi() ? eigentuemerBlock(p) : null,
     isAlkis ? rescueBlock(latlng) : null,
-    isAlkis ? geoInfoBlock(latlng, p.id, polysOf(p)) : null,
+    isAlkis ? geoInfoBlock(latlng, p.id, polysOf(p), achten) : null,
     isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Nächste Rettungspunkte'),
       h('ul', { class: 'rescue-list' }, rescue.map((rp) => h('li', { class: 'rescue' },
@@ -979,8 +997,6 @@ async function renderInfo() {
       ))),
       rescue.length ? h('p', { class: 'hint' }, 'Demo-Rettungspunkte. Im Notfall immer 112 wählen und die Rettungspunkt-Nummer nennen.') : null,
     ),
-    isAlkis ? klapp('besonder', 'Besonderheiten', [h('div', { id: 'besonderheiten' }, FEAT.has(p.id) ? besonderheitenListe(p) : h('p', { class: 'muted' }, 'Suche Verkehrssicherungspflicht und Biotope …')),
-      istProfi() ? wanderwegeTeil(p) : null], istProfi() ? 'Verkehrssicherung, Biotope, Wanderwege' : 'Verkehrssicherung, Biotope') : null,
     isAlkis ? null : h('div', { class: 'info-block' },
       h('h3', {}, 'Besonderheiten'),
       p.features?.length

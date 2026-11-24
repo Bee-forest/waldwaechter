@@ -51,17 +51,19 @@ const mine = (id) => store.get().parcels.find((p) => p.id === id);
 export const parcelTitle = (p) => `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}`;
 
 /** Inhalt des WaldWächter-Kopfs (Logo, Titel, Profil) – auch auf der Maßnahmen-Seite */
+const AUFGABEN_AN = false;
+
 export function kopfInhalt() {
   const pr = store.get().profile;
   const initials = (pr.name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
   return [
-    h('img', { class: 'app-logo', src: 'img/logo.svg', alt: 'WaldWächter-Logo' }),
+    // Logo = Eingang zur Wanzen-Ecke (ein Symbol statt zwei Wanzen)
+    h('button', { class: 'logo-knopf', 'aria-label': 'Wanzen-Ecke öffnen: Aufgabe der Woche, Quiz, Saisonkalender', title: 'Wanzen-Ecke', onclick: () => import('./wanzenecke.js').then((x) => x.openWanzenEcke()) },
+      h('img', { class: 'app-logo', src: 'img/logo.svg', alt: 'WaldWächter' })),
     h('div', { class: 'app-title' },
       h('h1', {}, 'WaldWächter'),
       h('p', {}, 'Digitale Wald- und Flächenbewirtschaftung für morgen.'),
     ),
-    h('button', { class: 'wanzen-knopf', 'aria-label': 'Wanzen-Ecke: Aufgabe der Woche, Quiz, Saisonkalender', title: 'Wanzen-Ecke', onclick: () => import('./wanzenecke.js').then((x) => x.openWanzenEcke()) },
-      h('span', { html: WANZE_SVG })),
     h('button', { class: 'profile-chip', 'aria-label': 'Mein Profil öffnen', onclick: () => openProfile() },
       h('span', { class: 'avatar' }, initials),
       h('span', { class: 'who' },
@@ -83,7 +85,8 @@ export async function initHome(root) {
   const chips = h('div', { class: 'cat-chips', role: 'group', 'aria-label': 'Kategorien ein- und ausblenden' });
   const baseSwitch = h('div', { class: 'segmented compact', role: 'radiogroup', 'aria-label': 'Basiskarte' });
   const streifen = h('div', { class: 'aufgaben-host' });
-  import('./aufgaben.js').then((x) => streifen.append(x.aufgabenStreifen()));
+  // „Das steht an“ vorerst ausgeblendet – zum Einschalten AUFGABEN_AN auf true setzen
+  if (AUFGABEN_AN) import('./aufgaben.js').then((x) => streifen.append(x.aufgabenStreifen()));
   root.append(
     head,
     streifen,
@@ -1140,7 +1143,7 @@ function openLayerSheet() {
   const SETS = [
     ['einfach', 'Einfach', 'Flurstücke und eigene Flächen', ['fotopunkte']],
     ['natur', 'Naturschutz', 'Schutzgebiete, Biotope, Habitatbäume', ['schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'habitat']],
-    ['holz', 'Holzernte', 'Gassen, Lager, Hangneigung, Rettung', ['gassen', 'lager', 'hangneigung', 'rettung', 'baumarten']],
+    ['holz', 'Holzernte', 'Gassen, Lager, Hangneigung, Rettung', ['gassen', 'lager', 'hangneigung', 'rettung']],
     ['wald', 'Waldinfo', 'Baumarten, Standort, Waldfunktionen', ['baumarten', 'standort', 'waldfunktionen', 'schaden']],
   ];
   const aktivSet = () => SETS.find(([, , , an]) => FACH.every((k) => !!s.layers[k] === an.includes(k)))?.[0];

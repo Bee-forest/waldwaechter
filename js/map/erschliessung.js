@@ -1,3 +1,4 @@
+import { eigeneFlaechenLayer } from './eigeneflaechen.js';
 // Profimodus: Erschließung – Rückegassen (Linien) und Lagerplätze/Polterplätze (Punkte) als eigene Kartenebenen.
 // Gassen per Hand, per GPS ablaufen oder als Vorschlag aus dem Luftbild; Lagerplätze mit Befahrbarkeit und Beschreibung.
 import { h, fill, dialog, confirmDialog, toast, openPage } from '../ui.js';
@@ -193,6 +194,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   const page = openPage('Erschließung bearbeiten', inhalt, { onClose: () => { umlauf?.stop(); lyr.entfernen(); abo(); map.remove(); } });
   const base = createBaseMap(mapEl, { center, zoom, basemap: s0.settings.basemap, alkis: true });
   const map = base.map;
+  eigeneFlaechenLayer(map);
   L.control.zoom({ position: 'topleft' }).addTo(map);
   let edit = null; // Verlauf einer bestehenden Gasse wird bearbeitet: { g, line }
   const lyr = createErschliessungLayers(map, {

@@ -1,3 +1,4 @@
+import { eigeneFlaechenLayer } from './eigeneflaechen.js';
 // Punkt-Ebenen zum Selbstpflegen: Habitatbäume (stehend / liegend) und jagdliche Einrichtungen
 // (Kanzel, Drückjagdbock, Erdsitz). Bearbeiten wie bei den Lagerplätzen: in die Karte tippen,
 // antippen zum Ändern, gedrückt halten und ziehen zum Verschieben.
@@ -155,6 +156,7 @@ export function openPunktEditor({ center, zoom = 17, art = 'habitat' } = {}) {
   const base = createBaseMap(mapEl, { center, zoom, basemap: s0.settings.basemap, alkis: true });
   const map = base.map;
   L.control.zoom({ position: 'topleft' }).addTo(map);
+  eigeneFlaechenLayer(map);
   const lyr = createPunktLayers(map, { verschiebbar: true });
   lyr[art].addTo(map);
   setTimeout(() => map.invalidateSize(), 250);

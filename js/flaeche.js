@@ -1,3 +1,4 @@
+import { eigeneFlaechenLayer } from './map/eigeneflaechen.js';
 // Fläche einer Maßnahme: ganzes Flurstück oder selbst eingezeichnete Teilfläche.
 import { h, fill } from './ui.js';
 import { store } from './store.js';
@@ -16,6 +17,7 @@ export function miniKarte(el, parcel, { zoom = 17, hell = false } = {}) {
   const base = createBaseMap(el, { center: parcel ? centroid(parcel.ring) : [50.9, 11.0], zoom, basemap: settings.basemap, alkis: false, hell });
   const map = base.map;
   // Umschalter Luftbild/OSM kommt aus createBaseMap
+  eigeneFlaechenLayer(map); // eigene Flächen farbig zur Orientierung
   const parcelLyr = parcel ? L.polygon(polys, STIL_FLURSTUECK).addTo(map) : null;
   const hl = L.layerGroup().addTo(map);
   const fit = (lyr) => setTimeout(() => { map.invalidateSize(); const b = (lyr || parcelLyr)?.getBounds(); if (b?.isValid()) map.fitBounds(b, { padding: [20, 20], maxZoom: 18 }); }, 60);

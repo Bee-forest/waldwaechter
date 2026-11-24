@@ -1212,11 +1212,11 @@ function openLayerSheet() {
   const box = (titel, ...inhalt) => h('section', { class: 'layer-box' }, h('h3', { class: 'layer-box-titel' }, titel), inhalt);
   const punktBearbeiten = (art, label) => h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openPunktEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()), art }); } }, label);
   // Voreinstellungen: ein Tipp schaltet passende Ebenen an und die übrigen Fachebenen aus
-  const FACH = ['flurnummern', 'grenzpunkte', 'rettung', 'baumarten', 'standort', 'waldfunktionen', 'schaden', 'schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'gassen', 'lager', 'hangneigung', 'habitat', 'jagd', 'fotopunkte', 'wege'];
+  const FACH = ['flurnummern', 'grenzpunkte', 'rettung', 'baumarten', 'standort', 'waldfunktionen', 'schaden', 'schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'gassen', 'lager', 'hangneigung', 'habitat', 'jagd', 'fotopunkte', 'wege', 'wegeAmtlich'];
   const SETS = [
     ['einfach', 'Einfach', 'Flurstücke und eigene Flächen', ['fotopunkte']],
     ['natur', 'Naturschutz', 'Schutzgebiete, Biotope, Habitatbäume', ['schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'habitat']],
-    ['holz', 'Holzernte', 'Wege, Gassen, Lager, Hangneigung, Rettung', ['wege', 'gassen', 'lager', 'hangneigung', 'rettung']],
+    ['holz', 'Holzernte', 'Wege, Gassen, Lager, Hangneigung, Rettung', ['wege', 'wegeAmtlich', 'gassen', 'lager', 'hangneigung', 'rettung']],
     ['wald', 'Waldinfo', 'Baumarten, Standort, Waldfunktionen', ['baumarten', 'standort', 'waldfunktionen', 'schaden']],
   ];
   const aktivSet = () => SETS.find(([, , , an]) => FACH.every((k) => !!s.layers[k] === an.includes(k)))?.[0];
@@ -1240,7 +1240,8 @@ function openLayerSheet() {
         sw('flurnummern', 'Flurstücksnummern', { note: 'ab Zoomstufe 16' }),
         OVERLAYS.filter((o) => o.group === 'Flurstücke').map((o) => sw(o.key, o.label, { note: o.note }))),
       box('Erschließung',
-        sw('wege', 'Wege (Waldwegenetz)', { color: '#F2C14E', note: 'ab Zoomstufe 13 · OpenStreetMap' }),
+        sw('wegeAmtlich', 'Wege amtlich (Geoportal Thüringen)', { color: '#C0392B', note: 'Straßen und Fahrwege aus ATKIS, Erholungswege von ThüringenForst' }),
+        sw('wege', 'Wege aus OpenStreetMap (Waldwegenetz)', { color: '#F2C14E', note: 'auch Rückewege und Pfade · ab Zoomstufe 13' }),
         sw('gassen', 'Rückegassen', { color: '#8D5A2B' }),
         sw('lager', 'Lagerplätze (Polterplätze)', { color: '#B5651D' }),
         h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten')),

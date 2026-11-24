@@ -2,7 +2,42 @@
 // kräftig gezeichnet, damit es auf Luftbild und OSM-Karte gut zu sehen ist.
 // LKW-fähige Wege (Fahrwege, Wirtschaftswege grade1/2) breit, Rückewege schmaler, Pfade gestrichelt.
 
+import { TH_ATTR } from './thueringen.js';
+
 export const WEGE_MIN_ZOOM = 13;
+
+// ---------- Amtliches Wegenetz (Geoportal Thüringen) ----------
+// ATKIS Basis-DLM (INSPIRE Verkehrsnetze, enthält Straßen und Fahrwege) und die Erholungswege von ThüringenForst.
+// Die Ebenennamen werden einmal aus GetCapabilities gelesen, damit Umbenennungen des Dienstes nicht stören.
+const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
+const QUELLEN = [
+  { url: `${GP}/INSPIREtn`, muster: /RoadLink|Strassen|Straßen|Weg/i, nicht: /Area|Node|Bahn|Rail|Water|Air/i },
+  { url: `${GP}/forst/FORST`, muster: /erholungsweg|wanderweg|waldweg|forstweg/i },
+];
+const ebenenCache = new Map();
+async function ebenenSuchen({ url, muster, nicht }) {
+  if (ebenenCache.has(url)) return ebenenCache.get(url);
+  const p = fetch(`${url}?SERVICE=WMS&REQUEST=GetCapabilities&VERSION=1.3.0`).then((r) => (r.ok ? r.text() : ''))
+    .then((t) => [...t.matchAll(/<Layer[^>]*>\s*<Name>([^<]+)<\/Name>\s*<Title>([^<]*)<\/Title>/g)]
+      .filter(([, n, ti]) => muster.test(`${n} ${ti}`) && !(nicht && nicht.test(n)))
+      .map(([, n]) => n))
+    .catch(() => []);
+  ebenenCache.set(url, p);
+  return p;
+}
+/** Amtliche Wege als WMS-Ebenen (Gruppe); leer, wenn der Dienst nichts Passendes anbietet */
+export function createAmtlicheWegeLayer() {
+  const grp = L.layerGroup();
+  grp.on('add', async () => {
+    for (const q of QUELLEN) {
+      const namen = await ebenenSuchen(q);
+      if (!namen.length || !grp._map) continue;
+      L.tileLayer.wms(q.url, { layers: namen.join(','), format: 'image/png', transparent: true, version: '1.3.0', attribution: TH_ATTR, maxZoom: 21, minZoom: 12, zIndex: 260, className: 'wege-amtlich' }).addTo(grp);
+    }
+  });
+  return grp;
+}
+
 const ZELLE = 0.02; // Kachelraster in Grad – lädt nur, was noch fehlt
 const cache = new Map(); // zelle → elements (gilt für alle Karten der Sitzung)
 const laufend = new Map();

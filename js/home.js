@@ -136,6 +136,21 @@ export async function initHome(root) {
   try { view = JSON.parse(localStorage.getItem('waldwaechter.view')) || view; } catch { /* egal */ }
   base = createBaseMap(mapEl, { center: view.c, zoom: view.z, basemap: s.basemap, alkis: s.layers.alkis !== false });
   map = base.map;
+  // Karte so hoch, dass beim Start Kopf, Karte und Knöpfe darunter ohne Scrollen zu sehen sind
+  const kartenHoehe = () => {
+    const wrap = root.querySelector('.map-wrap'), card = root.querySelector('.map-card');
+    if (!wrap || !card || !wrap.offsetParent) return;
+    const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+    const unten = tab && tab.top > innerHeight / 2 ? innerHeight - tab.top : 0; // Tab-Leiste unten (nicht als Seitenleiste)
+    const oben = wrap.getBoundingClientRect().top + (root.scrollTop || 0) + scrollY;
+    const rest = card.getBoundingClientRect().bottom - wrap.getBoundingClientRect().bottom;
+    document.documentElement.style.setProperty('--map-abzug', `${Math.round(oben + rest + unten + 12)}px`);
+    map?.invalidateSize();
+  };
+  requestAnimationFrame(() => requestAnimationFrame(kartenHoehe));
+  setTimeout(kartenHoehe, 700); document.fonts?.ready.then(kartenHoehe);
+  addEventListener('resize', () => setTimeout(kartenHoehe, 150));
+  addEventListener('orientationchange', () => setTimeout(kartenHoehe, 300));
   L.control.zoom({ position: 'topleft', zoomInTitle: 'Hineinzoomen', zoomOutTitle: 'Herauszoomen' }).addTo(map);
   renderBaseSwitch();
   // Fachebenen (Standortkarte, Schutzgebiete, …)

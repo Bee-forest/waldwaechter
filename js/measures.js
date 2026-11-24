@@ -170,6 +170,55 @@ async function render() {
   );
 }
 
+// ---------- Fotos einer Maßnahme: einfach so, an einem vorhandenen oder an einem neuen Fotopunkt ----------
+function fotopunktVerknuepfen(mid, fpId) {
+  store.update((s) => { const x = s.measures.find((y) => y.id === mid); if (x) { x.fotopunkte ||= []; if (!x.fotopunkte.includes(fpId)) x.fotopunkte.push(fpId); } });
+}
+async function fotosWaehlen(m, titel) {
+  const flst = m.parcelIds?.length ? m.parcelIds : m.parcelId ? [m.parcelId] : [];
+  const alle = store.get().fotopunkte || [];
+  const verknuepft = alle.filter((f) => (m.fotopunkte || []).includes(f.id));
+  const vorhanden = alle.filter((f) => flst.includes(f.parcelId) && !verknuepft.includes(f));
+  const zeile = (f) => `${f.name || 'Fotopunkt'} · Blick ${f.blick}° · ${fotoAnzahl(`fp:${f.id}`)} Fotos`;
+  const wahl = await dialog({
+    title: 'Fotos zur Maßnahme',
+    body: (close) => h('div', { class: 'foto-wahl' },
+      h('p', { class: 'muted' }, 'Wie möchtest du fotografieren?'),
+      h('button', { type: 'button', class: 'type-tile', onclick: () => close({ art: 'einfach' }) },
+        h('span', { class: 'type-text' }, h('strong', {}, 'Einfach Fotos machen'), h('small', {}, `Vorher/Nachher-Bilder direkt an der Maßnahme · ${fotoAnzahl(`m:${m.id}`)} Fotos`))),
+      verknuepft.length || vorhanden.length ? h('div', { class: 'foto-wahl-gruppe' },
+        h('p', { class: 'eyebrow' }, 'Vorhandenen Fotopunkt nutzen'),
+        [...verknuepft, ...vorhanden].map((f) => h('button', { type: 'button', class: 'type-tile', onclick: () => close({ art: 'punkt', id: f.id }) },
+          h('span', { class: 'type-text' }, h('strong', {}, f.name || 'Fotopunkt'), h('small', {}, `${zeile(f).split(' · ').slice(1).join(' · ')}${verknuepft.includes(f) ? ' · mit dieser Maßnahme verknüpft' : ''}`))))) : null,
+      flst.length ? h('button', { type: 'button', class: 'type-tile', onclick: () => close({ art: 'neu' }) },
+        h('span', { class: 'type-text' }, h('strong', {}, 'Neuen Fotopunkt anlegen'), h('small', {}, 'Fester Standort mit Blickrichtung – so lässt sich die Fläche über Jahre vergleichen'))) : null,
+      !flst.length ? h('p', { class: 'hint' }, 'Fotopunkte gibt es nur für Maßnahmen mit Flurstück.') : null),
+    actions: [{ label: 'Abbrechen', value: null }],
+  });
+  if (!wahl) return;
+  const { fotopunktFotos } = await import('./tagebuch.js');
+  if (wahl.art === 'einfach') openFotos(`m:${m.id}`, titel);
+  else if (wahl.art === 'punkt') {
+    fotopunktVerknuepfen(m.id, wahl.id);
+    const f = (store.get().fotopunkte || []).find((x) => x.id === wahl.id);
+    if (f) fotopunktFotos(f);
+  } else if (wahl.art === 'neu') {
+    let pid = flst[0];
+    if (flst.length > 1) {
+      const all = await source.allParcels();
+      pid = await dialog({ title: 'Auf welchem Flurstück?', body: h('p', {}, 'Wähle das Flurstück, auf dem der Fotopunkt liegen soll.'),
+        actions: [...flst.map((id) => { const p = all.find((x) => x.id === id); return { label: p ? `Flurstück ${p.nr}, ${p.gemarkung}` : id, value: id }; }), { label: 'Abbrechen', value: null }] });
+      if (!pid) return;
+    }
+    const { openHistorieFlurstueck } = await import('./historie.js');
+    openHistorieFlurstueck(pid, { neuerFotopunkt: (id) => {
+      fotopunktVerknuepfen(m.id, id);
+      const f = (store.get().fotopunkte || []).find((x) => x.id === id);
+      if (f) fotopunktFotos(f);
+    } });
+  }
+}
+
 // ---------- Liste: kompakte Zeilen mit Filter ----------
 let listFilter = 'offen';
 function listenKachel(list, byId) {
@@ -382,7 +431,7 @@ function measureCard(m, byId) {
       !m.serie && !['schaden', 'holzverkauf', 'polter'].includes(m.type) ? h('button', { class: 'btn btn-voll', title: 'Arbeitsauftrag mit Karte als PDF', onclick: () => import('./berichte.js').then((x) => x.unternehmerAuftrag(m.id)).catch(() => toast('Arbeitsauftrag konnte nicht erstellt werden.')) }, h('span', { html: icon.auftrag }), 'Arbeitsauftrag') : null,
       h('span', { class: 'measure-icons' },
         m.status !== 'fertig' && m.type !== 'durchforstung' ? knopf(icon.edit, 0, 'Bearbeiten', () => openMassnahmeBearbeiten(m.id)) : null,
-        knopf(icon.camera, fotoAnzahl(`m:${m.id}`), 'Fotos', () => openFotos(`m:${m.id}`, `${MEASURE_TYPES[m.type]?.label || 'Maßnahme'} · ${where}`)),
+        knopf(icon.camera, fotoAnzahl(`m:${m.id}`) + (m.fotopunkte || []).reduce((a, id) => a + fotoAnzahl(`fp:${id}`), 0), 'Fotos', () => fotosWaehlen(m, `${MEASURE_TYPES[m.type]?.label || 'Maßnahme'} · ${where}`)),
         knopf(icon.history, m.anhaenge?.length || 0, 'Verlauf und Anhänge', () => openVerlauf(m.id)),
         m.type !== 'durchforstung' && !m.serie ? knopf(icon.map, m.flaeche?.ring ? 1 : 0, m.flaeche?.ring ? `Fläche: ${formatHa(m.flaeche.ha)} – ändern` : 'Fläche hinterlegen', () => openFlaecheHinterlegen(m.id)) : null,
         m.type === 'polter' ? knopf(icon.zaehlen, 0, 'Stämme auf Foto zählen', () => import('./stirnzaehlung.js').then((x) => x.openStirnZaehlung({ onFertig: (n, blob) => { store.update((st) => { const y = st.measures.find((q) => q.id === m.id); if (y) y.details = { ...y.details, stueck: String(n) }; }); import('./fotos.js').then((f) => f.fotoHinzufuegen(`m:${m.id}`, blob, 'vorher', 'polter-zaehlung.jpg')); toast(`${n} Stämme gezählt`); } }))) : null,

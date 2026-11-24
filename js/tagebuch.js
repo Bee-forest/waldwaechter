@@ -98,6 +98,7 @@ export async function fotopunktAnlegen(parcelId, p, ort) {
   const blick = ((Math.round(Number(w.blick) || 0) % 360) + 360) % 360;
   store.update((s) => { s.fotopunkte ||= []; s.fotopunkte.push({ id, parcelId, at: r.at, genau: r.genau, perKarte: r.genau == null, blick, name: w.name.trim() || `Fotopunkt ${(s.fotopunkte.filter((x) => x.parcelId === parcelId).length) + 1}`, erfasst: Date.now() }); });
   toast('Fotopunkt angelegt');
+  return id;
 }
 
 /** Fotopunkt auf den aktuellen GPS-Standort verschieben (z. B. wenn er falsch erfasst wurde) */

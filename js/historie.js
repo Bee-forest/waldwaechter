@@ -48,14 +48,14 @@ export async function openFlurstueckHistorie() {
 }
 
 /** Flurstückhistorie eines Flurstücks direkt öffnen (z. B. aus der Infobox) */
-export async function openHistorieFlurstueck(parcelId, { fotopunkt = null } = {}) {
+export async function openHistorieFlurstueck(parcelId, { fotopunkt = null, neuerFotopunkt = null } = {}) {
   const [all, T] = await Promise.all([source.allParcels(), measureTypes()]);
   const p = all.find((x) => x.id === parcelId) || store.get().parcels.find((x) => x.id === parcelId);
   if (!p?.ring) { toast('Flurstück nicht gefunden'); return; }
-  openDetail(p, T, { fotopunkt });
+  openDetail(p, T, { fotopunkt, neuerFotopunkt });
 }
 
-function openDetail(p, T, { fotopunkt = null } = {}) {
+function openDetail(p, T, { fotopunkt = null, neuerFotopunkt = null } = {}) {
   const body = h('div', { class: 'historie-detail' });
   const mapEl = h('div', { class: 'mini-map historie-map' });
   const listHost = h('div');
@@ -83,6 +83,8 @@ function openDetail(p, T, { fotopunkt = null } = {}) {
     hinfuehren: (f) => openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }),
     verschieben: (f) => fotopunktAufKarteVerschieben(f, p, ort),
   }, { ohne: () => ohneId }).addTo(karte.map);
+  // direkt einen neuen Fotopunkt setzen (z. B. aus einer Maßnahme heraus); danach Rückmeldung mit der ID
+  if (neuerFotopunkt) setTimeout(async () => { const id = await fotopunktAnlegen(p.id, p, ort); if (id) { page.close(); neuerFotopunkt(id); } }, 400);
   if (fotopunkt) { const f = (store.get().fotopunkte || []).find((x) => x.id === fotopunkt); if (f) setTimeout(() => fotopunktAufKarteVerschieben(f, p, ort), 400); }
   let offen = null;
 

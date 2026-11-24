@@ -1,3 +1,4 @@
+import { store } from '../store.js';
 import { createOrtsnamenLayer } from './ortsnamen.js';
 // Kartengrundlagen: Basiskarten, Kategoriefarben, OSM-Objektlayer (Overpass).
 /* global L */
@@ -57,7 +58,8 @@ export function wmsTileUrl(base, layers, format, transparent, z, x, y) {
   return `${base}?${q}`;
 }
 
-export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = true } = {}) {
+/** Grundkarte. schalter: Umschalter Luftbild/OSM oben rechts (Wahl wird gemerkt); hell: zusätzlich „Hell“. */
+export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = true, schalter = true, hell = false } = {}) {
   if (!BASEMAPS[basemap]) basemap = 'dop';
   const map = L.map(el, { zoomControl: false, attributionControl: true, tap: true, maxZoom: 21, zoomSnap: 0.5 })
     .setView(center, zoom);
@@ -84,7 +86,7 @@ export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = 
   refreshAlkis();
   refreshLabels();
 
-  return {
+  const api = {
     map,
     get basemap() { return current; },
     setBasemap(key) {
@@ -100,6 +102,29 @@ export function createBaseMap(el, { center, zoom = 15, basemap = 'dop', alkis = 
     },
     setAlkis(on) { alkisOn = on; refreshAlkis(); },
   };
+  if (schalter) {
+    const Schalter = L.Control.extend({
+      onAdd() {
+        const box = L.DomUtil.create('div', 'segmented compact karten-schalter');
+        box.setAttribute('role', 'radiogroup'); box.setAttribute('aria-label', 'Hintergrundkarte');
+        const malen = () => box.replaceChildren(...Object.entries(hell ? { dop: 'Luftbild', osm: 'OSM', hell: 'Hell' } : BASEMAP_LABELS).map(([k, l]) => {
+          const b = L.DomUtil.create('button', '');
+          b.type = 'button'; b.textContent = l; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(current === k));
+          b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); api.setBasemap(k); if (k !== 'hell') store.update((x) => { x.settings.basemap = k; }); malen(); };
+          return b;
+        }));
+        malen();
+        api._schalterMalen = malen;
+        L.DomEvent.disableClickPropagation(box); L.DomEvent.disableScrollPropagation(box);
+        ['pointerdown', 'touchstart', 'mousedown'].forEach((t) => box.addEventListener(t, (e) => e.stopPropagation()));
+        return box;
+      },
+    });
+    new Schalter({ position: 'topright' }).addTo(map);
+    const set = api.setBasemap;
+    api.setBasemap = (k) => { set(k); api._schalterMalen?.(); };
+  }
+  return api;
 }
 
 /**

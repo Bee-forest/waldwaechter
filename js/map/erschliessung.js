@@ -324,7 +324,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   }
 
   function render() {
-    const MODI = [['gasse', 'Gasse zeichnen'], ['erkennen', 'Aus Luftbild'], ['lager', 'Lagerplatz'], ['ansehen', 'Ansehen']];
+    const MODI = [['gasse', 'Gasse zeichnen'], ['erkennen', 'Aus Luftbild'], ['lager', 'Lagerplatz'], ['ansehen', 'Ändern']];
     fill(inhalt.querySelector('.ersch-modus'), MODI.map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(modus === k), onclick: () => {
       modus = k; if (k !== 'gasse') { umlauf.stop?.(); } if (k === 'erkennen' && base.basemap !== 'dop') base.setBasemap('dop'); render();
     } }, l)));

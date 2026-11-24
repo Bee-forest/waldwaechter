@@ -138,39 +138,33 @@ export function createPunktLayers(map, { klickbar = () => true, verschiebbar = f
 
 // ---------- Bearbeiten ----------
 export function openPunktEditor({ center, zoom = 17, art = 'habitat' } = {}) {
+  // Habitatbäume und jagdliche Einrichtungen werden getrennt bearbeitet: ein Editor je Art
   const s0 = store.get();
-  let modus = art; // 'habitat' | 'jagd' | 'ansehen'
-  const mapEl = h('div', { class: 'ersch-map' });
+  const A = ARTEN[art];
+  const mapEl = h('div', { class: 'ersch-map malt' });
   const leiste = h('div', { class: 'ersch-leiste' });
-  const modusEl = h('div', { class: 'segmented ersch-modus', role: 'radiogroup', 'aria-label': 'Werkzeug' });
-  const inhalt = h('div', { class: 'ersch' }, modusEl, mapEl, leiste);
-  openPage('Habitatbäume und Jagdeinrichtungen', inhalt, { onClose: () => { lyr.entfernen(); abo(); map.remove(); } });
+  const inhalt = h('div', { class: 'ersch' }, mapEl, leiste);
+  openPage(A.mehrzahl, inhalt, { onClose: () => { lyr.entfernen(); abo(); map.remove(); } });
   const base = createBaseMap(mapEl, { center, zoom, basemap: s0.settings.basemap, alkis: true });
   const map = base.map;
   L.control.zoom({ position: 'topleft' }).addTo(map);
   const lyr = createPunktLayers(map, { verschiebbar: true });
-  lyr.habitat.addTo(map); lyr.jagd.addTo(map);
+  lyr[art].addTo(map);
   setTimeout(() => map.invalidateSize(), 250);
 
+  // Tippen in die Karte legt einen neuen Punkt an; vorhandene Punkte antippen = bearbeiten, gedrückt ziehen = verschieben
   map.on('click', async (e) => {
-    if (modus === 'ansehen') return;
-    const x = await punktDialog(modus, { at: [Number(e.latlng.lat.toFixed(7)), Number(e.latlng.lng.toFixed(7))] });
-    if (x) toast(`${ARTEN[modus].titel} gespeichert`);
+    const x = await punktDialog(art, { at: [Number(e.latlng.lat.toFixed(7)), Number(e.latlng.lng.toFixed(7))] });
+    if (x) toast(`${A.titel} gespeichert`);
   });
 
   function render() {
-    const MODI = [['habitat', 'Habitatbaum'], ['jagd', 'Jagdeinrichtung'], ['ansehen', 'Ansehen']];
-    fill(modusEl, MODI.map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(modus === k), onclick: () => { modus = k; render(); } }, l)));
-    mapEl.classList.toggle('malt', modus !== 'ansehen');
     const d = daten();
-    const zaehle = (art) => ARTEN[art].typen.map(([k, l]) => `${(d[art] || []).filter((x) => x.typ === k).length} ${l}`).join(', ');
-    const legende = (art) => h('div', { class: 'punkt-legende' }, ARTEN[art].typen.map(([k, l]) => h('span', {}, h('span', { class: `punkt-mini punkt-${ARTEN[art].form}`, style: `background:${ARTEN[art].farbe}`, html: SYMBOLE[k] }), l)));
+    const zaehle = A.typen.map(([k, l]) => `${(d[art] || []).filter((x) => x.typ === k).length} ${l}`).join(', ');
     fill(leiste,
-      h('p', { class: 'muted' }, `Habitatbäume: ${zaehle('habitat')} · Jagdeinrichtungen: ${zaehle('jagd')}`),
-      modus === 'ansehen'
-        ? h('p', { class: 'draw-status' }, 'Tippe einen Punkt an, um ihn zu bearbeiten oder zu löschen. Punkte lassen sich mit gedrücktem Finger verschieben.')
-        : h('p', { class: 'draw-status' }, `Tippe in die Karte, wo ${modus === 'habitat' ? 'ein Habitatbaum steht oder liegt' : 'eine jagdliche Einrichtung steht'}. Bestehende Punkte antippen zum Bearbeiten, gedrückt halten und ziehen zum Verschieben.`),
-      legende('habitat'), legende('jagd'));
+      h('p', { class: 'draw-status' }, `Tippe in die Karte, wo ${art === 'habitat' ? 'ein Habitatbaum steht oder liegt' : 'eine jagdliche Einrichtung steht'} – dann öffnet sich das Formular. Vorhandene Punkte antippen zum Bearbeiten oder Löschen, gedrückt halten und ziehen zum Verschieben.`),
+      h('p', { class: 'muted' }, `Eingetragen: ${zaehle}`),
+      h('div', { class: 'punkt-legende' }, A.typen.map(([k, l]) => h('span', {}, h('span', { class: `punkt-mini punkt-${A.form}`, style: `background:${A.farbe}`, html: SYMBOLE[k] }), l))));
   }
   render();
   const abo = store.subscribe(render);

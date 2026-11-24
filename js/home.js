@@ -134,7 +134,7 @@ export async function initHome(root) {
   // Letzten Kartenausschnitt merken; Start sonst über Landkreis Greiz / Saale-Orla-Kreis
   let view = { c: [50.64, 11.86], z: 11 };
   try { view = JSON.parse(localStorage.getItem('waldwaechter.view')) || view; } catch { /* egal */ }
-  base = createBaseMap(mapEl, { center: view.c, zoom: view.z, basemap: s.basemap, alkis: s.layers.alkis !== false });
+  base = createBaseMap(mapEl, { center: view.c, zoom: view.z, basemap: s.basemap, alkis: s.layers.alkis !== false, schalter: false });
   map = base.map;
   // Karte so hoch, dass beim Start Kopf, Karte und Knöpfe darunter ohne Scrollen zu sehen sind
   const kartenHoehe = () => {

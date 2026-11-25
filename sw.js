@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v3.15.0';
+const VERSION = 'v3.16.0';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';
@@ -22,7 +22,7 @@ const SHELL_FILES = [
   './js/home.js', './js/profile.js', './js/measures.js', './js/placeholders.js',
   './js/map/basemap.js', './js/map/thueringen.js', './js/data/source.js', './js/data/demo-data.js',
   './js/thinning/wizard.js', './js/thinning/plan.js', './js/thinning/wald.js', './js/thinning/gps.js', './js/thinning/feedback.js', './js/thinning/methode.js', './js/thinning/ertragstafeln.js', './js/map/geoinfo.js', './js/map/bestand.js', './js/map/besonderheiten.js', './js/map/baumartenkarte.js', './js/map/lrt.js', './js/schutzgebiete.js', './js/vertraeglichkeit.js', './js/flaeche.js', './js/historie.js', './js/polter.js', './js/zaun.js', './js/pflege.js', './js/massnahme-protokoll.js', './js/schutzpruefung.js', './js/aufgaben.js',
-  './js/jagdkarte.js', './js/map/eigeneflaechen.js', './js/map/waldwege.js', './js/pflanzung.js', './js/umlauf.js', './js/foerderung.js', './js/foerder-formular.js', './js/bzt.js', './js/formfill.js', './js/pdf.js', './js/pflanzlayout.js', './js/pflanzpreise.js', './js/erinnerung.js', './js/einzelschutz.js', './js/kartenbild.js', './js/dateien.js', './js/thinning/f4.js', './js/thinning/bhdkamera.js', './js/thinning/kamerafeld.js', './js/thinning/speicher.js', './data/durchforstung_parameter_f4.json', './js/finanzen.js', './js/aktuelles.js', './js/profi.js', './js/xlsx.js', './js/map/wanderwege.js', './js/map/flurnummern.js', './js/map/erschliessung.js',
+  './js/jagdkarte.js', './js/map/eigeneflaechen.js', './js/map/waldwege.js', './js/map/schadenpunkte.js', './js/pflanzung.js', './js/umlauf.js', './js/foerderung.js', './js/foerder-formular.js', './js/bzt.js', './js/formfill.js', './js/pdf.js', './js/pflanzlayout.js', './js/pflanzpreise.js', './js/erinnerung.js', './js/einzelschutz.js', './js/kartenbild.js', './js/dateien.js', './js/thinning/f4.js', './js/thinning/bhdkamera.js', './js/thinning/kamerafeld.js', './js/thinning/speicher.js', './data/durchforstung_parameter_f4.json', './js/finanzen.js', './js/aktuelles.js', './js/profi.js', './js/xlsx.js', './js/map/wanderwege.js', './js/map/flurnummern.js', './js/map/erschliessung.js',
   './js/map/punkte.js', './js/map/fotopunkte.js', './js/map/hangneigung.js', './js/fotos.js', './js/empfehlung.js', './js/schaden.js', './js/risiko.js', './js/grenzfinder.js', './js/tagebuch.js', './js/berichte.js', './js/stirnzaehlung.js', './js/wanzenecke.js', './data/foerderregeln.json', './js/map/gassenerkennung.js', './js/map/ortsnamen.js', './data/revierleiter.json', './data/holzpreise.json', './data/fbg-termine.json', './data/orte.json', './data/schutzgebiet-verordnungen.json',
 ];
 

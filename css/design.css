@@ -313,3 +313,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .page-body .leaflet-container canvas, .page-body .leaflet-container svg { max-width: none !important; }
 .wege-amtlich { filter: saturate(1.3) contrast(1.1); }
 .offline-status p { margin: 0 0 4px; } .trenner { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+.schaden-symbol span { display: grid; place-items: center; border-radius: 8px; border: 2.5px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45); box-sizing: border-box; }
+.schaden-symbol.schaden-mini { flex: 0 0 auto; }
+.schaden-symbol.schaden-mini span { width: 36px; height: 36px; background: #B83A1E; border-color: transparent; box-shadow: none; }
+.schaden .q-option { display: flex; gap: 12px; align-items: center; text-align: left; }
+.schaden-karte { height: 300px; }
+.schadstellen .draw-status { margin: 8px 0 4px; }
+.schaden-punkte p { margin: 2px 0; font-size: 13px; }

@@ -423,7 +423,9 @@ function measureCard(m, byId) {
     h('div', { class: 'measure-actions' },
       action,
       m.type === 'schaden' ? h('button', { class: 'btn btn-voll', onclick: () => import('./schaden.js').then((x) => x.schadenMelden(m.id)) }, m.schaden?.gemeldet ? 'Erneut an FBG melden' : 'An FBG melden') : null,
-      m.type !== 'durchforstung' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn btn-status', title: m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren', onclick: () => {
+      m.type === 'schaden' && m.status !== 'fertig' ? h('button', { class: 'btn btn-voll', onclick: () => { store.update((st) => { const x = st.measures.find((y) => y.id === m.id); if (x) { x.status = 'fertig'; x.finishedAt = Date.now(); x.details = { ...x.details, behoben: new Date().toLocaleDateString('de-DE') }; } }); toast('Schaden als behoben markiert'); } }, 'Als behoben markieren') : null,
+      m.type === 'schaden' && (m.schaden?.punkte?.length || m.schaden?.pos) ? h('button', { class: 'btn btn-voll', onclick: () => window.dispatchEvent(new CustomEvent('ww:karte-punkt', { detail: { at: m.schaden.punkte?.[0]?.at || m.schaden.pos, ebene: 'meineSchaeden' } })) }, 'In der Karte zeigen') : null,
+      m.type !== 'durchforstung' && m.type !== 'schaden' && !m.serie && m.status !== 'fertig' ? h('button', { class: 'btn btn-status', title: m.status === 'geplant' ? 'Als begonnen markieren' : 'Als erledigt markieren', onclick: () => {
         if (m.status === 'geplant') store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = 'arbeit'; });
         else openProtokoll(m.id, { abschliessen: true }); // Erledigt: gleich das Abschlussprotokoll anbieten
       } }, h('span', { html: m.status === 'geplant' ? icon.play : icon.checkmark }), m.status === 'geplant' ? 'Begonnen' : 'Erledigt') : null,

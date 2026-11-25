@@ -2,6 +2,7 @@
 /* global L */
 import { h, fill, icon, dialog, openPage, confirmDialog, toast, alleSeitenSchliessen } from './ui.js';
 import { createFotopunktLayer, FOTOPUNKT_FARBE } from './map/fotopunkte.js';
+import { createSchadenLayer, SCHADEN_FARBE } from './map/schadenpunkte.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
@@ -166,6 +167,10 @@ export async function initHome(root) {
   const punkte = createPunktLayers(map, { nurAnsehen: true });
   overlays.habitat = punkte.habitat; overlays.jagd = punkte.jagd;
   overlays.hangneigung = createHangneigungLayer();
+  overlays.meineSchaeden = createSchadenLayer(store, {
+    oeffnen: (id) => window.dispatchEvent(new CustomEvent('ww:massnahme-oeffnen', { detail: id })),
+    behoben: (id) => { store.update((st) => { const m = st.measures.find((x) => x.id === id); if (m) { m.status = 'fertig'; m.finishedAt = Date.now(); m.details = { ...m.details, behoben: new Date().toLocaleDateString('de-DE') }; } }); toast('Schaden als behoben markiert – er verschwindet aus der Karte.'); },
+  });
   overlays.fotopunkte = createFotopunktLayer(map, {
     fotos: async (f) => { const { fotopunktFotos } = await import('./tagebuch.js'); fotopunktFotos(f); },
     hinfuehren: async (f) => { const { openNavigation } = await import('./grenzfinder.js'); const p = (await source.allParcels()).find((x) => x.id === f.parcelId); openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }); },
@@ -1212,11 +1217,11 @@ function openLayerSheet() {
   const box = (titel, ...inhalt) => h('section', { class: 'layer-box' }, h('h3', { class: 'layer-box-titel' }, titel), inhalt);
   const punktBearbeiten = (art, label) => h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openPunktEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()), art }); } }, label);
   // Voreinstellungen: ein Tipp schaltet passende Ebenen an und die übrigen Fachebenen aus
-  const FACH = ['flurnummern', 'grenzpunkte', 'rettung', 'baumarten', 'standort', 'waldfunktionen', 'schaden', 'schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'gassen', 'lager', 'hangneigung', 'habitat', 'jagd', 'fotopunkte', 'wegeAmtlich'];
+  const FACH = ['flurnummern', 'grenzpunkte', 'rettung', 'baumarten', 'standort', 'waldfunktionen', 'schaden', 'schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'gassen', 'lager', 'hangneigung', 'habitat', 'jagd', 'fotopunkte', 'wegeAmtlich', 'meineSchaeden'];
   const SETS = [
-    ['einfach', 'Einfach', 'Flurstücke und eigene Flächen', ['fotopunkte']],
+    ['einfach', 'Einfach', 'Flurstücke und eigene Flächen', ['fotopunkte', 'meineSchaeden']],
     ['natur', 'Naturschutz', 'Schutzgebiete, Biotope, Habitatbäume', ['schutz', 'natura', 'lrt', 'waldbiotope', 'biotope', 'habitat']],
-    ['holz', 'Holzernte', 'Wege, Gassen, Lager, Hangneigung, Rettung', ['wegeAmtlich', 'gassen', 'lager', 'hangneigung', 'rettung']],
+    ['holz', 'Holzernte', 'Wege, Gassen, Lager, Hangneigung, Rettung', ['wegeAmtlich', 'meineSchaeden', 'gassen', 'lager', 'hangneigung', 'rettung']],
     ['wald', 'Waldinfo', 'Baumarten, Standort, Waldfunktionen', ['baumarten', 'standort', 'waldfunktionen', 'schaden']],
   ];
   const aktivSet = () => SETS.find(([, , , an]) => FACH.every((k) => !!s.layers[k] === an.includes(k)))?.[0];
@@ -1244,6 +1249,9 @@ function openLayerSheet() {
         sw('gassen', 'Rückegassen', { color: '#8D5A2B' }),
         sw('lager', 'Lagerplätze (Polterplätze)', { color: '#B5651D' }),
         h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); const c = map.getCenter(); openErschliessungEditor({ center: [c.lat, c.lng], zoom: Math.max(16, map.getZoom()) }); } }, 'Rückegassen und Lagerplätze bearbeiten')),
+      box('Schäden',
+        sw('meineSchaeden', 'Meine Schadensmeldungen', { color: SCHADEN_FARBE, note: 'offene Schäden mit Symbol je Art · antippen: behoben oder Details' }),
+        h('button', { class: 'btn btn-block', onclick: () => { document.querySelector('.scrim:not(.closing)')?.click(); import('./schaden.js').then((x) => x.openSchadensmeldung({})); } }, 'Neuen Schaden melden')),
       box('Fotopunkte',
         sw('fotopunkte', 'Fotopunkte (aus der Flurstückhistorie)', { color: FOTOPUNKT_FARBE, note: 'mit Blickrichtung' })),
       box('Gelände',

@@ -10,6 +10,7 @@ import { fotoListe, openFotos } from './fotos.js';
 import { dateiLaden } from './dateien.js';
 import { passtFlurstueck, ordnerFuerNeu } from './profi.js';
 import { openProfile } from './profile.js';
+import { schadstellenKarte, SCHADEN_SYMBOLE } from './map/schadenpunkte.js';
 
 export const SCHADEN_TYPEN = [
   ['kaefer', 'Borkenkäfer', 'Bohrmehl, Harzfluss, rote oder abfallende Nadeln, abfallende Rinde'],
@@ -70,10 +71,14 @@ export async function openSchadensmeldung({ parcelId = null, onSaved, typ = 'kae
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
   const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
   const id = uid();
+  const punkte = [];
   const w = { typ, parcelId: parcelId || mine[0]?.id || null, pos: null, genau: null, species: 'Fichte', menge: '', baeume: baeume ? String(baeume) : '', datum: new Date().toISOString().slice(0, 10), text: '' };
   let wahl = null;
   const body = h('div', { class: 'form schaden' });
-  const page = openPage('Schaden melden', body, { onClose: () => wahl?.entferne() });
+  const page = openPage('Schaden melden', body, { onClose: () => { wahl?.entferne(); stellen.entferne(); } });
+  // Schadstellen auf der Karte: je Schadensart ein eigenes Symbol
+  const stellen = schadstellenKarte({ punkte, typ: () => w.typ });
+  let stellenFlst = undefined;
   const flHost = h('div');
   const zeigeWahl = () => { wahl?.entferne(); wahl = null; fill(flHost); if (w.parcelId && byId[w.parcelId]) { wahl = flaechenWahl(byId[w.parcelId]); flHost.append(wahl.el); } };
   const gps = () => {
@@ -87,13 +92,13 @@ export async function openSchadensmeldung({ parcelId = null, onSaved, typ = 'kae
     fill(body,
       h('p', { class: 'muted' }, 'Kalamitätsholz muss schnell aus dem Wald. Erfasse den Schaden und schicke die Meldung direkt an deine FBG.'),
       h('p', { class: 'sheet-label' }, 'Art des Schadens'),
-      h('div', { class: 'q-cards' }, SCHADEN_TYPEN.map(([k, l, t]) => h('button', { type: 'button', class: `q-option ${w.typ === k ? 'on' : ''}`, 'aria-pressed': String(w.typ === k), onclick: () => { w.typ = k; if (k === 'kaefer' && !/fichte|kiefer|lärche/i.test(w.species)) w.species = 'Fichte'; zeichne(); } },
-        h('span', { class: 'q-text' }, h('strong', {}, l), h('small', {}, t))))),
+      h('div', { class: 'q-cards' }, SCHADEN_TYPEN.map(([k, l, t]) => h('button', { type: 'button', class: `q-option ${w.typ === k ? 'on' : ''}`, 'aria-pressed': String(w.typ === k), onclick: () => { w.typ = k; punkte.forEach((pp) => { pp.typ = k; }); if (k === 'kaefer' && !/fichte|kiefer|lärche/i.test(w.species)) w.species = 'Fichte'; zeichne(); } },
+        h('span', { class: 'schaden-symbol schaden-mini', html: `<span>${SCHADEN_SYMBOLE[k]}</span>` }), h('span', { class: 'q-text' }, h('strong', {}, l), h('small', {}, t))))),
       h('label', {}, 'Flurstück', h('select', { onchange: (e) => { w.parcelId = e.target.value || null; zeigeWahl(); } },
         h('option', { value: '' }, 'ohne Flurstück'), mine.map((p) => h('option', { value: p.id, selected: p.id === w.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
-      flHost,
-      h('div', { class: 'gps-feld' }, h('span', {}, w.pos ? `GPS-Punkt: ${w.pos[0].toFixed(5)}, ${w.pos[1].toFixed(5)}${w.genau ? ` (± ${w.genau} m)` : ''}` : 'Genauer Ort des Schadens (empfohlen)'),
-        h('button', { type: 'button', class: 'btn btn-small', onclick: gps }, w.pos ? 'Neu erfassen' : 'GPS-Punkt erfassen')),
+      h('p', { class: 'sheet-label' }, 'Wo genau? Schadstellen auf der Karte setzen'),
+      stellen.el,
+      h('details', { class: 'bzt-mehr' }, h('summary', {}, 'Betroffene Fläche (optional)'), flHost),
       h('div', { class: 'form-row' },
         h('label', {}, 'Baumart', h('select', { onchange: (e) => { w.species = e.target.value; } }, SPECIES.map((s) => h('option', { selected: s === w.species }, s)))),
         h('label', {}, 'Festgestellt am', h('input', { type: 'date', value: w.datum, onchange: (e) => { w.datum = e.target.value; } }))),
@@ -107,18 +112,21 @@ export async function openSchadensmeldung({ parcelId = null, onSaved, typ = 'kae
         h('button', { type: 'button', class: 'btn', onclick: () => speichern(false) }, 'Nur speichern'),
         h('button', { type: 'button', class: 'btn btn-primary btn-large', onclick: () => speichern(true) }, 'Speichern und melden')));
     if (w.parcelId && !wahl) zeigeWahl(); else if (wahl) flHost.append(wahl.el);
+    if (stellenFlst !== w.parcelId) { stellenFlst = w.parcelId; stellen.setFlurstueck(w.parcelId ? byId[w.parcelId] : null); } else stellen.neuZeichnen();
   }
   const abo = store.subscribe(() => { const btn = body.querySelector('.btn-row .btn'); if (btn) { const n = fotoListe(fotoKey).length; btn.textContent = n ? `Fotos (${n})` : 'Fotos hinzufügen'; } });
   async function speichern(melden) {
+    if (melden && !punkte.length) { toast('Bitte mindestens eine Schadstelle in der Karte setzen – sonst ist die Meldung zu ungenau.'); stellen.el.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    if (punkte.length) { w.pos = punkte[0].at; w.genau = punkte[0].genau || null; }
     const fl = wahl ? wahl.wert() : null;
     if (wahl && !fl) { toast('Bitte die Teilfläche fertig einzeichnen (mindestens 3 Eckpunkte) oder „Ganzes Flurstück“ wählen.'); return; }
     const p = w.parcelId ? byId[w.parcelId] : null;
     const pt = w.pos || (fl?.ring ? centroid(fl.ring) : p ? centroid(p.ring) : null);
     const details = { schaden: schadenText(w.typ), species: w.species, menge: w.menge, baeume: w.baeume, gps: w.pos ? `${w.pos[0].toFixed(6)}, ${w.pos[1].toFixed(6)}` : '', text: w.text.trim() };
     const m = { id, type: 'schaden', parcelId: w.parcelId, ordnerId: w.parcelId ? undefined : ordnerFuerNeu(), date: new Date(`${w.datum}T12:00`).getTime(), status: 'geplant', createdAt: Date.now(), note: w.text.trim(), details,
-      flaeche: fl?.modus === 'teil' ? { ring: fl.ring, ha: fl.ha } : undefined, schaden: { typ: w.typ, pos: w.pos, genau: w.genau, gemeldet: null } };
+      flaeche: fl?.modus === 'teil' ? { ring: fl.ring, ha: fl.ha } : undefined, schaden: { typ: w.typ, pos: w.pos, genau: w.genau, punkte: punkte.map((x) => ({ at: x.at, typ: x.typ, genau: x.genau || null })), gemeldet: null } };
     store.update((s) => { s.measures.push(m); });
-    abo(); page.close();
+    abo(); stellen.entferne(); page.close();
     toast('Schaden gespeichert');
     if (melden) await schadenMelden(m.id);
     onSaved?.(m.id);
@@ -138,8 +146,9 @@ export async function schadenMelden(measureId) {
   const text = [
     `Schadensmeldung: ${d.schaden}`,
     `Ort: ${flaechenText(p, m.flaeche ? { modus: 'teil', ha: m.flaeche.ha } : null)}`,
-    pt ? `Karte: ${kartenLink(pt)}` : null,
-    d.gps ? `GPS: ${d.gps}${m.schaden?.genau ? ` (± ${m.schaden.genau} m)` : ''}` : null,
+    ...(m.schaden?.punkte?.length > 1
+      ? [`Schadstellen (${m.schaden.punkte.length}):`, ...m.schaden.punkte.map((x, i) => `  ${i + 1}. ${x.at[0].toFixed(6)}, ${x.at[1].toFixed(6)}${x.genau ? ` (± ${x.genau} m)` : ''} – ${kartenLink(x.at)}`)]
+      : [pt ? `Karte: ${kartenLink(pt)}` : null, d.gps ? `GPS: ${d.gps}${m.schaden?.genau ? ` (± ${m.schaden.genau} m)` : ''}` : null]),
     `Baumart: ${d.species}`,
     d.menge ? `Menge grob: ca. ${d.menge} Fm` : null,
     d.baeume ? `Anzahl Bäume: ca. ${d.baeume}` : null,

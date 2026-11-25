@@ -28,7 +28,7 @@ const defaults = () => ({
     demo: false,            // Demo-Flurstücke (Raum Ilmenau) zusätzlich zeigen
     profi: false,           // Profimodus: Eigentümer, Erschließung, Lagerplätze, Wanderwege
     ordnerAktiv: 'eigen',   // Profimodus: angezeigter Ordner – 'eigen', 'alle' oder Ordner-id
-    layers: { alkis: true, demo: false, rettung: true, schutz: false, natura: false, biotope: false, schaden: false, standort: false, Wald: true, Landwirtschaft: true, Gewässer: true, Gebäude: true, info: true, rescue: false, flurnummern: false, grenzpunkte: false, gassen: true, lager: true, habitat: true, jagd: true, hangneigung: false, fotopunkte: true },
+    layers: { alkis: true, demo: false, rettung: true, schutz: false, natura: false, biotope: false, schaden: false, standort: false, Wald: true, Landwirtschaft: true, Gewässer: true, Gebäude: true, info: true, rescue: false, flurnummern: false, grenzpunkte: false, gassen: true, lager: true, habitat: true, jagd: true, hangneigung: false, fotopunkte: true, meineSchaeden: true },
   },
   onboardingDone: false,
 });

@@ -2,7 +2,7 @@
 /* global L */
 import { h, fill, icon, dialog, openPage, confirmDialog, toast, alleSeitenSchliessen } from './ui.js';
 import { createFotopunktLayer, FOTOPUNKT_FARBE } from './map/fotopunkte.js';
-import { createSchadenLayer, SCHADEN_FARBE } from './map/schadenpunkte.js';
+import { createSchadenLayer, SCHADEN_FARBE, SCHADEN_SYMBOLE, SCHADEN_NAMEN } from './map/schadenpunkte.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { createBaseMap, createOsmFeatureLayer, CATEGORIES, BASEMAP_LABELS } from './map/basemap.js';
@@ -1183,6 +1183,19 @@ function openSearch() {
   seite.el.addEventListener('focusin', (e) => { if (e.target.matches('input')) setTimeout(() => e.target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 300); });
 }
 
+// Legende der amtlichen Wege: Ebenennamen kommen aus dem Dienst, die Legendenbilder liefert das Geoportal
+function wegeLegendeBox() {
+  const box = h('div', { 'aria-live': 'polite' }, h('p', { class: 'sheet-label' }, 'Legende'), h('p', { class: 'muted' }, 'Legende wird geladen …'));
+  import('./map/waldwege.js').then((m) => m.amtlicheWegeEbenen()).then((ebenen) => {
+    const bilder = ebenen.flatMap((e) => e.layers.split(',').map((layer) => ({ layer, src: `${e.url}?${new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetLegendGraphic', FORMAT: 'image/png', LAYER: layer, SLD_VERSION: '1.1.0' })}` })));
+    fill(box, h('p', { class: 'sheet-label' }, 'Legende'),
+      bilder.length ? bilder.map((l) => h('figure', { class: 'legend-fig' }, h('img', { class: 'legend-img', src: l.src, alt: `Legende ${l.layer}`, loading: 'lazy', onerror: (e) => { e.target.replaceWith(h('p', { class: 'hint' }, 'Legende gerade nicht abrufbar.')); } }), h('figcaption', { class: 'muted' }, l.layer)))
+        : h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar – die Legende kann nicht geladen werden.'),
+      h('p', { class: 'hint' }, 'Quelle: © GDI-Th (ATKIS Basis-DLM), ThüringenForst. In der App werden die Wege etwas feiner gezeichnet als in der Legende.'));
+  }).catch(() => fill(box, h('p', { class: 'hint' }, 'Legende gerade nicht abrufbar.')));
+  return box;
+}
+
 function openLegend(key) {
   const info = LAYER_INFO[key];
   const legends = legendUrls(key);
@@ -1196,6 +1209,8 @@ function openLegend(key) {
       info.farben ? h('p', { class: 'hint' }, 'Farben nach dem QGIS-Stil von ThüringenForst. Quelle: Thüringer Waldverzeichnis, © GDI-Th, dl-de/by-2-0.') : null,
       legends.map((l) => h('img', { class: 'legend-img', src: l.src, alt: `Legende ${l.layer}`, loading: 'lazy',
         onerror: (e) => { e.target.replaceWith(h('p', { class: 'hint' }, 'Legende gerade nicht abrufbar.')); } })),
+      info.schadenLegende ? [h('p', { class: 'sheet-label' }, 'Symbole'), h('ul', { class: 'legend-swatches' }, Object.entries(SCHADEN_NAMEN).map(([k, l]) => h('li', {}, h('span', { class: 'schaden-symbol schaden-mini', html: `<span style="width:28px;height:28px">${SCHADEN_SYMBOLE[k]}</span>` }), l)))] : null,
+      info.wegeLegende ? wegeLegendeBox() : null,
     ),
     actions: [{ label: 'Schließen', value: true, primary: true }],
   });

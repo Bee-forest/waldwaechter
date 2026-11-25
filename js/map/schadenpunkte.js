@@ -15,6 +15,7 @@ export const SCHADEN_SYMBOLE = {
   sonstig: svg('<path d="M12 5v9"/><circle cx="12" cy="18.5" r="1.2" fill="#fff"/>'),
 };
 export const SCHADEN_FARBE = '#B83A1E';
+export const SCHADEN_NAMEN = { kaefer: 'Borkenkäfer', windwurf: 'Windwurf', bruch: 'Schnee- oder Windbruch', trocken: 'Trockenschaden', sonstig: 'Sonstiger Schaden' };
 export function schadenIcon(typ, gross = 34) {
   return L.divIcon({ className: 'schaden-symbol', html: `<span style="width:${gross}px;height:${gross}px;background:${SCHADEN_FARBE}">${SCHADEN_SYMBOLE[typ] || SCHADEN_SYMBOLE.sonstig}</span>`, iconSize: [gross, gross], iconAnchor: [gross / 2, gross / 2] });
 }

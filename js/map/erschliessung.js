@@ -199,10 +199,10 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   L.control.zoom({ position: 'topleft' }).addTo(map);
   let edit = null; // Verlauf einer bestehenden Gasse wird bearbeitet: { g, line }
   const lyr = createErschliessungLayers(map, {
-    klickbar: () => !edit && modus !== 'erkennen' && modus !== 'raster' && !(modus === 'gasse' && draft.length),
+    klickbar: () => modus !== 'erkennen' && modus !== 'raster' && !(modus === 'gasse' && draft.length),
     verschiebbar: true,
     ausblenden: () => edit?.g.id,
-    aufGasse: async (g) => { if (await gasseDialog(g, { verlauf: true }) === 'verlauf') verlaufStarten(g); },
+    aufGasse: (g) => verlaufStarten(g), // direkt mit Ziehpunkten und Schiebepfeil bearbeiten
   });
   lyr.gassen.addTo(map); lyr.lager.addTo(map);
   const draftLyr = L.layerGroup().addTo(map), vorLyr = L.layerGroup().addTo(map), abstLyr = L.layerGroup().addTo(map);
@@ -226,10 +226,13 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
 
   map.on('click', async (e) => {
     const ll = [e.latlng.lat, e.latlng.lng];
-    if (edit) { // an das nähere Ende anhängen
-      const L0 = edit.line;
-      if (distance(ll, L0[0]) < distance(ll, L0[L0.length - 1])) L0.unshift(ll); else L0.push(ll);
-      zeichneEdit(); render(); return;
+    if (edit) {
+      if (edit.verlaengern) { // an das nähere Ende anhängen
+        const L0 = edit.line;
+        if (distance(ll, L0[0]) < distance(ll, L0[L0.length - 1])) L0.unshift(ll); else L0.push(ll);
+        zeichneEdit(); editSpeichern(); render(); return;
+      }
+      verlaufEnde(true); return; // Tippen daneben beendet die Bearbeitung
     }
     if (modus === 'gasse') { draft.push(ll); zeichneDraft(); render(); }
     else if (modus === 'lager') { const l = await lagerDialog({ at: ll }); if (l) toast('Lagerplatz gespeichert'); }
@@ -263,19 +266,33 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   const editLyr = L.layerGroup().addTo(map);
   const punktIcon = (klein) => L.divIcon({ className: klein ? 'gpunkt gpunkt-mitte' : 'gpunkt', html: '<span></span>', iconSize: klein ? [18, 18] : [26, 26], iconAnchor: klein ? [9, 9] : [13, 13] });
   function verlaufStarten(g) {
-    edit = { g, line: g.line.map((p) => [...p]) };
+    if (edit && edit.g.id === g.id) return;
+    if (edit) verlaufEnde(true);
+    edit = { g, line: g.line.map((p) => [...p]), original: g.line.map((p) => [...p]), verlaengern: false };
     draft = []; zeichneDraft();
     lyr.neuZeichnen();
-    map.fitBounds(L.latLngBounds(edit.line), { padding: [40, 40], maxZoom: 19 });
+    const b = L.latLngBounds(edit.line);
+    if (!map.getBounds().contains(b)) map.fitBounds(b, { padding: [40, 40], maxZoom: 19 });
     zeichneEdit(); render();
   }
+  function editSpeichern() {
+    if (!edit || edit.line.length < 2) return;
+    const id = edit.g.id, line = edit.line.map(([a, b]) => [Number(a.toFixed(7)), Number(b.toFixed(7))]);
+    speichere((e) => { const x = e.gassen.find((y) => y.id === id); if (x) { x.line = line; x.grad = richtungAusLinie(line); } });
+  }
   function verlaufEnde(speichern) {
-    if (speichern && edit.line.length >= 2) {
-      const id = edit.g.id, line = edit.line.map(([a, b]) => [Number(a.toFixed(7)), Number(b.toFixed(7))]);
-      speichere((e) => { const x = e.gassen.find((y) => y.id === id); if (x) x.line = line; });
-      toast(`Verlauf gespeichert (${formatDist(Math.round(laenge(line)))})`);
-    }
+    if (!edit) return;
+    if (speichern) editSpeichern();
+    else { const id = edit.g.id, line = edit.original; speichere((e) => { const x = e.gassen.find((y) => y.id === id); if (x) x.line = line; }); toast('Änderungen verworfen'); }
     edit = null; editLyr.clearLayers(); lyr.neuZeichnen(); render();
+  }
+  async function gasseLoeschen() {
+    if (!edit) return;
+    if (!(await confirmDialog(`„${edit.g.name || 'Rückegasse'}“ löschen?`, { ok: 'Löschen', danger: true }))) return;
+    const id = edit.g.id;
+    edit = null; editLyr.clearLayers();
+    speichere((e) => { e.gassen = e.gassen.filter((y) => y.id !== id); });
+    toast('Gasse gelöscht'); lyr.neuZeichnen(); render();
   }
   function zeichneEdit() {
     editLyr.clearLayers();
@@ -285,11 +302,11 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
     L0.forEach((p, i) => {
       const m = L.marker(p, { icon: punktIcon(false), draggable: true, zIndexOffset: 800, title: 'Punkt ziehen · antippen zum Löschen' });
       m.on('drag', () => { const ll = m.getLatLng(); L0[i] = [ll.lat, ll.lng]; editLyr.eachLayer((x) => { if (x instanceof L.Polyline) x.setLatLngs(L0); }); });
-      m.on('dragend', () => { zeichneEdit(); render(); });
+      m.on('dragend', () => { zeichneEdit(); editSpeichern(); render(); });
       m.on('click', async (e) => {
         L.DomEvent.stop(e);
         if (L0.length <= 2) { toast('Eine Gasse braucht mindestens zwei Punkte.'); return; }
-        if (await confirmDialog('Diesen Punkt löschen?', { ok: 'Löschen' })) { L0.splice(i, 1); zeichneEdit(); render(); }
+        if (await confirmDialog('Diesen Punkt löschen?', { ok: 'Löschen' })) { L0.splice(i, 1); zeichneEdit(); editSpeichern(); render(); }
       });
       editLyr.addLayer(m);
       if (i < L0.length - 1) {
@@ -297,11 +314,25 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
         const mm = L.marker(mitte, { icon: punktIcon(true), draggable: true, zIndexOffset: 700, title: 'Ziehen fügt einen Punkt ein' });
         mm.on('dragstart', () => { L0.splice(i + 1, 0, mitte); });
         mm.on('drag', () => { const ll = mm.getLatLng(); L0[i + 1] = [ll.lat, ll.lng]; editLyr.eachLayer((x) => { if (x instanceof L.Polyline && !(x instanceof L.Polygon)) x.setLatLngs(L0); }); });
-        mm.on('dragend', () => { zeichneEdit(); render(); });
-        mm.on('click', (e) => { L.DomEvent.stop(e); L0.splice(i + 1, 0, mitte); zeichneEdit(); render(); });
+        mm.on('dragend', () => { zeichneEdit(); editSpeichern(); render(); });
+        mm.on('click', (e) => { L.DomEvent.stop(e); L0.splice(i + 1, 0, mitte); zeichneEdit(); editSpeichern(); render(); });
         editLyr.addLayer(mm);
       }
     });
+    // Schiebepfeil: ganze Gasse verschieben (parallel, ohne den Verlauf zu ändern)
+    const mitteAll = (() => { let a = 0, b = 0; L0.forEach((p) => { a += p[0]; b += p[1]; }); return [a / L0.length, b / L0.length]; })();
+    const anker = L0.length === 2 ? [L0[0][0] + (L0[1][0] - L0[0][0]) * 0.3, L0[0][1] + (L0[1][1] - L0[0][1]) * 0.3] : mitteAll; // neben dem weißen Mittelpunkt
+    const pfeil = L.marker(anker, { icon: L.divIcon({ className: 'gschieben', html: '<span><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg></span>', iconSize: [40, 40], iconAnchor: [20, 20] }), draggable: true, zIndexOffset: 900, title: 'Ziehen verschiebt die ganze Gasse' });
+    let start = null, startLine = null;
+    pfeil.on('dragstart', () => { start = pfeil.getLatLng(); startLine = L0.map((p) => [...p]); });
+    pfeil.on('drag', () => {
+      const ll = pfeil.getLatLng(), dl = ll.lat - start.lat, dg = ll.lng - start.lng;
+      startLine.forEach((p, k) => { L0[k] = [p[0] + dl, p[1] + dg]; });
+      editLyr.eachLayer((x) => { if (x instanceof L.Polyline) x.setLatLngs(L0); });
+    });
+    pfeil.on('dragend', () => { zeichneEdit(); editSpeichern(); render(); });
+    pfeil.on('click', (e) => L.DomEvent.stop(e));
+    editLyr.addLayer(pfeil);
   }
 
   function zeichneDraft() {
@@ -384,11 +415,17 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
     mapEl.classList.toggle('malt', modus === 'gasse' || modus === 'lager');
     if (edit) {
       fill(leiste,
-        h('p', { class: 'draw-status' }, `Verlauf von „${edit.g.name || 'Rückegasse'}“: ${edit.line.length} Punkte, ${formatDist(Math.round(laenge(edit.line)))}`),
-        h('p', { class: 'hint' }, 'Große Punkte ziehen verschiebt sie, Antippen löscht sie. Kleine Punkte in der Mitte ziehen oder antippen fügt einen Punkt ein. Tippen in die Karte verlängert die Gasse am näheren Ende.'),
+        h('p', { class: 'draw-status' }, `„${edit.g.name || 'Rückegasse'}“ wird bearbeitet: ${edit.line.length} Punkte, ${formatDist(Math.round(laenge(edit.line)))} · Änderungen werden sofort gespeichert`),
+        h('ul', { class: 'gassen-hilfe' },
+          h('li', {}, h('span', { class: 'gh-pfeil' }, '✥'), 'Schiebepfeil ziehen: ganze Gasse verschieben'),
+          h('li', {}, h('span', { class: 'gh-punkt' }), 'Orangen Punkt ziehen: Verlauf ändern · antippen: Punkt löschen'),
+          h('li', {}, h('span', { class: 'gh-mitte' }), 'Kleinen weißen Punkt ziehen: neuen Knick einfügen')),
+        h('label', { class: 'jk-check' }, h('input', { type: 'checkbox', checked: edit.verlaengern, onchange: (e) => { edit.verlaengern = e.target.checked; } }), h('span', {}, 'Verlängern', h('small', {}, 'Tippen in die Karte hängt einen Punkt am näheren Ende an'))),
         h('div', { class: 'btn-row' },
-          h('button', { class: 'btn btn-small', onclick: () => verlaufEnde(false) }, 'Abbrechen'),
-          h('button', { class: 'btn btn-small btn-primary', onclick: () => verlaufEnde(true) }, 'Verlauf speichern')));
+          h('button', { class: 'btn btn-small', onclick: () => verlaufEnde(false) }, 'Rückgängig'),
+          h('button', { class: 'btn btn-small', onclick: async () => { const g = daten().gassen.find((x) => x.id === edit.g.id); if (g) await gasseDialog(g); } }, 'Angaben'),
+          h('button', { class: 'btn btn-small btn-danger-ghost', onclick: gasseLoeschen }, 'Löschen'),
+          h('button', { class: 'btn btn-small btn-primary', onclick: () => verlaufEnde(true) }, 'Fertig')));
       umlaufHost.hidden = true;
       return;
     }
@@ -456,7 +493,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
         h('p', { class: 'hint' }, 'Die Gassen enden an der Flurstücksgrenze. Nach dem Anlegen kannst du jede Gasse antippen und ihren Verlauf verschieben, sie löschen oder mit „Gasse zeichnen“ weitere ergänzen.'));
     }
     if (modus === 'lager') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe in die Karte, wo ein neuer Lagerplatz liegt. Bestehende Lagerplätze antippen zum Bearbeiten, gedrückt halten und ziehen zum Verschieben.'));
-    if (modus === 'ansehen') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe eine Gasse oder einen Lagerplatz an, um Angaben oder Verlauf zu ändern. Lagerplätze lassen sich mit gedrücktem Finger verschieben.'));
+    if (modus === 'ansehen') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe eine Gasse an – dann erscheinen Ziehpunkte und ein Schiebepfeil. Lagerplätze lassen sich mit gedrücktem Finger verschieben, antippen öffnet die Angaben.'));
   }
   render();
   if (modus === 'erkennen') { if (base.basemap !== 'dop') base.setBasemap('dop'); if (flaeche) { waehle(flaeche); erkennen(flaeche); } }

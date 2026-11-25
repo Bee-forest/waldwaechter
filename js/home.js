@@ -1183,14 +1183,38 @@ function openSearch() {
   seite.el.addEventListener('focusin', (e) => { if (e.target.matches('input')) setTimeout(() => e.target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 300); });
 }
 
+// Deutsche Bezeichnungen für die (englischen) INSPIRE-Begriffe des Verkehrsnetz-Dienstes
+const WEGE_BEGRIFFE = [
+  ['motorway', 'Autobahn'],
+  ['dualCarriageway', 'Straße mit getrennten Richtungsfahrbahnen'],
+  ['singleCarriageway', 'Straße mit einer Fahrbahn'],
+  ['slipRoad', 'Auf- oder Abfahrt'],
+  ['serviceRoad', 'Zufahrt, Erschließungsstraße'],
+  ['tractor', 'Fahrweg / Wirtschaftsweg (Land- und Forstwirtschaft)'],
+  ['walkway', 'Fußweg'],
+  ['bicycleRoad', 'Radweg'],
+  ['pedestrianZone', 'Fußgängerzone'],
+  ['trafficSquare', 'Platz'],
+  ['roundabout', 'Kreisverkehr'],
+  ['enclosedTrafficArea', 'Verkehrsfläche (z. B. Parkplatz)'],
+  ['mainRoad', 'Hauptverkehrsstraße'],
+  ['firstClass … fourthClass', 'Straßenklasse 1 bis 4 – je höher die Zahl, desto geringer die Bedeutung'],
+  ['RoadLink / Road', 'Straßen- bzw. Wegeabschnitt'],
+  ['RoadArea', 'Straßenfläche'],
+];
+const wegeEbeneDeutsch = (n) => (/RoadLink/i.test(n) ? 'Straßen und Wege (ATKIS Basis-DLM)' : /RoadArea/i.test(n) ? 'Straßenflächen (ATKIS)' : /erholung|wander/i.test(n) ? 'Erholungs- und Wanderwege (ThüringenForst)' : /wald|forst/i.test(n) ? 'Waldwege (ThüringenForst)' : n);
+
 // Legende der amtlichen Wege: Ebenennamen kommen aus dem Dienst, die Legendenbilder liefert das Geoportal
 function wegeLegendeBox() {
   const box = h('div', { 'aria-live': 'polite' }, h('p', { class: 'sheet-label' }, 'Legende'), h('p', { class: 'muted' }, 'Legende wird geladen …'));
   import('./map/waldwege.js').then((m) => m.amtlicheWegeEbenen()).then((ebenen) => {
     const bilder = ebenen.flatMap((e) => e.layers.split(',').map((layer) => ({ layer, src: `${e.url}?${new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetLegendGraphic', FORMAT: 'image/png', LAYER: layer, SLD_VERSION: '1.1.0' })}` })));
     fill(box, h('p', { class: 'sheet-label' }, 'Legende'),
-      bilder.length ? bilder.map((l) => h('figure', { class: 'legend-fig' }, h('img', { class: 'legend-img', src: l.src, alt: `Legende ${l.layer}`, loading: 'lazy', onerror: (e) => { e.target.replaceWith(h('p', { class: 'hint' }, 'Legende gerade nicht abrufbar.')); } }), h('figcaption', { class: 'muted' }, l.layer)))
+      bilder.length ? bilder.map((l) => h('figure', { class: 'legend-fig' }, h('img', { class: 'legend-img', src: l.src, alt: `Legende ${l.layer}`, loading: 'lazy', onerror: (e) => { e.target.replaceWith(h('p', { class: 'hint' }, 'Legende gerade nicht abrufbar.')); } }), h('figcaption', { class: 'muted' }, wegeEbeneDeutsch(l.layer))))
         : h('p', { class: 'hint' }, 'Das Geoportal ist gerade nicht erreichbar – die Legende kann nicht geladen werden.'),
+      h('details', { class: 'bzt-mehr', open: true }, h('summary', {}, 'Begriffe der Legende auf Deutsch'),
+        h('p', { class: 'hint' }, 'Der Verkehrsnetz-Dienst folgt der europäischen INSPIRE-Norm, deshalb stehen in der Legende teils englische Fachbegriffe. Sie bedeuten:'),
+        h('table', { class: 'wege-glossar' }, h('tbody', {}, WEGE_BEGRIFFE.map(([en, de]) => h('tr', {}, h('td', {}, en), h('td', {}, de)))))),
       h('p', { class: 'hint' }, 'Quelle: © GDI-Th (ATKIS Basis-DLM), ThüringenForst. In der App werden die Wege etwas feiner gezeichnet als in der Legende.'));
   }).catch(() => fill(box, h('p', { class: 'hint' }, 'Legende gerade nicht abrufbar.')));
   return box;

@@ -62,7 +62,15 @@ export async function kartenLeinwand({ nord, sued, west, ost, basemap = 'osm', b
     const q = new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: e.layers, STYLES: '', CRS: 'EPSG:3857',
       BBOX: [mx(west), my(sued), mx(ost), my(nord)].join(','), WIDTH: String(Math.round(w * (e.fein || 1))), HEIGHT: String(Math.round(h * (e.fein || 1))), FORMAT: 'image/png', TRANSPARENT: 'true' });
     const img = await ladeBild(`${e.url}?${q}`, 20000);
-    if (img) { ctx.globalAlpha = e.alpha ?? 1; ctx.drawImage(img, 0, 0, w, h); ctx.globalAlpha = 1; } else e.fehler = true;
+    if (img) {
+      let quelle = img;
+      if (e.farbe) { // einheitlich umfärben wie in der App
+        const t = document.createElement('canvas'); t.width = w; t.height = h;
+        const tc = t.getContext('2d'); tc.drawImage(img, 0, 0, w, h); tc.globalCompositeOperation = 'source-in'; tc.fillStyle = e.farbe; tc.fillRect(0, 0, w, h);
+        quelle = t;
+      }
+      ctx.globalAlpha = e.alpha ?? 1; ctx.drawImage(quelle, 0, 0, w, h); ctx.globalAlpha = 1;
+    } else e.fehler = true;
   }
   return { cv, w, h, z, x0, y0, lon2px, lat2px };
 }

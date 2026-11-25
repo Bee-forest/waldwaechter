@@ -132,7 +132,7 @@ async function erstellen(w) {
   let y = 66 + kh + 14, x0 = L;
   for (const [t, l] of ARTEN.jagd.typen) { doc.bild(x0, y - 9, 11, 11, await sym('jagd', t)); doc.text(x0 + 14, y, l, { size: 8 }); x0 += 24 + l.length * 4.4; }
   if (w.habitat) { doc.bild(x0, y - 9, 11, 11, await sym('habitat', 'stehend')); doc.text(x0 + 14, y, 'Habitatbaum', { size: 8 }); x0 += 70; }
-  doc.text(x0, y, `grau = gesperrt · gelb = Flurstück${w.gassen ? ' · braun gestrichelt = Rückegasse' : ''}`, { size: 8, farbe: GRAU });
+  doc.text(x0, y, `grau = gesperrt · gelb umrandet = Flurstück${w.wege ? ' · Wege: gelb = Straßen und Wege, magenta = Erholungswege' : ''}${w.gassen ? ' · braun gestrichelt = Rückegasse' : ''}`, { size: 8, farbe: GRAU });
   y += 13;
   doc.text(L, y, `Hintergrund: ${KARTEN_QUELLE[w.basemap]}${w.wege ? (w.wegeFehler ? ' · Wege konnten nicht geladen werden' : ' · Wege © GDI-Th (ATKIS Basis-DLM) / ThüringenForst') : ''}`, { size: 7, farbe: GRAU });
   // Liste rechts neben der Karte

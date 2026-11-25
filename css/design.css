@@ -311,7 +311,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .jk-check span { display: grid; gap: 1px; }
 .jk-check small { color: var(--ink-2); font-weight: 400; }
 .page-body .leaflet-container canvas, .page-body .leaflet-container svg { max-width: none !important; }
-.wege-amtlich { filter: saturate(1.3) contrast(1.1); }
+.wege-atkis { filter: url(#wege-atkis) drop-shadow(0 0 .6px rgba(0,0,0,.7)); }
+.wege-erholung { filter: url(#wege-erholung) drop-shadow(0 0 .6px rgba(255,255,255,.8)); }
+.linien-swatch { width: 28px; height: 5px; border-radius: 3px; background: var(--c); box-shadow: 0 0 0 1px rgba(0,0,0,.35); flex: 0 0 auto; margin-top: 8px; }
 .offline-status p { margin: 0 0 4px; } .trenner { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .schaden-symbol span { display: grid; place-items: center; border-radius: 8px; border: 2.5px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45); box-sizing: border-box; }
 .schaden-symbol.schaden-mini { flex: 0 0 auto; }

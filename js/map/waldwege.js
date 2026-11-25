@@ -11,9 +11,24 @@ export const WEGE_MIN_ZOOM = 13;
 // Die Ebenennamen werden einmal aus GetCapabilities gelesen, damit Umbenennungen des Dienstes nicht stören.
 const GP = 'https://www.geoproxy.geoportal-th.de/geoproxy/services';
 const QUELLEN = [
-  { url: `${GP}/INSPIREtn`, muster: /RoadLink|Strassen|Straßen|Weg/i, nicht: /Area|Node|Bahn|Rail|Water|Air/i },
-  { url: `${GP}/forst/FORST`, muster: /erholungsweg|wanderweg|waldweg|forstweg/i },
+  { key: 'atkis', url: `${GP}/INSPIREtn`, muster: /RoadLink|Strassen|Straßen|Weg/i, nicht: /Area|Node|Bahn|Rail|Water|Air/i },
+  { key: 'erholung', url: `${GP}/forst/FORST`, muster: /erholungsweg|wanderweg|waldweg|forstweg/i },
 ];
+/** Einheitliche Farben der Wege in der App (der Dienst färbt anders – wir färben einheitlich um, damit die Legende stimmt) */
+export const WEGE_LEGENDE = [
+  { key: 'atkis', farbe: '#F5C518', label: 'Straßen und Wege', sub: 'amtliches Wegenetz (ATKIS Basis-DLM)' },
+  { key: 'erholung', farbe: '#C2185B', label: 'Erholungs- und Wanderwege', sub: 'ThüringenForst' },
+];
+// SVG-Filter, die jede Linie des Dienstes in die Legendenfarbe umfärben (Transparenz bleibt)
+(function filterAnlegen() {
+  if (typeof document === 'undefined' || document.getElementById('wege-filter')) return;
+  const hex = (c) => [1, 3, 5].map((i) => (parseInt(c.slice(i, i + 2), 16) / 255).toFixed(3));
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('id', 'wege-filter'); svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true');
+  svg.style.position = 'absolute';
+  svg.innerHTML = WEGE_LEGENDE.map((w) => { const [r, g, b] = hex(w.farbe); return `<filter id="wege-${w.key}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 ${r} 0 0 0 0 ${g} 0 0 0 0 ${b} 0 0 0 1.6 0"/></filter>`; }).join('');
+  (document.body || document.documentElement).appendChild(svg);
+})();
 const ebenenCache = new Map();
 async function ebenenSuchen({ url, muster, nicht }) {
   if (ebenenCache.has(url)) return ebenenCache.get(url);
@@ -39,7 +54,7 @@ const FeinWMS = L.TileLayer.WMS.extend({
 /** Dienste und Ebenennamen der amtlichen Wege (für PDF-Karten) */
 export async function amtlicheWegeEbenen() {
   const r = [];
-  for (const q of QUELLEN) { const namen = await ebenenSuchen(q); if (namen.length) r.push({ url: q.url, layers: namen.join(',') }); }
+  for (const q of QUELLEN) { const namen = await ebenenSuchen(q); if (namen.length) r.push({ key: q.key, url: q.url, layers: namen.join(','), farbe: WEGE_LEGENDE.find((w) => w.key === q.key)?.farbe }); }
   return r;
 }
 /** Amtliche Wege als WMS-Ebenen (Gruppe); leer, wenn der Dienst nichts Passendes anbietet */
@@ -49,7 +64,7 @@ export function createAmtlicheWegeLayer() {
     for (const q of QUELLEN) {
       const namen = await ebenenSuchen(q);
       if (!namen.length || !grp._map) continue;
-      new FeinWMS(q.url, { layers: namen.join(','), format: 'image/png', transparent: true, version: '1.3.0', attribution: TH_ATTR, maxZoom: 21, minZoom: 12, zIndex: 260, className: 'wege-amtlich', opacity: 0.8 }).addTo(grp);
+      new FeinWMS(q.url, { layers: namen.join(','), format: 'image/png', transparent: true, version: '1.3.0', attribution: TH_ATTR, maxZoom: 21, minZoom: 12, zIndex: 260, className: `wege-amtlich wege-${q.key}`, opacity: 0.95 }).addTo(grp);
     }
   });
   return grp;

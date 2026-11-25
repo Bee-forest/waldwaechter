@@ -1,3 +1,4 @@
+import { gassenRaster, hauptRichtung, gassenAbstaende } from './gassenraster.js';
 import { eigeneFlaechenLayer } from './eigeneflaechen.js';
 // Profimodus: Erschließung – Rückegassen (Linien) und Lagerplätze/Polterplätze (Punkte) als eigene Kartenebenen.
 // Gassen per Hand, per GPS ablaufen oder als Vorschlag aus dem Luftbild; Lagerplätze mit Befahrbarkeit und Beschreibung.
@@ -190,7 +191,7 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   const leiste = h('div', { class: 'ersch-leiste' });
   const umlaufHost = h('div');
   let draft = [], quelle = 'hand', vorschlaege = [], erkennt = false;
-  const inhalt = h('div', { class: 'ersch' }, h('div', { class: 'segmented ersch-modus', role: 'radiogroup', 'aria-label': 'Werkzeug' }), mapEl, leiste, umlaufHost);
+  const inhalt = h('div', { class: 'ersch' }, h('div', { class: 'ersch-werkzeuge', role: 'radiogroup', 'aria-label': 'Was möchtest du tun?' }), h('p', { class: 'ersch-was' }), mapEl, leiste, umlaufHost);
   const page = openPage('Erschließung bearbeiten', inhalt, { onClose: () => { umlauf?.stop(); lyr.entfernen(); abo(); map.remove(); } });
   const base = createBaseMap(mapEl, { center, zoom, basemap: s0.settings.basemap, alkis: true });
   const map = base.map;
@@ -198,13 +199,26 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   L.control.zoom({ position: 'topleft' }).addTo(map);
   let edit = null; // Verlauf einer bestehenden Gasse wird bearbeitet: { g, line }
   const lyr = createErschliessungLayers(map, {
-    klickbar: () => !edit && modus !== 'erkennen' && !(modus === 'gasse' && draft.length),
+    klickbar: () => !edit && modus !== 'erkennen' && modus !== 'raster' && !(modus === 'gasse' && draft.length),
     verschiebbar: true,
     ausblenden: () => edit?.g.id,
     aufGasse: async (g) => { if (await gasseDialog(g, { verlauf: true }) === 'verlauf') verlaufStarten(g); },
   });
   lyr.gassen.addTo(map); lyr.lager.addTo(map);
-  const draftLyr = L.layerGroup().addTo(map), vorLyr = L.layerGroup().addTo(map);
+  const draftLyr = L.layerGroup().addTo(map), vorLyr = L.layerGroup().addTo(map), abstLyr = L.layerGroup().addTo(map);
+  // Raster-Einstellungen (neue Gassen mit festem Abstand)
+  const R0 = (() => { try { return JSON.parse(localStorage.getItem('waldwaechter.gassenRaster') || '{}'); } catch { return {}; } })();
+  const raster = { abstand: R0.abstand || 30, winkel: null, versatz: 0, breite: R0.breite || 4 };
+  let zeigeAbstaende = true;
+  const abstandsMarke = (m) => L.marker(m.at, { interactive: false, icon: L.divIcon({ className: 'gassen-abstand', html: `<span>${m.m} m</span>`, iconSize: [52, 22], iconAnchor: [26, 11] }) });
+  function zeichneAbstaende() {
+    abstLyr.clearLayers();
+    if (!zeigeAbstaende || modus === 'raster') return;
+    for (const a of gassenAbstaende(daten().gassen)) {
+      abstLyr.addLayer(L.polyline([a.von, a.bis], { color: '#FFFFFF', weight: 1.5, dashArray: '3 4', opacity: 0.9, interactive: false }));
+      abstLyr.addLayer(abstandsMarke(a));
+    }
+  }
   setTimeout(() => map.invalidateSize(), 250);
 
   const umlauf = umlaufSteuerung({ map, text: 'Gasse ablaufen', minAbstand: 5, onPunkt: (ll) => { quelle = 'gps'; draft.push(ll); zeichneDraft(); render(); },
@@ -219,6 +233,11 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
     }
     if (modus === 'gasse') { draft.push(ll); zeichneDraft(); render(); }
     else if (modus === 'lager') { const l = await lagerDialog({ at: ll }); if (l) toast('Lagerplatz gespeichert'); }
+    else if (modus === 'raster') {
+      const p = await source.parcelAt(ll).catch(() => null);
+      if (!p) { toast(map.getZoom() < 16 ? 'Zoom näher heran und tippe ein Flurstück an.' : 'An dieser Stelle wurde kein Flurstück gefunden.'); return; }
+      raster.winkel = null; raster.versatz = 0; waehle(p, false); rasterVorschau(); render();
+    }
     else if (modus === 'erkennen' && !erkennt) {
       const p = await source.parcelAt(ll).catch(() => null);
       if (!p) { toast(map.getZoom() < 16 ? 'Zoom näher heran und tippe ein Flurstück an.' : 'An dieser Stelle wurde kein Flurstück gefunden.'); return; }
@@ -298,6 +317,24 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
       vorLyr.addLayer(pl);
     });
   }
+  function rasterVorschau() {
+    vorschlaege = []; vorLyr.clearLayers();
+    if (!wahlP) { render(); return; }
+    const polys = polysOf(wahlP);
+    if (raster.winkel == null) raster.winkel = Math.round(hauptRichtung(polys));
+    const r = gassenRaster(polys, { abstand: raster.abstand, winkel: raster.winkel, versatz: raster.versatz });
+    vorschlaege = r.linien.map((line) => ({ line, an: true, raster: true }));
+    zeichneVorschlaege();
+    for (const a of r.abstaende) vorLyr.addLayer(abstandsMarke(a));
+  }
+  function rasterUebernehmen() {
+    const an = vorschlaege.filter((v) => v.an);
+    if (!an.length) return;
+    try { localStorage.setItem('waldwaechter.gassenRaster', JSON.stringify({ abstand: raster.abstand, breite: raster.breite })); } catch { /* egal */ }
+    speichere((e) => { for (const v of an) e.gassen.push({ id: uid(), line: v.line, quelle: 'raster', breite: raster.breite, abstand: raster.abstand, grad: richtungAusLinie(v.line), erfasst: Date.now() }); });
+    toast(`${an.length} Rückegassen angelegt – einzelne Gassen antippen zum Verschieben oder Ändern.`);
+    vorschlaege = []; vorLyr.clearLayers(); modus = 'ansehen'; render();
+  }
   function gasseSpeichern() {
     if (draft.length < 2) return;
     const g = { id: uid(), line: draft.map(([a, b]) => [Number(a.toFixed(7)), Number(b.toFixed(7))]), quelle, erfasst: Date.now() };
@@ -326,10 +363,24 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   }
 
   function render() {
-    const MODI = [['gasse', 'Gasse zeichnen'], ['erkennen', 'Aus Luftbild'], ['lager', 'Lagerplatz'], ['ansehen', 'Ändern']];
-    fill(inhalt.querySelector('.ersch-modus'), MODI.map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(modus === k), onclick: () => {
-      modus = k; if (k !== 'gasse') { umlauf.stop?.(); } if (k === 'erkennen' && base.basemap !== 'dop') base.setBasemap('dop'); render();
-    } }, l)));
+    const ic = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const MODI = [
+      ['raster', 'Gassen anlegen', 'mit festem Abstand', ic('<path d="M5 3v18M11 3v18M17 3v18"/><path d="M5 12h12" stroke-dasharray="2 2"/>'), 'Lege parallele Rückegassen mit dem gewählten Abstand über ein Flurstück. Danach kannst du jede Gasse einzeln verschieben, ändern oder weitere ergänzen.'],
+      ['gasse', 'Gasse zeichnen', 'Punkt für Punkt', ic('<path d="M4 20l5-7 5 3 6-10"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="6" r="1.5"/>'), 'Tippe den Verlauf einer einzelnen Gasse in die Karte – oder lauf sie mit dem GPS ab.'],
+      ['erkennen', 'Aus Luftbild', 'Gassen erkennen', ic('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v18M15 3v18"/>'), 'Die App sucht Gassen im Luftbild eines Flurstücks und schlägt sie vor.'],
+      ['lager', 'Lagerplatz', 'Polter setzen', ic('<circle cx="7" cy="16" r="3"/><circle cx="13" cy="16" r="3"/><circle cx="10" cy="11" r="3"/><path d="M3 21h18"/>'), 'Tippe in die Karte, wo ein Lagerplatz liegt.'],
+      ['ansehen', 'Ändern', 'Gassen bearbeiten', ic('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>'), 'Tippe eine Gasse oder einen Lagerplatz an, um Angaben oder Verlauf zu ändern oder zu verschieben.'],
+    ];
+    fill(inhalt.querySelector('.ersch-werkzeuge'), MODI.map(([k, l, sub, svg]) => h('button', { type: 'button', role: 'radio', class: 'ersch-werkzeug', 'aria-checked': String(modus === k), onclick: () => {
+      if (k === modus) return;
+      if (modus === 'raster' || modus === 'erkennen') { vorschlaege = []; zeichneVorschlaege(); }
+      modus = k; if (k !== 'gasse') { umlauf.stop?.(); } if (k === 'erkennen' && base.basemap !== 'dop') base.setBasemap('dop');
+      if (k === 'raster') rasterVorschau();
+      render();
+    } }, h('span', { class: 'ersch-werkzeug-icon', html: svg }), h('span', {}, h('strong', {}, l), h('small', {}, sub)))));
+    const aktiv = MODI.find(([k]) => k === modus);
+    fill(inhalt.querySelector('.ersch-was'), edit ? 'Du änderst gerade den Verlauf einer Gasse.' : aktiv ? aktiv[4] : '');
+    zeichneAbstaende();
     mapEl.classList.toggle('malt', modus === 'gasse' || modus === 'lager');
     if (edit) {
       fill(leiste,
@@ -342,7 +393,9 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
       return;
     }
     const d = daten();
-    const kopf = h('p', { class: 'muted' }, `${d.gassen.length} Rückegassen (${formatDist(Math.round(d.gassen.reduce((s, g) => s + laenge(g.line || []), 0)))}), ${d.lager.length} Lagerplätze gespeichert.`);
+    const kopf = h('div', { class: 'ersch-kopf' },
+      h('p', { class: 'muted' }, `${d.gassen.length} Rückegassen (${formatDist(Math.round(d.gassen.reduce((s, g) => s + laenge(g.line || []), 0)))}), ${d.lager.length} Lagerplätze gespeichert.`),
+      d.gassen.length > 1 && modus !== 'raster' ? h('label', { class: 'jk-check' }, h('input', { type: 'checkbox', checked: zeigeAbstaende, onchange: (e) => { zeigeAbstaende = e.target.checked; zeichneAbstaende(); } }), h('span', {}, 'Abstände zwischen den Gassen anzeigen')) : null);
     if (modus === 'gasse') {
       fill(leiste, kopf,
         h('p', { class: 'draw-status' }, draft.length ? `${draft.length} Punkte, ${formatDist(Math.round(laenge(draft)))}` : 'Tippe den Verlauf einer neuen Gasse Punkt für Punkt in die Karte – oder lauf sie mit dem GPS ab. Eine bestehende Gasse antippen, um Angaben oder Verlauf zu ändern.'),
@@ -375,11 +428,39 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
             h('button', { class: 'btn btn-small btn-primary', disabled: !an, onclick: uebernehmen }, `${an} übernehmen`))) : null,
         h('p', { class: 'hint' }, 'Die Suche wertet das aktuelle Luftbild (DOP, © GDI-Th) aus: gerade, parallele Lücken im Kronendach. Das ist ein Vorschlag – unter dichtem Kronendach, in Laubholz ohne Laub oder bei Schatten kann sie Gassen übersehen oder Wege und Schneisen für Gassen halten. Bitte vor Ort prüfen.'));
     }
+    if (modus === 'raster') {
+      const flaechen = (store.get().parcels || []).filter((p) => polysOf(p).length && passtFlurstueck(p)).sort((a, b) => (a.category === 'Wald' ? -1 : 0) - (b.category === 'Wald' ? -1 : 0));
+      if (wahlP && !flaechen.some((p) => p.id === wahlP.id)) flaechen.unshift(wahlP);
+      const n = vorschlaege.filter((v) => v.an).length;
+      const setze = (k, v) => { raster[k] = v; rasterVorschau(); render(); };
+      fill(leiste, kopf,
+        h('div', { class: 'form raster-form' },
+          h('label', {}, 'Flurstück', h('select', { onchange: (e) => { raster.winkel = null; raster.versatz = 0; waehle(flaechen.find((x) => x.id === e.target.value) || null); rasterVorschau(); render(); } },
+            wahlP ? null : h('option', { value: '', selected: true }, '– bitte wählen oder in der Karte antippen –'),
+            flaechen.map((p) => h('option', { value: p.id, selected: p.id === wahlP?.id }, `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}`)))),
+          h('div', { class: 'fin-feld' }, h('span', { class: 'fin-feld-label' }, `Abstand zwischen den Gassen: ${raster.abstand} m`),
+            h('div', { class: 'schnell-chips' }, [20, 25, 30, 40].map((a) => h('button', { type: 'button', class: 'chip', 'aria-pressed': String(raster.abstand === a), onclick: () => setze('abstand', a) }, `${a} m`)),
+              h('input', { type: 'number', min: 10, max: 100, step: 1, value: raster.abstand, 'aria-label': 'Eigener Abstand in Metern', class: 'raster-zahl', onchange: (e) => { const v = Math.max(10, Math.min(100, Number(e.target.value) || 30)); setze('abstand', v); } }))),
+          wahlP ? h('div', { class: 'fin-feld' }, h('span', { class: 'fin-feld-label' }, `Richtung der Gassen: ${raster.winkel ?? 0}° (${himmelsrichtung(raster.winkel ?? 0)}–${himmelsrichtung((raster.winkel ?? 0) + 180)})`),
+            h('div', { class: 'btn-row' },
+              h('button', { type: 'button', class: 'btn btn-small', onclick: () => { raster.winkel = Math.round(hauptRichtung(polysOf(wahlP))); rasterVorschau(); render(); } }, 'Längs zur Fläche'),
+              h('button', { type: 'button', class: 'btn btn-small', onclick: () => { raster.winkel = (Math.round(hauptRichtung(polysOf(wahlP))) + 90) % 180; rasterVorschau(); render(); } }, 'Quer zur Fläche')),
+            h('input', { type: 'range', min: 0, max: 179, step: 1, value: raster.winkel ?? 0, 'aria-label': 'Richtung drehen', oninput: (e) => { raster.winkel = Number(e.target.value); rasterVorschau(); fill(e.target.previousSibling.previousSibling, `Richtung der Gassen: ${raster.winkel}° (${himmelsrichtung(raster.winkel)}–${himmelsrichtung(raster.winkel + 180)})`); } })) : null,
+          wahlP ? h('div', { class: 'fin-feld' }, h('span', { class: 'fin-feld-label' }, 'Raster seitlich verschieben'),
+            h('input', { type: 'range', min: 0, max: raster.abstand, step: 1, value: raster.versatz, 'aria-label': 'Raster seitlich verschieben', oninput: (e) => { raster.versatz = Number(e.target.value); rasterVorschau(); } })) : null,
+          h('label', {}, 'Gassenbreite (m)', h('input', { type: 'number', min: 2, max: 8, step: 0.5, value: raster.breite, onchange: (e) => { raster.breite = Number(e.target.value) || 4; } }))),
+        wahlP ? h('p', { class: 'draw-status' }, n ? `${n} Gassen in der Vorschau. Gestrichelte Linien antippen nimmt sie heraus.` : 'Für diesen Abstand passt keine Gasse in die Fläche.') : h('p', { class: 'draw-status' }, 'Wähle ein Flurstück aus der Liste oder tippe es in der Karte an.'),
+        h('div', { class: 'btn-row' },
+          h('button', { class: 'btn btn-small', disabled: !vorschlaege.length, onclick: () => { vorschlaege = []; zeichneVorschlaege(); vorLyr.clearLayers(); render(); } }, 'Verwerfen'),
+          h('button', { class: 'btn btn-primary', disabled: !n, onclick: rasterUebernehmen }, n ? `${n} Gassen anlegen` : 'Gassen anlegen')),
+        h('p', { class: 'hint' }, 'Die Gassen enden an der Flurstücksgrenze. Nach dem Anlegen kannst du jede Gasse antippen und ihren Verlauf verschieben, sie löschen oder mit „Gasse zeichnen“ weitere ergänzen.'));
+    }
     if (modus === 'lager') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe in die Karte, wo ein neuer Lagerplatz liegt. Bestehende Lagerplätze antippen zum Bearbeiten, gedrückt halten und ziehen zum Verschieben.'));
     if (modus === 'ansehen') fill(leiste, kopf, h('p', { class: 'draw-status' }, 'Tippe eine Gasse oder einen Lagerplatz an, um Angaben oder Verlauf zu ändern. Lagerplätze lassen sich mit gedrücktem Finger verschieben.'));
   }
   render();
   if (modus === 'erkennen') { if (base.basemap !== 'dop') base.setBasemap('dop'); if (flaeche) { waehle(flaeche); erkennen(flaeche); } }
-  const abo = store.subscribe(() => { if (modus !== 'gasse' || !draft.length) render(); });
+  if (modus === 'raster' && flaeche) { waehle(flaeche); rasterVorschau(); render(); }
+  const abo = store.subscribe(() => { if (modus !== 'gasse' || !draft.length) render(); else zeichneAbstaende(); });
   return page;
 }

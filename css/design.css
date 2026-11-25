@@ -320,3 +320,21 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .schaden-karte { height: 300px; }
 .schadstellen .draw-status { margin: 8px 0 4px; }
 .schaden-punkte p { margin: 2px 0; font-size: 13px; }
+
+/* Erschließung: Werkzeuge oben gut sichtbar */
+.ersch-werkzeuge { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin-bottom: 6px; }
+.ersch-werkzeug { display: flex; gap: 8px; align-items: center; text-align: left; padding: 10px; min-height: 54px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; }
+.ersch-werkzeug span:last-child { display: grid; line-height: 1.15; min-width: 0; }
+.ersch-werkzeug strong { font-size: 14px; }
+.ersch-werkzeug small { font-size: 11.5px; color: var(--ink-2); }
+.ersch-werkzeug-icon { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); color: var(--primary); }
+.ersch-werkzeug[aria-checked='true'] { border-color: var(--primary); background: var(--primary); color: #fff; box-shadow: 0 4px 12px -4px rgba(31,77,58,.6); }
+.ersch-werkzeug[aria-checked='true'] small { color: rgba(255,255,255,.8); }
+.ersch-werkzeug[aria-checked='true'] .ersch-werkzeug-icon { background: rgba(255,255,255,.16); color: #fff; }
+.ersch-was { margin: 4px 2px 10px; padding: 8px 12px; border-radius: 12px; background: var(--primary-soft); font-size: 14px; }
+.ersch-was:empty { display: none; }
+.gassen-abstand span { display: inline-block; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,.95); color: #3A2A14; font-size: 12px; font-weight: 800; border: 1.5px solid #8D5A2B; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.raster-zahl { width: 84px !important; min-height: 38px; }
+.raster-form input[type=range] { width: 100%; accent-color: var(--primary); }
+.schnell-chips .chip[aria-pressed='true'] { background: var(--primary); color: #fff; border-color: var(--primary); }
+.ersch-kopf .jk-check { margin-top: 6px; }

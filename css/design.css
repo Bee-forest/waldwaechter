@@ -399,3 +399,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .fk-ort svg { width: 22px; height: 22px; }
 .fk-info .btn-row { margin-top: 6px; }
 .fk-gewaehlt p { margin: 2px 0 10px; font-weight: 700; }
+.feld-auto { display: block; color: var(--ink-2); font-size: 12.5px; font-weight: 500; margin-top: 3px; }

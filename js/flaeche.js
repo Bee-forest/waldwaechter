@@ -39,7 +39,7 @@ export function miniKarte(el, parcel, { zoom = 17, hell = false } = {}) {
  * start: ein Ring, mehrere Ringe oder ein gespeichertes flaeche-Objekt ({ ring, ringe }).
  * wert() liefert { modus: 'ganz', ha } oder { modus: 'teil', ring, ringe, ha } – null, wenn eine Teilfläche unvollständig ist.
  */
-export function flaechenWahl(parcel, start = null) {
+export function flaechenWahl(parcel, start = null, { onChange = null } = {}) {
   const startRinge = !start ? [] : Array.isArray(start) ? (Array.isArray(start[0]?.[0]) ? start : [start]) : (start.ringe?.length ? start.ringe : start.ring ? [start.ring] : []);
   let ringe = startRinge.filter((r) => r?.length >= 3).map((r) => r.map((x) => [...x]));
   let modus = ringe.length ? 'teil' : 'ganz', aktiv = ringe.length ? ringe.length - 1 : 0, karte = null, umlauf = null;
@@ -106,8 +106,10 @@ export function flaechenWahl(parcel, start = null) {
     } else if (karte) setTimeout(() => karte.map.invalidateSize(), 60);
     zeichne(); listeZeichnen();
   }
+  // Bei jeder Änderung der Fläche melden (z. B. um „Fläche (ha)“ automatisch einzutragen)
+  if (onChange) { const z0 = zeichne, r0 = render; const melde = () => { try { onChange(api.wert()); } catch {} }; zeichne = (...a) => { z0(...a); melde(); }; render = (...a) => { r0(...a); melde(); }; setTimeout(melde, 0); }
   render();
-  return {
+  const api = {
     el: host,
     wert() {
       if (modus === 'ganz') return { modus: 'ganz', ha: amtlicheFlaecheHa(parcel) };
@@ -118,6 +120,7 @@ export function flaechenWahl(parcel, start = null) {
     },
     entferne() { umlauf?.stop(); karte?.remove(); },
   };
+  return api;
 }
 
 /** Fläche, auf der eine Maßnahme stattfindet – so wie sie beim Anlegen gewählt wurde. */
@@ -145,4 +148,26 @@ export function betrifftFlurstueck(m, parcel) {
   if (!ring?.length || !parcel.ring?.length) return false;
   const polys = polysOf(parcel);
   return inPolys(centroid(ring), polys) || ring.some((pt) => inPolys(pt, polys));
+}
+
+/** „Fläche (ha)“ automatisch aus der gewählten Fläche eintragen – solange niemand selbst etwas hineinschreibt. */
+export const haText = (ha) => (ha ? (Math.round(ha * 100) / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+export function flaecheAutomatisch(form, startHa = null) {
+  const input = form.querySelector('input[name="area"]');
+  if (!input) return () => {};
+  let auto = startHa != null && input.value === haText(startHa) ? input.value : '';
+  const hinweis = document.createElement('small');
+  hinweis.className = 'feld-auto';
+  input.insertAdjacentElement('afterend', hinweis);
+  let letzt = auto;
+  input.addEventListener('input', () => { hinweis.textContent = input.value && input.value !== auto ? 'selbst eingetragen' : ''; });
+  // Feld geleert → wieder den automatischen Wert nehmen
+  input.addEventListener('change', () => { if (!input.value.trim() && letzt) { auto = letzt; input.value = auto; hinweis.textContent = 'automatisch aus der gewählten Fläche'; } });
+  return (ha) => {
+    letzt = haText(ha);
+    if (input.value && input.value !== auto) return; // selbst eingetragen → nicht überschreiben
+    auto = letzt;
+    input.value = auto;
+    hinweis.textContent = auto ? 'automatisch aus der gewählten Fläche' : '';
+  };
 }

@@ -7,7 +7,7 @@ import { formatHa } from './geo.js';
 import { amtlicheFlaecheHa } from './map/thueringen.js';
 import { CATEGORIES } from './map/basemap.js';
 import { SPECIES } from './thinning/plan.js';
-import { flaechenWahl } from './flaeche.js';
+import { flaechenWahl, flaecheAutomatisch, flaecheVon, haText } from './flaeche.js';
 import { passtFlurstueck } from './profi.js';
 import { openFotos, fotoAnzahl } from './fotos.js';
 
@@ -26,7 +26,8 @@ export async function openMassnahmeBearbeiten(measureId) {
   if (m.parcelId && !mine.some((p) => p.id === m.parcelId) && byId[m.parcelId]) mine.unshift(byId[m.parcelId]);
   const flHost = h('div', { class: 'flaeche-host' });
   let wahl = null;
-  const zeigeWahl = (id, start = null) => { wahl?.entferne(); wahl = null; flHost.replaceChildren(); if (id && byId[id]) { wahl = flaechenWahl(byId[id], start); flHost.append(wahl.el); } };
+  let setzeHa = () => {};
+  const zeigeWahl = (id, start = null) => { wahl?.entferne(); wahl = null; flHost.replaceChildren(); if (!id) setzeHa(null); if (id && byId[id]) { wahl = flaechenWahl(byId[id], start, { onChange: (f) => setzeHa(f?.ha) }); flHost.append(wahl.el); } };
   const feld = ([k, label, kind]) => {
     const v = m.details?.[k] ?? '';
     if (Array.isArray(kind) || kind === 'species') {
@@ -77,6 +78,7 @@ export async function openMassnahmeBearbeiten(measureId) {
     h('label', {}, 'Notiz', h('textarea', { name: 'note', rows: 3, value: m.note || '' })),
     h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, 'Änderungen speichern'));
   page = openPage(`${t.label} bearbeiten`, h('div', { class: 'new-measure' }, form), { onClose: () => wahl?.entferne() });
+  setzeHa = flaecheAutomatisch(form, flaecheVon(m, byId[m.parcelId] || m.flurstueck)?.ha ?? null);
   if (m.parcelId) zeigeWahl(m.parcelId, m.flaeche || null);
 }
 
@@ -242,6 +244,8 @@ export async function openFlaecheHinterlegen(measureId) {
       store.update((s) => {
         const x = s.measures.find((y) => y.id === m.id); if (!x) return;
         x.parcelId = parcelId;
+        // „Fläche (ha)“ mitziehen, wenn sie leer war oder automatisch eingetragen wurde
+        if (fl?.ha && 'area' in (x.details || {})) { const alt = flaecheVon(m, byId[m.parcelId] || m.flurstueck)?.ha; const v = x.details?.area || ''; if (!v || (alt != null && v === haText(alt))) x.details = { ...(x.details || {}), area: haText(fl.ha) }; }
         if (fl?.modus === 'teil') x.flaeche = { ring: fl.ring, ringe: fl.ringe, ha: fl.ha, ...(m.status === 'fertig' ? { ist: true } : {}) };
         else delete x.flaeche;
         x.geaendert = Date.now();

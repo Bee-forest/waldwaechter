@@ -16,7 +16,7 @@ import { amtlicheFlaecheHa } from './map/thueringen.js';
 import { openThinningWizard } from './thinning/wizard.js';
 import { SPECIES } from './thinning/plan.js';
 import { WANZE_SVG } from './mascot.js';
-import { flaechenWahl } from './flaeche.js';
+import { flaechenWahl, flaecheAutomatisch } from './flaeche.js';
 import { openFlurstueckHistorie } from './historie.js';
 import { openPolterVermessung } from './polter.js';
 import { openZaunPlanung } from './zaun.js';
@@ -553,16 +553,18 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
     const flHost = h('div', { class: 'flaeche-host' });
     let wahl = null;
     const schutzHost = h('div');
+    let setzeHa = () => {};
     const zeigeWahl = (id) => {
       if (vorwahl) { // Fläche kommt aus der Kartenwahl (auch fremde Flurstücke oder selbst eingezeichnet)
-        if (vp) { wahl = flaechenWahl(vp); flHost.append(wahl.el); }
+        if (vp) { wahl = flaechenWahl(vp, null, { onChange: (f) => setzeHa(f?.ha) }); flHost.append(wahl.el); } else setzeHa(areaHa(vorwahl.ring));
         const sel = vp || { ring: vorwahl.ring, polys: [[vorwahl.ring]] };
         import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(sel, { eingriff: EINGRIFF.includes(type) })));
         return;
       }
       wahl?.entferne(); wahl = null; flHost.replaceChildren(); schutzHost.replaceChildren();
       if (!id) flHost.append(h('p', { class: 'hint' }, 'Nach der Wahl der Fläche kannst du festlegen, ob die Maßnahme das ganze Flurstück betrifft oder nur eine oder mehrere Teilflächen, die du in der Karte einzeichnest.'));
-      if (id && byId[id]) { wahl = flaechenWahl(byId[id]); flHost.append(wahl.el); import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(byId[id], { eingriff: EINGRIFF.includes(type) }))); }
+      if (!id) setzeHa(null);
+      if (id && byId[id]) { wahl = flaechenWahl(byId[id], null, { onChange: (f) => setzeHa(f?.ha) }); flHost.append(wahl.el); import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(byId[id], { eingriff: EINGRIFF.includes(type) }))); }
     };
     const form = h('form', { class: 'form', onsubmit: (e) => {
       e.preventDefault();
@@ -607,6 +609,7 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
       h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, AUSZEICHNEN.includes(type) && !foerdern ? 'Anlegen und Bäume auszeichnen' : `${t.label} buchen`),
     );
     neueSeite(t.label, h('div', { class: 'new-measure' }, form));
+    setzeHa = flaecheAutomatisch(form);
     zeigeWahl(vorwahl ? null : parcelId);
   }
 }

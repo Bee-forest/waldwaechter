@@ -12,7 +12,10 @@ export const STUFEN = [
   { k: 's2', label: '15–25 cm', mitte: 20, farbe: '#4F8A3A' },
   { k: 's3', label: '25–35 cm', mitte: 30, farbe: '#D9A21B' },
   { k: 's4', label: '35–50 cm', mitte: 42.5, farbe: '#C8661E' },
-  { k: 's5', label: 'über 50 cm', mitte: 55, farbe: '#8E2F1C' },
+  { k: 's5', label: '50–60 cm', mitte: 55, farbe: '#A8432A' },
+  { k: 's6', label: '60–70 cm', mitte: 65, farbe: '#7E2A1E' },
+  { k: 's7', label: '70–80 cm', mitte: 75, farbe: '#6B3A6E' },
+  { k: 's8', label: '80–90 cm', mitte: 85, farbe: '#3E3F86' },
 ];
 // Näherungswerte: Volumen je Baum in Vorratsfestmeter mit Rinde (Vfm m.R.) für den Stufenmittelwert,
 // angelehnt an übliche Massentafeln bei mittlerer Wuchsleistung. Nur zur Orientierung beim Auszeichnen.
@@ -27,7 +30,9 @@ export const BAUMARTEN = {
   elb: { name: 'Ahorn / Esche', v: [0.06, 0.29, 0.76, 1.6, 2.75] },
   wlb: { name: 'Birke / Weichlaub', v: [0.05, 0.24, 0.62, 1.3, 2.2] },
 };
-const DURCHSCHNITT = [0, 1, 2, 3, 4].map((i) => ['fi', 'ki', 'bu', 'ei'].reduce((s, k) => s + BAUMARTEN[k].v[i], 0) / 4);
+// Starke Stufen (60–90 cm) aus dem 55-cm-Wert hochgerechnet (Volumen etwa ~ BHD^2,3)
+Object.values(BAUMARTEN).forEach((b) => { if (b.v) b.v.push(...[65, 75, 85].map((d) => Math.round(b.v[4] * (d / 55) ** 2.3 * 100) / 100)); });
+const DURCHSCHNITT = STUFEN.map((_, i) => i).map((i) => ['fi', 'ki', 'bu', 'ei'].reduce((s, k) => s + BAUMARTEN[k].v[i], 0) / 4);
 const EFM = 0.8; // Vfm m.R. → Erntefestmeter ohne Rinde (Rinde und Ernteverlust ca. 20 %)
 export const vfm = (stufe, ba) => (BAUMARTEN[ba]?.v || DURCHSCHNITT)[STUFEN.findIndex((s) => s.k === stufe)] || 0;
 export const efm = (stufe, ba) => vfm(stufe, ba) * EFM;
@@ -39,7 +44,7 @@ export const SORTIMENTE = [
   { k: 'brenn', name: 'Brennholz' },
   { k: 'energie', name: 'Energieholz / Hackschnitzel' },
 ];
-const ANTEILE = { s1: [0, 0.85, 0.15], s2: [0.25, 0.6, 0.15], s3: [0.6, 0.3, 0.1], s4: [0.75, 0.18, 0.07], s5: [0.8, 0.12, 0.08] };
+const ANTEILE = { s1: [0, 0.85, 0.15], s2: [0.25, 0.6, 0.15], s3: [0.6, 0.3, 0.1], s4: [0.75, 0.18, 0.07], s5: [0.8, 0.12, 0.08], s6: [0.82, 0.1, 0.08], s7: [0.83, 0.09, 0.08], s8: [0.83, 0.09, 0.08] };
 /** Menge je Sortiment (Efm o.R.) – nicht gewählte Sortimente fallen auf das nächst schwächere gewählte */
 export function sortimentMengen(baeume, gewaehlt) {
   const r = Object.fromEntries(SORTIMENTE.map((s) => [s.k, 0]));
@@ -88,7 +93,7 @@ export async function openAuszeichnen(measureId) {
   function baeumeZeichnen() {
     if (!baumLyr) return;
     baumLyr.clearLayers();
-    az.baeume.forEach((b, i) => { if (!b.at) return; const s = STUFEN.find((x) => x.k === b.k); L.circleMarker(b.at, { radius: 4 + STUFEN.indexOf(s), color: '#fff', weight: 1.5, fillColor: s.farbe, fillOpacity: 1 }).bindTooltip(`${i + 1}: ${s.label}, ${BAUMARTEN[b.ba]?.name || 'Durchschnitt'}`).addTo(baumLyr); });
+    az.baeume.forEach((b, i) => { if (!b.at) return; const s = STUFEN.find((x) => x.k === b.k); L.circleMarker(b.at, { radius: 4 + STUFEN.indexOf(s) * 0.8, color: '#fff', weight: 1.5, fillColor: s.farbe, fillOpacity: 1 }).bindTooltip(`${i + 1}: ${s.label}, ${BAUMARTEN[b.ba]?.name || 'Durchschnitt'}`).addTo(baumLyr); });
   }
   function ichZeichnen() {
     if (!ichLyr || !pos) return;

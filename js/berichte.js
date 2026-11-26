@@ -125,10 +125,10 @@ export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) 
   gassen.forEach((g) => linieZeichnen(doc, k.tr, g.line.filter(k.drin), { w: 2, farbe: [141, 90, 43], strich: [5, 3] }));
   lager.forEach((l) => k.drin(l.at) && punkt(doc, k.tr(l.at), [181, 101, 29], 5));
   const rgb = (hx) => [1, 3, 5].map((i) => parseInt(hx.slice(i, i + 2), 16));
-  baeume.forEach((b) => { if (!k.drin(b.at)) return; const i = STUFEN.findIndex((x) => x.k === b.k); punkt(doc, k.tr(b.at), rgb(STUFEN[i].farbe), 2.6 + i * 0.7); });
+  baeume.forEach((b) => { if (!k.drin(b.at)) return; const i = STUFEN.findIndex((x) => x.k === b.k); punkt(doc, k.tr(b.at), rgb(STUFEN[i].farbe), 2.6 + i * 0.5); });
   if (rp && k.drin(rp.at)) { punkt(doc, k.tr(rp.at), [0, 150, 70], 6); const [a, b] = k.tr(rp.at); doc.text(a + 8, b + 3, rp.id, { bold: true, size: 8 }); }
   W.y += 346;
-  if (baeume.length) { let x0 = W.L; doc.text(x0, W.y, 'Ausgezeichnete Bäume (BHD):', { size: 7.5, bold: true }); x0 += 122; STUFEN.forEach((st, i) => { punkt(doc, [x0 + 3, W.y - 2.5], rgb(st.farbe), 2.6 + i * 0.7); doc.text(x0 + 9, W.y, st.label, { size: 7.5 }); x0 += 62; }); W.y += 12; }
+  if (baeume.length) { let x0 = W.L; doc.text(x0, W.y, 'Ausgezeichnete Bäume (BHD):', { size: 7.5, bold: true }); x0 += 122; STUFEN.forEach((st, i) => { if (x0 + 60 > W.R) { x0 = W.L + 122; W.y += 11; } punkt(doc, [x0 + 3, W.y - 2.5], rgb(st.farbe), 3.2); doc.text(x0 + 9, W.y, st.label, { size: 7.5 }); x0 += 62; }); W.y += 12; }
   doc.text(W.L, W.y, `Legende: orange = Arbeitsfläche · braun gestrichelt = Rückegasse · braun = Lagerplatz · grün = Rettungspunkt. Hintergrund: ${KARTEN_QUELLE[basemap]}`, { size: 7, farbe: GRAU });
   W.y += 22;
   W.kopf('Vereinbarung');

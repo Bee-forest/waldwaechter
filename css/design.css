@@ -400,3 +400,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .fk-info .btn-row { margin-top: 6px; }
 .fk-gewaehlt p { margin: 2px 0 10px; font-weight: 700; }
 .feld-auto { display: block; color: var(--ink-2); font-size: 12.5px; font-weight: 500; margin-top: 3px; }
+/* Sortimente einstellen */
+.so-kachel { padding: 0; margin-bottom: 10px; }
+.so-kachel > summary { display: grid; gap: 2px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.so-kachel > summary::-webkit-details-marker { display: none; }
+.so-kachel > .form { padding: 0 16px 14px; }
+.az-sortimente .jk-check small { display: block; }
+.az-rechenweg { margin: 8px 0 12px; }
+.az-rechenweg summary { cursor: pointer; font-weight: 700; color: var(--ink-2); }
+.sortimente-edit .mit-einheit { display: flex; align-items: center; gap: 8px; }
+.sortimente-edit .mit-einheit input { flex: 1; min-width: 0; }
+.sortimente-edit .mit-einheit span { font-weight: 700; color: var(--ink-2); min-width: 2.6em; }

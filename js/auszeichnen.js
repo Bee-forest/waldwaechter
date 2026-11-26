@@ -102,6 +102,7 @@ export async function openAuszeichnen(measureId) {
     L.circleMarker(pos, { radius: 6, color: '#fff', weight: 2, fillColor: '#2F6FB0', fillOpacity: 1, interactive: false }).addTo(ichLyr);
   }
   function baumDazu(k) {
+    delete az.abgeschlossen; // wieder geöffnet und weiter ausgezeichnet → wieder „offen“
     az.baeume.push({ id: uid(), k, ba: az.ba, at: pos ? [Number(pos[0].toFixed(7)), Number(pos[1].toFixed(7))] : null, genau: pos ? genau : null, t: Date.now() });
     navigator.vibrate?.(25);
     zaehler(); baeumeZeichnen(); knoepfe(); aktiv();
@@ -122,13 +123,14 @@ export async function openAuszeichnen(measureId) {
 
   function speichern(abschliessen) {
     const n = az.baeume.length;
+    if (abschliessen) az.abgeschlossen = Date.now();
     store.update((st) => {
       const x = st.measures.find((y) => y.id === measureId);
       if (!x) return;
       x.auszeichnung = { ...az, stand: Date.now() };
       if (n) x.details = { ...(x.details || {}), baeume: String(n), menge: fmt(summe()) };
       if (n && x.status === 'geplant') x.status = 'arbeit';
-      if (abschliessen) x.auszeichnung.abgeschlossen = Date.now();
+
     });
   }
 

@@ -254,7 +254,15 @@ function zeile(m, byId) {
       h('span', { class: 'mzeile-rechts' },
         h('span', { class: `badge badge-${m.status}` }, STATUS[m.status]),
         h('small', { class: ueberfaellig ? 'ueberfaellig' : '' }, datum ? new Date(datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : 'ohne Termin')),
-      h('span', { class: 'chev', html: icon.chevron })));
+      h('span', { class: 'chev', html: icon.chevron })),
+    auszeichnenOffen(m) ? fortsetzenKnopf(m, 'mzeile-weiter') : null);
+}
+/** Holzernte, die noch nicht für beendet erklärt wurde: direkt weiter Bäume auszeichnen */
+const auszeichnenOffen = (m) => AUSZEICHNEN.includes(m.type) && m.status !== 'fertig' && !m.auszeichnung?.abgeschlossen;
+function fortsetzenKnopf(m, cls = '') {
+  const n = m.auszeichnung?.baeume?.length || 0;
+  return h('button', { type: 'button', class: `btn btn-primary btn-block ${cls}`, onclick: () => import('./auszeichnen.js').then((x) => x.openAuszeichnen(m.id)) },
+    n ? `Fortsetzen · ${n} ${n === 1 ? 'Baum' : 'Bäume'}${m.details?.menge ? `, ${m.details.menge} Fm` : ''}` : 'Auszeichnen starten');
 }
 
 // ---------- Maßnahmenplan: Tages-, Wochen- oder Monatsansicht ----------
@@ -430,7 +438,8 @@ function measureCard(m, byId) {
         if (m.status === 'geplant') { store.update((s) => { const x = s.measures.find((y) => y.id === m.id); x.status = 'arbeit'; }); if (AUSZEICHNEN.includes(m.type)) import('./auszeichnen.js').then((x) => x.openAuszeichnen(m.id)); }
         else openProtokoll(m.id, { abschliessen: true }); // Erledigt: gleich das Abschlussprotokoll anbieten
       } }, h('span', { html: m.status === 'geplant' ? icon.play : icon.checkmark }), m.status === 'geplant' ? 'Begonnen' : 'Erledigt') : null,
-      AUSZEICHNEN.includes(m.type) && m.status !== 'fertig' ? h('button', { class: 'btn btn-voll btn-auszeichnen', onclick: () => import('./auszeichnen.js').then((x) => x.openAuszeichnen(m.id)) }, m.auszeichnung?.baeume?.length ? `Weiter auszeichnen (${m.auszeichnung.baeume.length} Bäume)` : 'Bäume auszeichnen') : null,
+      auszeichnenOffen(m) ? fortsetzenKnopf(m, 'btn-voll btn-auszeichnen')
+        : AUSZEICHNEN.includes(m.type) && m.status !== 'fertig' ? h('button', { class: 'btn btn-voll btn-auszeichnen', onclick: () => import('./auszeichnen.js').then((x) => x.openAuszeichnen(m.id)) }, `Auszeichnung ansehen / ändern (${m.auszeichnung?.baeume?.length || 0} Bäume)`) : null,
       m.status === 'fertig' && !m.serie && m.type !== 'schaden' ? h('button', { class: 'btn btn-voll', onclick: () => openProtokoll(m.id) }, m.protokoll ? 'Protokoll ansehen' : 'Protokoll ausfüllen') : null,
       !m.serie && !['schaden', 'holzverkauf', 'polter'].includes(m.type) ? h('button', { class: 'btn btn-voll', title: 'Arbeitsauftrag mit Karte als PDF', onclick: () => import('./berichte.js').then((x) => x.unternehmerAuftrag(m.id)).catch(() => toast('Arbeitsauftrag konnte nicht erstellt werden.')) }, h('span', { html: icon.auftrag }), 'Arbeitsauftrag') : null,
       h('span', { class: 'measure-icons' },

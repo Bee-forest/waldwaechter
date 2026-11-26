@@ -391,3 +391,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .az-ergebnis { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; font-size: 17px !important; }
 .az-ergebnis strong { color: var(--primary); }
 .btn-auszeichnen { background: var(--primary); color: #fff; border-color: var(--primary); }
+.mzeile-weiter { margin: 0 0 12px; min-height: 46px; }

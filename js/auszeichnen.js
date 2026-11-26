@@ -68,7 +68,8 @@ export async function openAuszeichnen(measureId) {
   const all = await source.allParcels();
   const p = all.find((x) => x.id === m0.parcelId) || store.get().parcels.find((x) => x.id === m0.parcelId) || m0.flurstueck || null;
   const fl = flaecheVon(m0, p);
-  const az = { baeume: [], ba: 'avg', sortimente: ['stamm', 'is', 'brenn'], ...(m0.auszeichnung || {}) };
+  // Sortimentswahl der letzten Holzernte für neue Maßnahmen übernehmen
+  const az = { baeume: [], ba: 'avg', sortimente: store.get().settings?.sortimentWahl || ['stamm', 'is', 'brenn'], ...(m0.auszeichnung || {}) };
   az.sortimente = gewaehlteKeys(az.sortimente);
   az.baeume = (az.baeume || []).map((b) => ({ ...b }));
   if (!m0.auszeichnung && m0.details?.species) { const t = String(m0.details.species).toLowerCase(); const k = Object.keys(BAUMARTEN).find((x) => x !== 'avg' && BAUMARTEN[x].name.toLowerCase().split(/[ /]+/).some((w) => w.length > 3 && t.includes(w))); if (k) az.ba = k; }
@@ -176,16 +177,17 @@ export async function openAuszeichnen(measureId) {
     az.baeume.forEach((b) => { const n = BAUMARTEN[b.ba]?.name || 'Durchschnitt'; nachBa[n] = (nachBa[n] || 0) + efm(b.k, b.ba); });
     fill(body,
       h('div', { class: 'az-summe-gross' }, h('strong', {}, `${fmt(gesamt)} Fm`), h('span', {}, `${az.baeume.length} Bäume ausgezeichnet${fl?.ha ? ` auf ${formatHa(fl.ha)}` : ''} · ${az.baeume.filter((b) => b.at).length} mit GPS-Punkt`)),
+      h('button', { type: 'button', class: 'btn btn-block az-sort-btn', onclick: () => openSortimenteEinstellen({ onClose: () => { if (ansicht === 'uebersicht') render(); } }) }, 'Sortimente und Preise einstellen'),
       h('table', { class: 'az-tabelle' }, h('thead', {}, h('tr', {}, h('th', {}, 'BHD'), h('th', {}, 'Stück'), h('th', {}, 'Fm'))),
         h('tbody', {}, STUFEN.map((s) => { const bs = az.baeume.filter((b) => b.k === s.k); return bs.length ? h('tr', {}, h('td', {}, h('span', { class: 'az-punkt', style: `--c:${s.farbe}` }), s.label), h('td', {}, String(bs.length)), h('td', {}, fmt(bs.reduce((x, b) => x + efm(b.k, b.ba), 0)))) : null; }))),
       Object.keys(nachBa).length > 1 || !nachBa.Durchschnitt ? h('p', { class: 'muted' }, Object.entries(nachBa).map(([n, v]) => `${n}: ${fmt(v)} Fm`).join(' · ')) : null,
       h('p', { class: 'sheet-label' }, 'Welche Sortimente sollen geschnitten werden?'),
+      h('p', { class: 'hint' }, 'Deine Sortimente, Preise und die Auswahl hier gelten auch für alle neuen Holzernten.'),
       h('div', { class: 'az-sortimente' }, liste.map((s) => h('label', { class: 'jk-check' },
-        h('input', { type: 'checkbox', checked: az.sortimente.includes(s.k), onchange: (e) => { az.sortimente = e.target.checked ? liste.map((x) => x.k).filter((k) => k === s.k || az.sortimente.includes(k)) : az.sortimente.filter((x) => x !== s.k); speichern(false); render(); } }),
+        h('input', { type: 'checkbox', checked: az.sortimente.includes(s.k), onchange: (e) => { az.sortimente = e.target.checked ? liste.map((x) => x.k).filter((k) => k === s.k || az.sortimente.includes(k)) : az.sortimente.filter((x) => x !== s.k); store.update((st) => { st.settings.sortimentWahl = [...az.sortimente]; }); speichern(false); render(); } }),
         h('span', {}, s.name, h('small', {}, az.sortimente.includes(s.k) ? `${fmt(menge[s.k]?.fm || 0)} Fm${menge[s.k]?.stueck ? ` · ${menge[s.k].stueck} Stück` : ''} · ${masse(s)}` : masse(s)))))),
       menge._zugabe?.fm >= 0.05 ? h('p', { class: 'hint' }, `Längenzugabe: ca. ${fmt(menge._zugabe.fm)} Fm werden mit abgeschnitten, aber nicht mitverkauft.`) : null,
       menge._wald?.fm >= 0.05 ? h('p', { class: 'hint' }, `Ca. ${fmt(menge._wald.fm)} Fm passen in kein gewähltes Sortiment und bleiben im Wald (Kronen- und Zopfholz). Mit einem Restholz-Sortiment wie Energieholz wird es mitgerechnet.`) : null,
-      h('button', { type: 'button', class: 'btn btn-small', onclick: () => openSortimenteEinstellen({ onClose: () => { if (ansicht === 'uebersicht') render(); } }) }, 'Sortimente einstellen (Länge, Zopf, Durchmesser, Preise)'),
       h('details', { class: 'az-rechenweg' }, h('summary', {}, 'Wie wird gerechnet?'),
         h('p', { class: 'hint' }, 'Für jede Durchmesserstufe und Baumart bildet die App einen Musterstamm: Höhe aus einer Höhenkurve, der Durchmesser nimmt nach oben ab (ohne Rinde). Vom Stock (0,3 m) aufwärts hält sie Stücke in der Reihenfolge deiner Sortimentsliste aus – ein Stück passt, wenn das obere Ende mindestens den Zopf hat und das dicke Ende höchstens den Höchstdurchmesser. Der Rest geht ins Restholz. Am Ende wird alles auf die Menge im Zähler umgerechnet. Das ist eine Näherung – krumme, kranke oder stark beastete Stämme rechnet sie nicht ein.')),
       h('p', { class: 'sheet-label' }, 'Preise und Kosten (für die Kalkulation)'),

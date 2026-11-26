@@ -411,3 +411,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .sortimente-edit .mit-einheit { display: flex; align-items: center; gap: 8px; }
 .sortimente-edit .mit-einheit input { flex: 1; min-width: 0; }
 .sortimente-edit .mit-einheit span { font-weight: 700; color: var(--ink-2); min-width: 2.6em; }
+.az-sort-btn { margin: -4px 0 14px; }

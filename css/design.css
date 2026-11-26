@@ -354,7 +354,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .map-actions { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .aktion-btn { flex-direction: column; justify-content: center; gap: 4px; min-height: 60px; padding: 8px 4px; font-size: 14.5px; white-space: nowrap; }
 .aktion-btn > span:first-child svg { width: 20px; height: 20px; }
-.aktion-haupt { background: var(--primary); color: #fff; border-color: var(--primary); }
+.aktion-haupt { background: var(--signal); color: #fff; border-color: var(--signal); }
+.aktion-haupt:active { filter: brightness(.92); }
+[data-theme='dark'] .aktion-haupt { color: #1B120C; }
 .eintragen-liste { display: grid; gap: 8px; }
 .eintrag-tile { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; }
 .eintrag-tile .type-text { display: grid; gap: 1px; }

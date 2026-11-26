@@ -9,16 +9,24 @@ import { h, fill, openPage, toast, confirmDialog } from './ui.js';
 import { store, uid } from './store.js';
 
 export const STANDARD_SORTIMENTE = [
-  { k: 'stamm', name: 'Stammholz Abschnitte', laenge: 5, zopf: 16, max: '', fuer: 'alle', preis: '' },
-  { k: 'las', name: 'LAS', laenge: 4, zopf: 12, max: 45, fuer: 'nadel', preis: '' },
-  { k: 'palette', name: 'Palettenholz', laenge: 4, zopf: 12, max: 40, fuer: 'alle', preis: '' },
-  { k: 'pfahl', name: 'Pfahlholz', laenge: 2.5, zopf: 8, max: 16, fuer: 'nadel', preis: '' },
-  { k: 'is', name: 'IS Industrieholz', laenge: 3, zopf: 7, max: 45, fuer: 'alle', preis: '' },
-  { k: 'brenn', name: 'Brennholz', laenge: 1, zopf: 7, max: 60, fuer: 'alle', preis: '' },
+  { k: 'stamm', name: 'Stammholz Abschnitte', laenge: 5, zopf: 16, max: '', zugabe: 10, fuer: 'alle', preis: '' },
+  { k: 'las', name: 'LAS', laenge: 4, zopf: 12, max: 45, zugabe: 10, fuer: 'nadel', preis: '' },
+  { k: 'palette', name: 'Palettenholz', laenge: 4, zopf: 12, max: 40, zugabe: 5, fuer: 'alle', preis: '' },
+  { k: 'pfahl', name: 'Pfahlholz', laenge: 2.5, zopf: 8, max: 16, zugabe: 5, fuer: 'nadel', preis: '' },
+  { k: 'is', name: 'IS Industrieholz', laenge: 3, zopf: 7, max: 45, zugabe: 0, fuer: 'alle', preis: '' },
+  { k: 'brenn', name: 'Brennholz', laenge: 1, zopf: 7, max: 60, zugabe: 0, fuer: 'alle', preis: '' },
   { k: 'energie', name: 'Energieholz / Hackschnitzel', laenge: 0, zopf: 0, max: 0, fuer: 'alle', preis: '', rest: true },
 ];
 const FUER = { alle: 'alle Baumarten', nadel: 'nur Nadelholz', laub: 'nur Laubholz' };
 const ALT = { industrie: 'is' }; // Schlüssel aus der ersten Version
+/** Längenzugabe in cm (Übermaß beim Einschnitt, wird nicht mitverkauft) */
+export const zugabeVon = (s) => Number(s.zugabe ?? STANDARD_SORTIMENTE.find((x) => x.k === s.k)?.zugabe ?? 0) || 0;
+/** Kurztext der Maße, z. B. „5 m + 10 cm · Zopf ≥ 16 cm · max. 45 cm“ */
+export function masseText(s, { ge = '≥' } = {}) {
+  if (s.rest) return 'Rest';
+  const z = zugabeVon(s);
+  return `${String(s.laenge).replace('.', ',')} m${z ? ` + ${z} cm Zugabe` : ''} · Zopf ${ge} ${s.zopf} cm${s.max ? ` · max. ${s.max} cm` : ''}`;
+}
 
 /** Sortimentsliste aus den Einstellungen (bei Bedarf mit Standardwerten anlegen) */
 export function sortimente() {
@@ -41,21 +49,23 @@ const vol = (dm, L) => Math.PI / 4 * (dm / 100) ** 2 * L; // Mittenformel
 export function aushalten(d13, ba, efmZiel, liste, gewaehlt, nadel) {
   const H = hoehe(d13, ba);
   const res = {};
-  let x = 0.3, summe = 0, xholz = 0;
+  let x = 0.3, summe = 0, xholz = 0, zug = 0;
   const passend = liste.filter((s) => !s.rest && gewaehlt.includes(s.k) && Number(s.laenge) > 0
     && !(s.fuer === 'nadel' && nadel === false) && !(s.fuer === 'laub' && nadel === true)); // nadel === null: Durchschnitt – alle erlaubt
   // Stück für Stück vom Stock aufwärts: jeweils das ranghöchste Sortiment, dessen Maße passen
   for (let n = 0; n < 200 && x < H; n++) {
     let genommen = false, zuDick = false;
     for (const s of passend) {
-      const L = Number(s.laenge), zopf = Number(s.zopf) || 0, max = Number(s.max) || Infinity;
-      if (x + L > H) continue;
+      const L = Number(s.laenge), Z = zugabeVon(s) / 100, zopf = Number(s.zopf) || 0, max = Number(s.max) || Infinity;
+      if (x + L + Z > H) continue;
+      // Maße und Volumen gelten für die Nennlänge, die Zugabe wird mit abgeschnitten, aber nicht verkauft
       const unten = dmAt(x, d13, H, ba), oben = dmAt(x + L, d13, H, ba);
       if (unten > max) { zuDick = true; continue; }
       if (oben < zopf) continue;
       const v = vol(dmAt(x + L / 2, d13, H, ba), L);
       res[s.k] = res[s.k] || { fm: 0, stueck: 0 };
-      res[s.k].fm += v; res[s.k].stueck += 1; summe += v; x += L; genommen = true;
+      const vz = Z ? vol(dmAt(x + L + Z / 2, d13, H, ba), Z) : 0;
+      res[s.k].fm += v; res[s.k].stueck += 1; summe += v; zug += vz; x += L + Z; genommen = true;
       break;
     }
     if (genommen) continue;
@@ -67,7 +77,8 @@ export function aushalten(d13, ba, efmZiel, liste, gewaehlt, nadel) {
   let rest = xholz;
   for (let y = x; y < H; y += 0.25) rest += vol(dmAt(y + 0.125, d13, H, ba), Math.min(0.25, H - y));
   const restS = liste.find((s) => s.rest && gewaehlt.includes(s.k));
-  const faktor = efmZiel / ((summe + rest) || 1);
+  const faktor = efmZiel / ((summe + rest + zug) || 1);
+  if (zug > 0) res._zugabe = { fm: zug * faktor, stueck: 0 };
   Object.values(res).forEach((r) => { r.fm *= faktor; });
   if (restS && rest > 0) res[restS.k] = { fm: rest * faktor, stueck: 0 };
   else res._wald = { fm: rest * faktor, stueck: 0 };
@@ -86,11 +97,13 @@ export function openSortimenteEinstellen({ onClose } = {}) {
       h('p', { class: 'hint' }, 'Die Reihenfolge ist die Rangfolge beim Aushalten: Vom Stammfuß nach oben wird zuerst das oberste Sortiment ausgehalten, solange die Maße passen, dann das nächste. Was übrig bleibt, geht ins Restholz (z. B. Energieholz) – ist keins gewählt, bleibt es im Wald.'),
       liste.map((s, i) => h('details', { class: 'kachel so-kachel', open: s._neu || null },
         h('summary', {}, h('strong', {}, s.name || 'Neues Sortiment'),
-          h('small', { class: 'muted' }, s.rest ? 'Restholz – nimmt alles, was übrig bleibt' : `${String(s.laenge).replace('.', ',')} m · Zopf ≥ ${s.zopf} cm · ${s.max ? `max. ${s.max} cm` : 'ohne Höchstmaß'} · ${FUER[s.fuer] || FUER.alle}`)),
+          h('small', { class: 'muted' }, s.rest ? 'Restholz – nimmt alles, was übrig bleibt' : `${masseText(s)}${s.max ? '' : ' · ohne Höchstmaß'} · ${FUER[s.fuer] || FUER.alle}`)),
         h('div', { class: 'form' },
           h('label', {}, 'Name', h('input', { value: s.name, onchange: (e) => { s.name = e.target.value.trim() || s.name; speichern(liste); render(); } })),
           s.rest ? h('p', { class: 'hint' }, 'Restholz hat keine feste Länge: Kronen- und Zopfstücke, die in kein anderes Sortiment passen.') : [
-            zahl(s, 'laenge', 'Länge', 'm', 0.1),
+            zahl(s, 'laenge', 'Länge (Nennlänge)', 'm', 0.1),
+            h('label', {}, 'Längenzugabe (Übermaß)',
+              h('span', { class: 'mit-einheit' }, h('input', { type: 'number', inputmode: 'numeric', min: 0, step: 1, value: zugabeVon(s), onchange: (e) => { s.zugabe = Number(e.target.value) || 0; speichern(liste); render(); } }), h('span', {}, 'cm'))),
             zahl(s, 'zopf', 'Zopf min. (oberes Ende, ohne Rinde)', 'cm', 1),
             zahl(s, 'max', 'Durchmesser max. (dickes Ende, ohne Rinde) – leer = ohne Höchstmaß', 'cm', 1),
             h('label', {}, 'Gilt für', h('select', { onchange: (e) => { s.fuer = e.target.value; speichern(liste); render(); } }, Object.entries(FUER).map(([k, l]) => h('option', { value: k, selected: (s.fuer || 'alle') === k }, l))))],

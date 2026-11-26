@@ -6,7 +6,7 @@ import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { miniKarte, flaecheVon } from './flaeche.js';
 import { polysOf, formatHa } from './geo.js';
-import { sortimente, gewaehlteKeys, aushalten, openSortimenteEinstellen } from './sortimente.js';
+import { sortimente, gewaehlteKeys, aushalten, openSortimenteEinstellen, masseText, zugabeVon } from './sortimente.js';
 
 export const STUFEN = [
   { k: 's1', label: '7–15 cm', mitte: 11, farbe: '#8FB35A' },
@@ -44,7 +44,7 @@ const cache = new Map();
 export function sortimentMengen(baeume, gewaehltRoh) {
   const liste = sortimente();
   const gewaehlt = gewaehlteKeys(gewaehltRoh);
-  const sig = JSON.stringify([liste.map((x) => [x.k, x.laenge, x.zopf, x.max, x.fuer, x.rest]), gewaehlt]);
+  const sig = JSON.stringify([liste.map((x) => [x.k, x.laenge, zugabeVon(x), x.zopf, x.max, x.fuer, x.rest]), gewaehlt]);
   if (cache.get('sig') !== sig) { cache.clear(); cache.set('sig', sig); }
   const r = Object.fromEntries([...liste.map((x) => [x.k, { fm: 0, stueck: 0 }]), ['_wald', { fm: 0, stueck: 0 }]]);
   for (const b of baeume) {
@@ -168,10 +168,10 @@ export async function openAuszeichnen(measureId) {
     const menge = sortimentMengen(az.baeume, az.sortimente);
     const gesamt = summe();
     const erloes = az.sortimente.reduce((s, k) => s + (menge[k]?.fm || 0) * (Number(preise[k]) || 0), 0);
-    const sortDef = liste.filter((x) => az.sortimente.includes(x.k)).map(({ k, name, laenge, zopf, max, fuer, rest }) => ({ k, name, laenge, zopf, max, fuer, rest }));
+    const sortDef = liste.filter((x) => az.sortimente.includes(x.k)).map(({ k, name, laenge, zopf, max, fuer, rest }) => ({ k, name, laenge, zugabe: zugabeVon({ k, zugabe: liste.find((y) => y.k === k).zugabe }), zopf, max, fuer, rest }));
     const kost = gesamt * (Number(kosten) || 0);
     const preisSetzen = (k, v) => store.update((st) => { st.settings.sortimente = sortimente().map((x) => (x.k === k ? { ...x, preis: v } : { ...x })); });
-    const masse = (x) => (x.rest ? 'Rest' : `${String(x.laenge).replace('.', ',')} m · Zopf ≥ ${x.zopf} cm${x.max ? ` · max. ${x.max} cm` : ''}`);
+    const masse = (x) => masseText(x);
     const nachBa = {};
     az.baeume.forEach((b) => { const n = BAUMARTEN[b.ba]?.name || 'Durchschnitt'; nachBa[n] = (nachBa[n] || 0) + efm(b.k, b.ba); });
     fill(body,
@@ -183,6 +183,7 @@ export async function openAuszeichnen(measureId) {
       h('div', { class: 'az-sortimente' }, liste.map((s) => h('label', { class: 'jk-check' },
         h('input', { type: 'checkbox', checked: az.sortimente.includes(s.k), onchange: (e) => { az.sortimente = e.target.checked ? liste.map((x) => x.k).filter((k) => k === s.k || az.sortimente.includes(k)) : az.sortimente.filter((x) => x !== s.k); speichern(false); render(); } }),
         h('span', {}, s.name, h('small', {}, az.sortimente.includes(s.k) ? `${fmt(menge[s.k]?.fm || 0)} Fm${menge[s.k]?.stueck ? ` · ${menge[s.k].stueck} Stück` : ''} · ${masse(s)}` : masse(s)))))),
+      menge._zugabe?.fm >= 0.05 ? h('p', { class: 'hint' }, `Längenzugabe: ca. ${fmt(menge._zugabe.fm)} Fm werden mit abgeschnitten, aber nicht mitverkauft.`) : null,
       menge._wald?.fm >= 0.05 ? h('p', { class: 'hint' }, `Ca. ${fmt(menge._wald.fm)} Fm passen in kein gewähltes Sortiment und bleiben im Wald (Kronen- und Zopfholz). Mit einem Restholz-Sortiment wie Energieholz wird es mitgerechnet.`) : null,
       h('button', { type: 'button', class: 'btn btn-small', onclick: () => openSortimenteEinstellen({ onClose: () => { if (ansicht === 'uebersicht') render(); } }) }, 'Sortimente einstellen (Länge, Zopf, Durchmesser, Preise)'),
       h('details', { class: 'az-rechenweg' }, h('summary', {}, 'Wie wird gerechnet?'),
@@ -222,7 +223,8 @@ export function auszeichnungZeilen(az) {
   return [
     ['Ausgezeichnet', `${az.baeume.length} Bäume, ca. ${fmt(gesamt)} Fm (Efm o.R., Näherung)`],
     ['Durchmesser', STUFEN.map((s) => { const c = az.baeume.filter((b) => b.k === s.k).length; return c ? `${s.label}: ${c}` : null; }).filter(Boolean).join(' · ')],
-    ['Sortimente', gew.filter((k) => def(k)).map((k) => { const d = def(k); return `${d.name}${d.rest ? '' : ` (${String(d.laenge).replace('.', ',')} m, Zopf mind. ${d.zopf} cm${d.max ? `, max. ${d.max} cm` : ''})`}: ca. ${fmt(menge[k]?.fm || 0)} Fm${menge[k]?.stueck ? `, ${menge[k].stueck} Stück` : ''}`; }).join(' · ')],
+    ['Sortimente', gew.filter((k) => def(k)).map((k) => { const d = def(k); return `${d.name}${d.rest ? '' : ` (${masseText(d, { ge: 'mind.' }).replace(/ · /g, ', ')})`}: ca. ${fmt(menge[k]?.fm || 0)} Fm${menge[k]?.stueck ? `, ${menge[k].stueck} Stück` : ''}`; }).join(' · ')],
+    ...(menge._zugabe?.fm >= 0.05 ? [['Längenzugabe', `ca. ${fmt(menge._zugabe.fm)} Fm (wird mit abgeschnitten, nicht mitverkauft)`]] : []),
     ...(menge._wald?.fm >= 0.05 ? [['Bleibt im Wald', `ca. ${fmt(menge._wald.fm)} Fm Kronen- und Zopfholz`]] : []),
   ];
 }

@@ -392,3 +392,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .az-ergebnis strong { color: var(--primary); }
 .btn-auszeichnen { background: var(--primary); color: #fff; border-color: var(--primary); }
 .mzeile-weiter { margin: 0 0 12px; min-height: 46px; }
+/* Fläche in der Karte wählen (Holzernte) */
+.fk .segmented { margin-bottom: 10px; }
+.fk-karte { height: 52vh; min-height: 300px; border-radius: 16px; overflow: hidden; margin-bottom: 10px; }
+.fk-ort { width: 40px; height: 40px; border-radius: 12px; border: 0; background: var(--surface); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.25); display: grid; place-items: center; cursor: pointer; }
+.fk-ort svg { width: 22px; height: 22px; }
+.fk-info .btn-row { margin-top: 6px; }
+.fk-gewaehlt p { margin: 2px 0 10px; font-weight: 700; }

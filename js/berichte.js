@@ -75,7 +75,7 @@ export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) 
   if (!anhaengen) toast('Arbeitsauftrag wird erstellt …');
   const { MEASURE_TYPES } = await import('./measures.js');
   const all = await source.allParcels();
-  const p = all.find((x) => x.id === m.parcelId) || null;
+  const p = all.find((x) => x.id === m.parcelId) || m.flurstueck || null;
   const fl = flaecheVon(m, p);
   const polys = fl?.polys?.length ? fl.polys : p ? polysOf(p) : [];
   const mitte = polys.length ? centroid(polys[0][0]) : m.schaden?.pos || null;

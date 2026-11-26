@@ -10,7 +10,8 @@ import { openVertraeglichkeit, openVerlauf, anhangOeffnen, protokoll } from './v
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { CATEGORIES } from './map/basemap.js';
-import { formatHa } from './geo.js';
+import { formatHa, areaHa } from './geo.js';
+import { flurstueckSchnappschuss } from './flaechekarte.js';
 import { amtlicheFlaecheHa } from './map/thueringen.js';
 import { openThinningWizard } from './thinning/wizard.js';
 import { SPECIES } from './thinning/plan.js';
@@ -342,7 +343,7 @@ function kalender(list, byId) {
       : h('li', { class: 'muted' }, tagWahl ? 'An diesem Tag ist nichts geplant.' : leer)),
   );
 }
-const wo = (m, byId) => { const p = byId[m.parcelId]; return m.thinning?.label || (p ? `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}` : m.ort || 'Ohne Flächenzuordnung'); };
+const wo = (m, byId) => { const p = byId[m.parcelId] || m.flurstueck; return m.thinning?.label || (p ? `${p.gemarkung}, Flur ${p.flur}, Flurstück ${p.nr}` : m.ort || 'Ohne Flächenzuordnung'); };
 
 function datumFeld(m) {
   return h('label', { class: 'date-field' }, 'Termin',
@@ -388,7 +389,7 @@ function vspFelder(m) {
 const fmtM3 = (v) => Number(v || 0).toLocaleString('de-DE', { maximumFractionDigits: 1 });
 
 function measureCard(m, byId) {
-  const p = byId[m.parcelId];
+  const p = byId[m.parcelId] || m.flurstueck;
   const where = wo(m, byId);
   let progress = null, action = null;
   if (m.type === 'durchforstung' && m.thinning?.plan) {
@@ -500,6 +501,10 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
     else if (k === 'pflege') import('./pflege.js').then(({ openPflegePlanung }) => openPflegePlanung({ parcelId, foerdern, art: pflegeArt, onSaved: nachSpeichern(foerdern) }));
     else if (k === 'schaden') import('./schaden.js').then((x) => x.openSchadensmeldung({ parcelId, onSaved: alleSchliessen }));
     else if (k === 'holzverkauf') { alleSchliessen(); import('./schaden.js').then((x) => x.openHolzVerkaufen({ parcelId })); }
+    else if (AUSZEICHNEN.includes(k)) import('./flaechekarte.js').then(async ({ flaecheAufKarte }) => {
+      const w = await flaecheAufKarte({ titel: MEASURE_TYPES[k].label, frage: 'Wo soll Holz geerntet werden?', parcelId });
+      if (w) formularSeite(k, foerdern, w);
+    });
     else formularSeite(k, foerdern);
   });
 
@@ -542,12 +547,19 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
   }
 
   // Seite 3: Eingabe der Maßnahme
-  function formularSeite(type, foerdern = false) {
+  function formularSeite(type, foerdern = false, vorwahl = null) {
     const t = MEASURE_TYPES[type];
+    const vp = vorwahl?.parcel || null;
     const flHost = h('div', { class: 'flaeche-host' });
     let wahl = null;
     const schutzHost = h('div');
     const zeigeWahl = (id) => {
+      if (vorwahl) { // Fläche kommt aus der Kartenwahl (auch fremde Flurstücke oder selbst eingezeichnet)
+        if (vp) { wahl = flaechenWahl(vp); flHost.append(wahl.el); }
+        const sel = vp || { ring: vorwahl.ring, polys: [[vorwahl.ring]] };
+        import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(sel, { eingriff: EINGRIFF.includes(type) })));
+        return;
+      }
       wahl?.entferne(); wahl = null; flHost.replaceChildren(); schutzHost.replaceChildren();
       if (!id) flHost.append(h('p', { class: 'hint' }, 'Nach der Wahl der Fläche kannst du festlegen, ob die Maßnahme das ganze Flurstück betrifft oder nur eine oder mehrere Teilflächen, die du in der Karte einzeichnest.'));
       if (id && byId[id]) { wahl = flaechenWahl(byId[id]); flHost.append(wahl.el); import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(byId[id], { eingriff: EINGRIFF.includes(type) }))); }
@@ -555,14 +567,17 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
     const form = h('form', { class: 'form', onsubmit: (e) => {
       e.preventDefault();
       const fd = new FormData(form);
-      const fl = wahl ? wahl.wert() : null;
+      const fl = vorwahl?.ring ? { modus: 'teil', ring: vorwahl.ring, ringe: [vorwahl.ring], ha: areaHa(vorwahl.ring) } : wahl ? wahl.wert() : null;
       if (wahl && !fl) { toast('Bitte mindestens 3 Eckpunkte der Teilfläche einzeichnen.'); return; }
       let kosten = String(fd.get('kosten') || '').trim();
       if (type === 'einzelschutz' && !kosten) { const n = Number(fd.get('count')) || 0, pr = Number(String(fd.get('preis') || '').replace(',', '.')) || 0; if (n && pr) kosten = String(Math.round(n * pr * 100) / 100); }
       const details = Object.fromEntries(t.fields.map(([k]) => [k, String(fd.get(k) || '').trim()]));
       const neuId = uid();
       store.update((s) => {
-        s.measures.push({ id: neuId, type, parcelId: fd.get('parcel') || null, date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
+        const eigen = vp && s.parcels.some((x) => x.id === vp.id);
+        s.measures.push({ id: neuId, type, parcelId: vorwahl ? (vp?.id || null) : (fd.get('parcel') || null),
+          ...(vp && !eigen ? { flurstueck: flurstueckSchnappschuss(vp) } : {}),
+          ...(vorwahl?.ring ? { ort: `Eingezeichnete Fläche (${formatHa(areaHa(vorwahl.ring))})` } : {}), date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
           note: String(fd.get('note') || '').trim(), details, status: 'geplant', createdAt: Date.now(),
           ...(fl?.modus === 'teil' ? { flaeche: { ring: fl.ring, ringe: fl.ringe, ha: fl.ha } } : {}), kosten: kosten ? Number(kosten.replace(',', '.')) : null,
           ...(type === 'verkehrssicherung' ? { date: null, serie: { termine: VSP_TERMINE.map((x) => ({ ...x })) }, erledigt: {} } : {}) });
@@ -572,6 +587,8 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
     } },
       foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Nach dem Buchen geht es direkt mit dem Förderantrag weiter. Die Angaben hier werden übernommen.')) : null,
       h('h2', { class: 'step-title' }, 'Fläche und Angaben'),
+      vorwahl ? h('div', { class: 'fk-gewaehlt' }, h('span', { class: 'sheet-label' }, 'Fläche'),
+        h('p', {}, vp ? `Flurstück ${vp.nr}, ${vp.gemarkung}, Flur ${vp.flur}${store.get().parcels.some((x) => x.id === vp.id) ? '' : ' (nicht in „Meine Flächen“)'}` : `Eingezeichnete Fläche, ${formatHa(areaHa(vorwahl.ring))}`)) :
       h('label', {}, 'Fläche',
         h('select', { name: 'parcel', onchange: (e) => zeigeWahl(e.target.value) },
           h('option', { value: '' }, mine.length ? 'Fläche wählen' : 'Noch keine eigenen Flächen'),
@@ -590,6 +607,6 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
       h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, AUSZEICHNEN.includes(type) && !foerdern ? 'Anlegen und Bäume auszeichnen' : `${t.label} buchen`),
     );
     neueSeite(t.label, h('div', { class: 'new-measure' }, form));
-    zeigeWahl(parcelId);
+    zeigeWahl(vorwahl ? null : parcelId);
   }
 }

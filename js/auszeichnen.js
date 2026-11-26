@@ -67,7 +67,7 @@ export async function openAuszeichnen(measureId) {
   const m0 = store.get().measures.find((x) => x.id === measureId);
   if (!m0) return;
   const all = await source.allParcels();
-  const p = all.find((x) => x.id === m0.parcelId) || store.get().parcels.find((x) => x.id === m0.parcelId) || null;
+  const p = all.find((x) => x.id === m0.parcelId) || store.get().parcels.find((x) => x.id === m0.parcelId) || m0.flurstueck || null;
   const fl = flaecheVon(m0, p);
   const az = { baeume: [], ba: 'avg', sortimente: ['stamm', 'industrie', 'brenn'], ...(m0.auszeichnung || {}) };
   az.baeume = (az.baeume || []).map((b) => ({ ...b }));
@@ -151,7 +151,7 @@ export async function openAuszeichnen(measureId) {
     zaehler(); knoepfe(); gpsZeile(); aktiv();
     const mapEl = body.querySelector('.az-karte');
     karte?.map.remove();
-    karte = miniKarte(mapEl, p, { zoom: 17 });
+    karte = miniKarte(mapEl, p || (fl?.polys?.length ? { ring: fl.polys[0][0], polys: fl.polys } : null), { zoom: 17 });
     if (fl?.polys?.length && fl.art !== 'Flurstück') L.polygon(fl.polys, { color: '#F26B1D', weight: 2, fillOpacity: 0.08, interactive: false }).addTo(karte.map);
     baumLyr = L.layerGroup().addTo(karte.map); ichLyr = L.layerGroup().addTo(karte.map);
     baeumeZeichnen(); ichZeichnen();

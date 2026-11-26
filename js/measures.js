@@ -476,7 +476,11 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
   const nachSpeichern = (foerdern) => (id) => {
     alleSchliessen();
     // Nach dem Anlegen direkt den Arbeitsauftrag mit Karte zeigen (zum Weitergeben an den Unternehmer)
-    if (!foerdern && id) arbeitsauftragZeigen(Array.isArray(id) ? id[0] : id);
+    const erste = Array.isArray(id) ? id[0] : id;
+    const mt = store.get().measures.find((x) => x.id === erste)?.type;
+    // Holzernte: nach dem Anlegen direkt ins Auszeichnen – der Arbeitsauftrag kommt danach mit den Bäumen
+    if (!foerdern && id && AUSZEICHNEN.includes(mt)) { import('./auszeichnen.js').then((x) => x.openAuszeichnen(erste)); return; }
+    if (!foerdern && id) arbeitsauftragZeigen(erste);
     if (!foerdern || !id) return;
     if (Array.isArray(id)) antragFuer(id, antragId); else weiterZumAntrag(id, antragId);
   };
@@ -566,14 +570,15 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
         )),
       t.gruppe === 'vorbereitung' ? h('p', { class: 'hint' }, 'Förderung: Räumung, Bodenverwundung und streifenweises Mulchen werden als Kulturvorbereitung zusammen mit der Pflanzung gefördert (Richtlinie 530 €/ha bzw. 1.300 €/ha Mulchen). Im Förderantrag der Pflanzung unter „Kulturvorbereitung“ angeben.') : null,
       flHost, schutzHost,
-      t.fields.map(([k, label, kind]) => h('label', {}, label,
+      AUSZEICHNEN.includes(type) ? h('p', { class: 'hint' }, 'Anzahl der Bäume und die Menge brauchst du hier nicht anzugeben: Nach dem Anlegen geht es direkt ins Auszeichnen. Dort tippst du je Baum die Durchmesserstufe an – die App zählt mit und setzt GPS-Punkte.') : null,
+      t.fields.filter(([k]) => !(AUSZEICHNEN.includes(type) && ['baeume', 'menge'].includes(k))).map(([k, label, kind]) => h('label', {}, label,
         Array.isArray(kind) ? h('select', { name: k }, kind.map((o) => h('option', {}, o)))
           : kind === 'species' ? h('select', { name: k }, SPECIES.map((o) => h('option', {}, o)))
           : h('input', { name: k, type: kind === 'number' ? 'number' : 'text', inputmode: kind === 'decimal' ? 'decimal' : kind === 'number' ? 'numeric' : null, min: kind === 'number' ? 0 : null }))),
       h('label', {}, 'Geplanter Termin', h('input', { type: 'date', name: 'date' })),
       h('label', {}, 'Kosten (€, optional)', h('input', { name: 'kosten', type: 'number', inputmode: 'decimal', min: 0, step: '0.01' })),
       h('label', {}, 'Notiz', h('textarea', { name: 'note', rows: 3 })),
-      h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, `${t.label} buchen`),
+      h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, AUSZEICHNEN.includes(type) && !foerdern ? 'Anlegen und Bäume auszeichnen' : `${t.label} buchen`),
     );
     neueSeite(t.label, h('div', { class: 'new-measure' }, form));
     zeigeWahl(parcelId);

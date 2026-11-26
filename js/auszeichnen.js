@@ -66,6 +66,7 @@ export async function openAuszeichnen(measureId) {
   const fl = flaecheVon(m0, p);
   const az = { baeume: [], ba: 'avg', sortimente: ['stamm', 'industrie', 'brenn'], ...(m0.auszeichnung || {}) };
   az.baeume = (az.baeume || []).map((b) => ({ ...b }));
+  if (!m0.auszeichnung && m0.details?.species) { const t = String(m0.details.species).toLowerCase(); const k = Object.keys(BAUMARTEN).find((x) => x !== 'avg' && BAUMARTEN[x].name.toLowerCase().split(/[ /]+/).some((w) => w.length > 3 && t.includes(w))); if (k) az.ba = k; }
   let ansicht = 'zaehlen', pos = null, genau = null, watch = null, karte = null, baumLyr = null, ichLyr = null;
 
   const body = h('div', { class: 'auszeichnen' });
@@ -98,9 +99,13 @@ export async function openAuszeichnen(measureId) {
   function baumDazu(k) {
     az.baeume.push({ id: uid(), k, ba: az.ba, at: pos ? [Number(pos[0].toFixed(7)), Number(pos[1].toFixed(7))] : null, genau: pos ? genau : null, t: Date.now() });
     navigator.vibrate?.(25);
-    zaehler(); baeumeZeichnen(); knoepfe();
+    zaehler(); baeumeZeichnen(); knoepfe(); aktiv();
     speichern(false);
   }
+  // Knöpfe, die erst mit dem ersten Baum gehen, nach jedem Tipp freischalten
+  const undoBtn = h('button', { type: 'button', class: 'btn btn-small', onclick: () => { const b = az.baeume.pop(); if (!b) return; toast(`Baum ${az.baeume.length + 1} (${STUFEN.find((s) => s.k === b.k).label}) entfernt`); zaehler(); baeumeZeichnen(); knoepfe(); aktiv(); speichern(false); } }, 'Letzten Baum rückgängig');
+  const fertigBtn = h('button', { type: 'button', class: 'btn btn-primary btn-block btn-large', onclick: () => { ansicht = 'uebersicht'; render(); } }, 'Auszeichnen abschließen – Übersicht');
+  function aktiv() { undoBtn.disabled = !az.baeume.length; fertigBtn.disabled = !az.baeume.length; }
   const knoepfeEl = h('div', { class: 'az-knoepfe' });
   function knoepfe() {
     fill(knoepfeEl, STUFEN.map((s) => {
@@ -131,12 +136,12 @@ export async function openAuszeichnen(measureId) {
       h('p', { class: 'sheet-label' }, 'Durchmesser in Brusthöhe (BHD) antippen – je Baum einmal'),
       knoepfeEl,
       h('div', { class: 'btn-row' },
-        h('button', { type: 'button', class: 'btn btn-small', disabled: !az.baeume.length, onclick: () => { const b = az.baeume.pop(); toast(`Baum ${az.baeume.length + 1} (${STUFEN.find((s) => s.k === b.k).label}) entfernt`); zaehler(); baeumeZeichnen(); knoepfe(); speichern(false); zaehlAnsicht(); } }, 'Letzten Baum rückgängig')),
+        undoBtn),
       gpsEl,
       h('div', { class: 'mini-map az-karte' }),
-      h('button', { type: 'button', class: 'btn btn-primary btn-block btn-large', disabled: !az.baeume.length, onclick: () => { ansicht = 'uebersicht'; render(); } }, 'Auszeichnen abschließen – Übersicht'),
+      fertigBtn,
       h('p', { class: 'hint' }, `Mengen sind Näherungswerte in Erntefestmetern ohne Rinde (Efm o.R.), aus mittleren Massentafelwerten je Durchmesserstufe${az.ba === 'avg' ? ' – mit Baumart wird es genauer' : ''}. Bitte mit eigener Erfahrung abgleichen.`));
-    zaehler(); knoepfe(); gpsZeile();
+    zaehler(); knoepfe(); gpsZeile(); aktiv();
     const mapEl = body.querySelector('.az-karte');
     karte?.map.remove();
     karte = miniKarte(mapEl, p, { zoom: 17 });

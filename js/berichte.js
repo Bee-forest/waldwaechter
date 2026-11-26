@@ -101,6 +101,8 @@ export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) 
   const T = MEASURE_TYPES[m.type];
   for (const [k, v] of Object.entries(m.details || {})) { if (v === '' || v == null) continue; const f = T?.fields?.find((x) => x[0] === k); if (f) W.zeile(f[1].replace(/ \(.*\)/, ''), String(v)); }
   if (m.thinning?.plan) W.zeile('Durchforstung', `${m.thinning.plan.methode === 'f4' ? `${Math.round(m.thinning.plan.planung?.budget || 0)} m³ Menge laut Durchforstungshilfe` : `${m.thinning.plan.total} Bäume Entnahme geplant`}; Bäume sind ausgezeichnet`);
+  const { auszeichnungZeilen, STUFEN } = await import('./auszeichnen.js');
+  auszeichnungZeilen(m.auszeichnung).forEach(([a, b]) => W.zeile(a, b));
   if (m.note) W.zeile('Hinweise', m.note);
   const sg = m.thinning?.natura2000 || m.schutzgebiete || [];
   if (sg.length) W.zeile('Schutzgebiet', `${sg.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')} – Verordnung beachten${['ffh_geb', 'spa', 'nsg'].some((l) => sg.some((g) => g.layer === l)) ? '; Brut- und Setzzeit 1.3.–30.9. beachten' : ''}.`);
@@ -114,15 +116,19 @@ export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) 
   W.zeile('Rettungspunkt', rp ? `${rp.id}${rp.name ? ` (${rp.name})` : ''}, ${formatDist(rp.dist)} ${compassLabel(rp.brg)} – ${rp.at[0].toFixed(5)} N, ${rp.at[1].toFixed(5)} O. Im Notfall 112 anrufen und die Nummer des Rettungspunkts nennen.` : 'kein Rettungspunkt gefunden (Geoportal nicht erreichbar)');
   // Karte
   W.platz(360);
-  const kartePts = [...polys.flat(2), ...lager.map((l) => l.at), ...(rp && rp.dist < 2500 ? [rp.at] : [])];
+  const baeume = (m.auszeichnung?.baeume || []).filter((b) => b.at);
+  const kartePts = [...polys.flat(2), ...baeume.map((b) => b.at), ...lager.map((l) => l.at), ...(rp && rp.dist < 2500 ? [rp.at] : [])];
   const basemap = s.settings?.basemap === 'dop' ? 'dop' : 'osm';
   const k = await pdfKarte(doc, { x: W.L, y: W.y, w: W.R - W.L, h: 340, pts: kartePts, basemap });
   if (polys.length) ringeZeichnen(doc, k.tr, polys, { stroke: [242, 107, 29], w: 2.2 });
   if (p && fl && !fl.ganz) ringeZeichnen(doc, k.tr, polysOf(p), { stroke: [246, 211, 45], w: 1.2 });
   gassen.forEach((g) => linieZeichnen(doc, k.tr, g.line.filter(k.drin), { w: 2, farbe: [141, 90, 43], strich: [5, 3] }));
   lager.forEach((l) => k.drin(l.at) && punkt(doc, k.tr(l.at), [181, 101, 29], 5));
+  const rgb = (hx) => [1, 3, 5].map((i) => parseInt(hx.slice(i, i + 2), 16));
+  baeume.forEach((b) => { if (!k.drin(b.at)) return; const i = STUFEN.findIndex((x) => x.k === b.k); punkt(doc, k.tr(b.at), rgb(STUFEN[i].farbe), 2.6 + i * 0.7); });
   if (rp && k.drin(rp.at)) { punkt(doc, k.tr(rp.at), [0, 150, 70], 6); const [a, b] = k.tr(rp.at); doc.text(a + 8, b + 3, rp.id, { bold: true, size: 8 }); }
   W.y += 346;
+  if (baeume.length) { let x0 = W.L; doc.text(x0, W.y, 'Ausgezeichnete Bäume (BHD):', { size: 7.5, bold: true }); x0 += 122; STUFEN.forEach((st, i) => { punkt(doc, [x0 + 3, W.y - 2.5], rgb(st.farbe), 2.6 + i * 0.7); doc.text(x0 + 9, W.y, st.label, { size: 7.5 }); x0 += 62; }); W.y += 12; }
   doc.text(W.L, W.y, `Legende: orange = Arbeitsfläche · braun gestrichelt = Rückegasse · braun = Lagerplatz · grün = Rettungspunkt. Hintergrund: ${KARTEN_QUELLE[basemap]}`, { size: 7, farbe: GRAU });
   W.y += 22;
   W.kopf('Vereinbarung');

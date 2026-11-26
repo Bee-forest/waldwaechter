@@ -360,3 +360,34 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .eintrag-tile .type-text { display: grid; gap: 1px; }
 .eintrag-tile small { color: var(--ink-2); }
 .eintrag-tile strong { color: var(--ink); } .eintrag-tile .ersch-werkzeug-icon { background: var(--primary-soft); }
+
+/* Holzernte: Auszeichnen */
+.az-zaehler { position: sticky; top: -16px; z-index: 6; margin: -4px -4px 12px; padding: 12px 14px; border-radius: 16px; background: var(--primary); color: #fff; box-shadow: 0 8px 18px -10px rgba(0,0,0,.5); }
+.az-summe { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.az-summe strong { font-size: 28px; font-weight: 900; }
+.az-summe span { opacity: .85; font-size: 14px; }
+.az-stufen-mini { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.az-stufen-mini span { font-size: 12.5px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.14); border-left: 4px solid var(--c); }
+.az-ba { margin-bottom: 4px; }
+.az-ba .chip[aria-pressed='true'] { background: var(--primary); color: #fff; border-color: var(--primary); }
+.az-knoepfe { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.az-stufe { display: grid; gap: 2px; justify-items: start; padding: 14px 14px 12px; min-height: 76px; border: 0; border-radius: 16px; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line), inset 8px 0 0 var(--c); padding-left: 22px; cursor: pointer; color: var(--ink); text-align: left; font: inherit; touch-action: manipulation; }
+.az-stufe:active { transform: scale(.97); background: color-mix(in srgb, var(--c) 14%, var(--surface)); }
+.az-stufe strong { font-size: 20px; font-weight: 900; }
+.az-stufe small { color: var(--ink-2); font-size: 13px; }
+.az-stufe:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.az-gps { margin: 8px 0; font-size: 13.5px; }
+.az-karte { height: 280px; margin-bottom: 14px; }
+.az-summe-gross { padding: 16px; border-radius: 16px; background: var(--primary); color: #fff; display: grid; gap: 4px; margin-bottom: 12px; }
+.az-summe-gross strong { font-size: 32px; font-weight: 900; }
+.az-tabelle { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 15px; }
+.az-tabelle th, .az-tabelle td { padding: 7px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+.az-tabelle th:first-child, .az-tabelle td:first-child { text-align: left; }
+.az-punkt { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--c); margin-right: 8px; vertical-align: -1px; }
+.az-sortimente, .az-preise { display: grid; gap: 8px; margin-bottom: 10px; }
+.az-preise label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+.az-kalk { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); margin-bottom: 12px; }
+.az-kalk > div { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; }
+.az-ergebnis { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; font-size: 17px !important; }
+.az-ergebnis strong { color: var(--primary); }
+.btn-auszeichnen { background: var(--primary); color: #fff; border-color: var(--primary); }

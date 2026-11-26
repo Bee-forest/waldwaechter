@@ -409,7 +409,7 @@ function measureCard(m, byId) {
     h('p', { class: 'measure-where' }, where),
     m.serie ? vspFelder(m) : m.status === 'fertig' ? h('p', { class: 'muted' }, `Termin ${m.date ? fmtDate(m.date) : 'offen'}`) : datumFeld(m),
     details.length ? h('p', { class: 'measure-details' }, details.join('; ')) : null,
-    m.flaeche?.ring ? h('p', { class: 'measure-details' }, `Teilfläche ${formatHa(m.flaeche.ha)}`) : null,
+    m.flaeche?.ring ? h('p', { class: 'measure-details' }, `${m.flaeche.ringe?.length > 1 ? `${m.flaeche.ringe.length} Teilflächen` : 'Teilfläche'} ${formatHa(m.flaeche.ha)}`) : null,
     m.foerderung?.antragId ? (() => { const fa = store.get().foerderantraege?.find((x) => x.id === m.foerderung.antragId); return fa ? h('p', { class: 'measure-details' }, h('button', { type: 'button', class: 'link-btn', onclick: () => openFoerderantrag({ antragId: fa.id }) }, fa.status === 'fertig' ? 'Förderantrag vorbereitet – ansehen' : 'Förderantrag fortsetzen')) : null; })() : null,
     m.kosten ? h('p', { class: 'measure-details' }, `Kosten: ${Number(m.kosten).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`) : null,
     m.thinning?.plan ? h('p', { class: 'measure-details' }, `${m.thinning.plan.eingriffe?.anzahl > 1 ? `Eingriff ${m.thinning.plan.eingriffe.nr} von ${m.thinning.plan.eingriffe.anzahl}, ` : ''}${formatHa(m.thinning.plan.areaHa)}, ${m.thinning.plan.methode === 'f4' ? `${fmtM3(m.thinning.plan.planung?.mengeHa)} m³/ha = ${fmtM3(m.thinning.plan.planung?.budget)} m³ Menge${m.thinning.f4 ? `, ${fmtM3(m.thinning.f4.gezaehlt)} m³ gezählt` : ''}` : `${m.thinning.plan.total} Bäume Entnahme geplant`}`) : null,
@@ -449,6 +449,13 @@ function measureCard(m, byId) {
   );
 }
 
+/** Arbeitsauftrag sofort anzeigen – für alle Maßnahmen, für die es einen gibt */
+export function arbeitsauftragZeigen(id) {
+  const m = store.get().measures.find((x) => x.id === id);
+  if (!m || m.serie || ['schaden', 'holzverkauf', 'polter'].includes(m.type)) return;
+  setTimeout(() => import('./berichte.js').then((b) => b.unternehmerAuftrag(id)).catch(() => toast('Der Arbeitsauftrag konnte nicht erstellt werden – du findest ihn später bei der Maßnahme.')), 300);
+}
+
 async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt = null } = {}) {
   const all = await source.allParcels();
   const byId = Object.fromEntries(all.map((p) => [p.id, p]));
@@ -466,6 +473,8 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
   }
   const nachSpeichern = (foerdern) => (id) => {
     alleSchliessen();
+    // Nach dem Anlegen direkt den Arbeitsauftrag mit Karte zeigen (zum Weitergeben an den Unternehmer)
+    if (!foerdern && id) arbeitsauftragZeigen(Array.isArray(id) ? id[0] : id);
     if (!foerdern || !id) return;
     if (Array.isArray(id)) antragFuer(id, antragId); else weiterZumAntrag(id, antragId);
   };
@@ -525,6 +534,7 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
     const schutzHost = h('div');
     const zeigeWahl = (id) => {
       wahl?.entferne(); wahl = null; flHost.replaceChildren(); schutzHost.replaceChildren();
+      if (!id) flHost.append(h('p', { class: 'hint' }, 'Nach der Wahl der Fläche kannst du festlegen, ob die Maßnahme das ganze Flurstück betrifft oder nur eine oder mehrere Teilflächen, die du in der Karte einzeichnest.'));
       if (id && byId[id]) { wahl = flaechenWahl(byId[id]); flHost.append(wahl.el); import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(byId[id], { eingriff: EINGRIFF.includes(type) }))); }
     };
     const form = h('form', { class: 'form', onsubmit: (e) => {
@@ -539,7 +549,7 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
       store.update((s) => {
         s.measures.push({ id: neuId, type, parcelId: fd.get('parcel') || null, date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
           note: String(fd.get('note') || '').trim(), details, status: 'geplant', createdAt: Date.now(),
-          ...(fl?.modus === 'teil' ? { flaeche: { ring: fl.ring, ha: fl.ha } } : {}), kosten: kosten ? Number(kosten.replace(',', '.')) : null,
+          ...(fl?.modus === 'teil' ? { flaeche: { ring: fl.ring, ringe: fl.ringe, ha: fl.ha } } : {}), kosten: kosten ? Number(kosten.replace(',', '.')) : null,
           ...(type === 'verkehrssicherung' ? { date: null, serie: { termine: VSP_TERMINE.map((x) => ({ ...x })) }, erledigt: {} } : {}) });
       });
       toast(`${t.label} gebucht`);
@@ -564,6 +574,6 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
       h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, `${t.label} buchen`),
     );
     neueSeite(t.label, h('div', { class: 'new-measure' }, form));
-    if (parcelId) zeigeWahl(parcelId);
+    zeigeWahl(parcelId);
   }
 }

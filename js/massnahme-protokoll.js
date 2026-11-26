@@ -52,7 +52,7 @@ export async function openMassnahmeBearbeiten(measureId) {
       x.details = { ...(x.details || {}), ...Object.fromEntries(felder.map(([k]) => [k, String(fd.get(k) ?? '').trim()])) };
       x.kosten = kosten ? Number(kosten.replace(',', '.')) : null;
       x.note = String(fd.get('note') || '').trim();
-      if (fl?.modus === 'teil') x.flaeche = { ring: fl.ring, ha: fl.ha };
+      if (fl?.modus === 'teil') x.flaeche = { ring: fl.ring, ringe: fl.ringe, ha: fl.ha };
       else if (fl?.modus === 'ganz' || !x.parcelId) delete x.flaeche;
       x.geaendert = Date.now();
     });
@@ -77,7 +77,7 @@ export async function openMassnahmeBearbeiten(measureId) {
     h('label', {}, 'Notiz', h('textarea', { name: 'note', rows: 3, value: m.note || '' })),
     h('button', { class: 'btn btn-primary btn-block btn-large', type: 'submit' }, 'Änderungen speichern'));
   page = openPage(`${t.label} bearbeiten`, h('div', { class: 'new-measure' }, form), { onClose: () => wahl?.entferne() });
-  if (m.parcelId) zeigeWahl(m.parcelId, m.flaeche?.ring || null);
+  if (m.parcelId) zeigeWahl(m.parcelId, m.flaeche || null);
 }
 
 // ---------- Abschlussprotokoll ----------
@@ -242,7 +242,7 @@ export async function openFlaecheHinterlegen(measureId) {
       store.update((s) => {
         const x = s.measures.find((y) => y.id === m.id); if (!x) return;
         x.parcelId = parcelId;
-        if (fl?.modus === 'teil') x.flaeche = { ring: fl.ring, ha: fl.ha, ...(m.status === 'fertig' ? { ist: true } : {}) };
+        if (fl?.modus === 'teil') x.flaeche = { ring: fl.ring, ringe: fl.ringe, ha: fl.ha, ...(m.status === 'fertig' ? { ist: true } : {}) };
         else delete x.flaeche;
         x.geaendert = Date.now();
       });
@@ -251,5 +251,5 @@ export async function openFlaecheHinterlegen(measureId) {
       import('./berichte.js').then((b) => b.unternehmerAuftrag(m.id, { anhaengen: true })).catch(() => {});
     } }, 'Fläche speichern'));
   page = openPage('Fläche der Maßnahme', h('div', { class: 'new-measure' }, body), { onClose: () => wahl?.entferne() });
-  if (parcelId) zeige(parcelId, m.parcelId === parcelId ? m.flaeche?.ring || null : null);
+  if (parcelId) zeige(parcelId, m.parcelId === parcelId ? m.flaeche || null : null);
 }

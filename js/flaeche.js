@@ -1,6 +1,6 @@
 import { eigeneFlaechenLayer } from './map/eigeneflaechen.js';
 // Fläche einer Maßnahme: ganzes Flurstück oder selbst eingezeichnete Teilfläche.
-import { h, fill } from './ui.js';
+import { h, fill, toast } from './ui.js';
 import { store } from './store.js';
 import { createBaseMap, BASEMAP_LABELS } from './map/basemap.js';
 import { areaHa, formatHa, polysOf, inPolys, centroid } from './geo.js';
@@ -35,54 +35,86 @@ export function miniKarte(el, parcel, { zoom = 17, hell = false } = {}) {
 }
 
 /**
- * Auswahl für das Formular „Neue Maßnahme“: ganzes Flurstück oder Teilfläche einzeichnen.
- * Gibt { el, wert() } zurück; wert() liefert { modus, ring?, ha } oder null, wenn die Zeichnung unvollständig ist.
+ * Auswahl für Maßnahmen: ganzes Flurstück oder eine bzw. mehrere Teilflächen einzeichnen.
+ * start: ein Ring, mehrere Ringe oder ein gespeichertes flaeche-Objekt ({ ring, ringe }).
+ * wert() liefert { modus: 'ganz', ha } oder { modus: 'teil', ring, ringe, ha } – null, wenn eine Teilfläche unvollständig ist.
  */
 export function flaechenWahl(parcel, start = null) {
-  let modus = start?.length >= 3 ? 'teil' : 'ganz', draft = start?.length >= 3 ? start.map((x) => [...x]) : [], karte = null, umlauf = null;
+  const startRinge = !start ? [] : Array.isArray(start) ? (Array.isArray(start[0]?.[0]) ? start : [start]) : (start.ringe?.length ? start.ringe : start.ring ? [start.ring] : []);
+  let ringe = startRinge.filter((r) => r?.length >= 3).map((r) => r.map((x) => [...x]));
+  let modus = ringe.length ? 'teil' : 'ganz', aktiv = ringe.length ? ringe.length - 1 : 0, karte = null, umlauf = null;
+  if (!ringe.length) ringe = [[]];
   const umlaufHost = h('div');
   const host = h('div', { class: 'flaeche-wahl' });
   const status = h('p', { class: 'draw-status', 'aria-live': 'polite' });
+  const teileHost = h('div', { class: 'teil-liste' });
   const mapEl = h('div', { class: 'mini-map' });
   const lyr = L.layerGroup();
+  const ecke = (an) => L.divIcon({ className: an ? 'gpunkt' : 'gpunkt gpunkt-mitte', html: '<span></span>', iconSize: an ? [22, 22] : [16, 16], iconAnchor: an ? [11, 11] : [8, 8] });
+  const gesamtHa = () => ringe.filter((r) => r.length >= 3).reduce((x, r) => x + areaHa(r), 0);
 
   function zeichne() {
     lyr.clearLayers();
     if (modus !== 'teil') return;
-    if (draft.length >= 2) L.polygon(draft, STIL_MASSNAHME).addTo(lyr);
-    draft.forEach((ll) => L.circleMarker(ll, { radius: 6, color: '#fff', weight: 2, fillColor: '#F26B1D', fillOpacity: 1, interactive: false }).addTo(lyr));
-    status.textContent = draft.length >= 3 ? `${draft.length} Eckpunkte, ${formatHa(areaHa(draft))}` : `${draft.length} von mindestens 3 Eckpunkten – tippe in der Karte auf die Ecken der Fläche oder lauf sie mit dem GPS ab.`;
+    ringe.forEach((r, ri) => {
+      const an = ri === aktiv;
+      if (r.length >= 2) {
+        const pg = L.polygon(r, { ...STIL_MASSNAHME, weight: an ? 3 : 2, fillOpacity: an ? 0.3 : 0.18, dashArray: an ? null : '5 5' });
+        if (!an) pg.on('click', (e) => { L.DomEvent.stop(e); aktiv = ri; zeichne(); listeZeichnen(); });
+        pg.addTo(lyr);
+      }
+      if (!an) return;
+      r.forEach((ll, i) => {
+        const m = L.marker(ll, { icon: ecke(true), draggable: true, zIndexOffset: 800, title: 'Ziehen verschiebt die Ecke · antippen entfernt sie' });
+        m.on('drag', () => { const p = m.getLatLng(); r[i] = [p.lat, p.lng]; lyr.eachLayer((x) => { if (x instanceof L.Polygon && x.getLatLngs()[0]?.length === r.length) x.setLatLngs(r); }); });
+        m.on('dragend', () => { zeichne(); listeZeichnen(); });
+        m.on('click', (e) => { L.DomEvent.stop(e); r.splice(i, 1); zeichne(); listeZeichnen(); });
+        m.addTo(lyr);
+      });
+    });
+    const r = ringe[aktiv];
+    status.textContent = r.length >= 3
+      ? `Teilfläche ${aktiv + 1}: ${r.length} Ecken, ${formatHa(areaHa(r))}${ringe.length > 1 ? ` · zusammen ${formatHa(gesamtHa())}` : ''}. Ecken ziehen zum Verschieben, antippen zum Entfernen.`
+      : `Teilfläche ${aktiv + 1}: ${r.length} von mindestens 3 Ecken – tippe in der Karte auf die Ecken oder lauf die Fläche mit dem GPS ab.`;
+  }
+  function listeZeichnen() {
+    fill(teileHost, ringe.length > 1 ? h('div', { class: 'teil-chips' }, ringe.map((r, i) => h('button', { type: 'button', class: 'chip', 'aria-pressed': String(i === aktiv),
+      onclick: () => { aktiv = i; zeichne(); listeZeichnen(); } }, `Teilfläche ${i + 1}${r.length >= 3 ? ` · ${formatHa(areaHa(r))}` : ' · unvollständig'}`))) : null);
   }
   function render() {
     fill(host,
       h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Fläche der Maßnahme' },
-        [['ganz', 'Ganzes Flurstück'], ['teil', 'Teilfläche einzeichnen']].map(([k, l]) => h('button', {
+        [['ganz', 'Ganzes Flurstück'], ['teil', 'Teilfläche(n) einzeichnen']].map(([k, l]) => h('button', {
           type: 'button', role: 'radio', 'aria-checked': String(modus === k), class: modus === k ? 'on' : '',
           onclick: () => { modus = k; render(); },
         }, l))),
       modus === 'ganz'
         ? h('p', { class: 'muted' }, `Die Maßnahme gilt für das ganze Flurstück (${formatHa(amtlicheFlaecheHa(parcel))}).`)
-        : [mapEl, status, umlaufHost, h('div', { class: 'btn-row' },
-            h('button', { type: 'button', class: 'btn btn-small', onclick: () => { draft.pop(); zeichne(); } }, 'Letzten Punkt entfernen'),
-            h('button', { type: 'button', class: 'btn btn-small', onclick: () => { draft = []; zeichne(); } }, 'Neu beginnen'))],
+        : [mapEl, status, teileHost, umlaufHost, h('div', { class: 'btn-row' },
+            h('button', { type: 'button', class: 'btn btn-small', onclick: () => { ringe[aktiv].pop(); zeichne(); listeZeichnen(); } }, 'Letzte Ecke entfernen'),
+            h('button', { type: 'button', class: 'btn btn-small', onclick: () => { if (ringe[aktiv].length < 3) { toast('Erst diese Teilfläche fertig einzeichnen (mindestens 3 Ecken).'); return; } ringe.push([]); aktiv = ringe.length - 1; zeichne(); listeZeichnen(); render(); } }, '+ Weitere Teilfläche'),
+            h('button', { type: 'button', class: 'btn btn-small btn-danger-ghost', onclick: () => { if (ringe.length > 1) { ringe.splice(aktiv, 1); aktiv = Math.max(0, aktiv - 1); } else ringe[0] = []; zeichne(); listeZeichnen(); render(); } }, ringe.length > 1 ? 'Diese Teilfläche löschen' : 'Neu beginnen'))],
     );
     if (modus === 'teil' && !karte) {
       karte = miniKarte(mapEl, parcel);
       lyr.addTo(karte.map);
       karte.map.doubleClickZoom.disable(); // schnelles Tippen setzt Punkte statt zu zoomen
-      karte.map.on('click', (e) => { draft.push([e.latlng.lat, e.latlng.lng]); zeichne(); });
-      umlauf = umlaufSteuerung({ map: karte.map, onPunkt: (ll) => { draft.push(ll); zeichne(); }, onEnde: () => { draft = vereinfachen(draft, 1.5); zeichne(); } });
+      karte.map.on('click', (e) => { ringe[aktiv].push([e.latlng.lat, e.latlng.lng]); zeichne(); listeZeichnen(); });
+      umlauf = umlaufSteuerung({ map: karte.map, onPunkt: (ll) => { ringe[aktiv].push(ll); zeichne(); }, onEnde: () => { ringe[aktiv] = vereinfachen(ringe[aktiv], 1.5); zeichne(); listeZeichnen(); } });
       fill(umlaufHost, umlauf.el);
+      if (ringe.some((r) => r.length >= 3)) setTimeout(() => karte.map.fitBounds(L.latLngBounds(ringe.flat()), { padding: [24, 24], maxZoom: 18 }), 120);
     } else if (karte) setTimeout(() => karte.map.invalidateSize(), 60);
-    zeichne();
+    zeichne(); listeZeichnen();
   }
   render();
   return {
     el: host,
     wert() {
       if (modus === 'ganz') return { modus: 'ganz', ha: amtlicheFlaecheHa(parcel) };
-      if (draft.length < 3) return null;
-      return { modus: 'teil', ring: [...draft], ha: areaHa(draft) };
+      const fertig = ringe.filter((r) => r.length >= 3);
+      if (!fertig.length || ringe.some((r) => r.length > 0 && r.length < 3)) return null;
+      const rr = fertig.map((r) => r.map(([a, b]) => [Number(a.toFixed(7)), Number(b.toFixed(7))]));
+      return { modus: 'teil', ring: rr[0], ringe: rr, ha: rr.reduce((x, r) => x + areaHa(r), 0) };
     },
     entferne() { umlauf?.stop(); karte?.remove(); },
   };

@@ -124,7 +124,7 @@ export async function openSchadensmeldung({ parcelId = null, onSaved, typ = 'kae
     const pt = w.pos || (fl?.ring ? centroid(fl.ring) : p ? centroid(p.ring) : null);
     const details = { schaden: schadenText(w.typ), species: w.species, menge: w.menge, baeume: w.baeume, gps: w.pos ? `${w.pos[0].toFixed(6)}, ${w.pos[1].toFixed(6)}` : '', text: w.text.trim() };
     const m = { id, type: 'schaden', parcelId: w.parcelId, ordnerId: w.parcelId ? undefined : ordnerFuerNeu(), date: new Date(`${w.datum}T12:00`).getTime(), status: 'geplant', createdAt: Date.now(), note: w.text.trim(), details,
-      flaeche: fl?.modus === 'teil' ? { ring: fl.ring, ha: fl.ha } : undefined, schaden: { typ: w.typ, pos: w.pos, genau: w.genau, punkte: punkte.map((x) => ({ at: x.at, typ: x.typ, genau: x.genau || null })), gemeldet: null } };
+      flaeche: fl?.modus === 'teil' ? { ring: fl.ring, ringe: fl.ringe, ha: fl.ha } : undefined, schaden: { typ: w.typ, pos: w.pos, genau: w.genau, punkte: punkte.map((x) => ({ at: x.at, typ: x.typ, genau: x.genau || null })), gemeldet: null } };
     store.update((s) => { s.measures.push(m); });
     abo(); stellen.entferne(); page.close();
     toast('Schaden gespeichert');

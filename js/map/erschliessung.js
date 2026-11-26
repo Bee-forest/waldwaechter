@@ -165,7 +165,7 @@ export function createErschliessungLayers(map, { klickbar = () => true, aufGasse
       // breite, unsichtbare Linie zum Antippen (gestrichelte Linien sind sonst in den Lücken nicht antippbar)
       const pl = L.polyline(g.line, { color: '#000', weight: 24, opacity: 0, lineCap: 'round', className: 'gasse-treffer' });
       pl.bindTooltip(gasseText(g), { sticky: true });
-      if (nurAnsehen) pl.bindPopup(() => h('div', { class: 'lager-popup' }, h('strong', {}, g.name || 'Rückegasse'), h('p', {}, gasseText(g)), h('p', { class: 'muted' }, 'Bearbeiten unter „Weitere Layer“ → „Rückegassen und Lagerplätze bearbeiten“.'),
+      if (nurAnsehen) pl.bindPopup(() => h('div', { class: 'lager-popup' }, h('strong', {}, g.name || 'Rückegasse'), h('p', {}, gasseText(g)), h('p', { class: 'muted' }, 'Ändern über „Bearbeiten“ → „Rückegassen und Lagerplätze bearbeiten“ oder „Eintragen“.'),
         h('div', { class: 'btn-row' }, h('button', { class: 'btn btn-small', onclick: () => { map.closePopup(); openFotos(`gasse:${g.id}`, `Rückegasse${g.name ? ` ${g.name}` : ''}`); } }, fotoKnopfText(`gasse:${g.id}`)))));
       else pl.on('click', (e) => { if (!klickbar()) return; L.DomEvent.stop(e); (aufGasse || gasseDialog)(g); });
       gassen.addLayer(pl);

@@ -60,7 +60,7 @@ function bestimmen(onArt) {
 const woche = (d = new Date()) => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const tag = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - tag); const j = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return `${t.getUTCFullYear()}-${String(Math.ceil(((t - j) / 864e5 + 1) / 7)).padStart(2, '0')}`; };
 const AUFGABEN = [
   { k: 'zaehlen', titel: 'Baumarten zählen', text: 'Geh 100 Schritte durch deinen Wald und zähle jeden Baum, an dem du vorbeikommst – nach Baumart. Wie gemischt ist dein Wald?', ziel: 20 },
-  { k: 'habitat', titel: 'Habitatbäume finden', text: 'Finde Bäume mit Spechthöhlen, Pilzen oder Rissen und trage sie unter „Weitere Layer“ → Naturschutz ein.', ziel: 3 },
+  { k: 'habitat', titel: 'Habitatbäume finden', text: 'Finde Bäume mit Spechthöhlen, Pilzen oder Rissen und trage sie über „Eintragen“ → Habitatbaum ein.', ziel: 3 },
   { k: 'verbiss', titel: 'Verbiss prüfen', text: 'Schau dir 20 junge Bäume an und tippe für jeden an, ob und wo er verbissen ist.', ziel: 20 },
   { k: 'kaefer', titel: 'Fichten kontrollieren', text: 'Prüfe 10 Fichten am Stammfuß und in Rindenritzen auf braunes Bohrmehl und Harztropfen und schau in die Krone. Tippe für jede Fichte das Ergebnis an.', ziel: 10 },
   { k: 'zaehlen2', titel: 'Mischbaumarten entdecken', text: 'Zähle auf einer Fläche alle Bäume, die nicht Fichte oder Kiefer sind. Jede Mischbaumart macht deinen Wald stabiler.', ziel: 10 },

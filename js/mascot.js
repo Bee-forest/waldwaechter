@@ -35,7 +35,7 @@ export function hide() {
 const TOUR = [
   'Hallo, ich bin der WaldWächter! Ich zeige dir kurz, wie die App funktioniert.',
   'Tippe in der Karte auf ein Flurstück. Unter der Karte siehst du dann Größe, Rettungspunkte und Besonderheiten.',
-  'Mit „Flurstück suchen“ findest du Flächen nach Gemarkung, Flur und Nummer. Unter „Weitere Layer“ blendest du Standortkarte, Rettungspunkte und Schutzgebiete ein.',
+  'Mit „Suchen“ findest du Flächen nach Gemarkung, Flur und Nummer. Unter „Bearbeiten“ blendest du Standortkarte, Rettungspunkte und Schutzgebiete ein, über „Eintragen“ setzt du Gassen, Habitatbäume oder Hochsitze in die Karte.',
   'Unter „Maßnahmen“ planst du deine Arbeiten im Wald. Bei einer Durchforstung führe ich dich im Bestand von Rasterpunkt zu Rasterpunkt.',
 ];
 

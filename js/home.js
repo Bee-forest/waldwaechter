@@ -105,8 +105,9 @@ export async function initHome(root) {
         ),
       ),
       h('div', { class: 'map-actions' },
-        h('button', { class: 'pill-btn', onclick: openLayerSheet }, h('span', { html: icon.layers }), 'Ebenen'),
-        h('button', { class: 'pill-btn', onclick: openSearch }, h('span', { html: icon.search }), 'Flurstück suchen'),
+        h('button', { class: 'pill-btn aktion-btn', onclick: openLayerSheet }, h('span', { html: icon.layers }), 'Bearbeiten'),
+        h('button', { class: 'pill-btn aktion-btn aktion-haupt', onclick: openEintragen }, h('span', { html: icon.plus }), 'Eintragen'),
+        h('button', { class: 'pill-btn aktion-btn', onclick: openSearch }, h('span', { html: icon.search }), 'Suchen'),
       ),
       chips,
     ),
@@ -1212,6 +1213,39 @@ function openLegend(key) {
   });
 }
 
+// „+ Eintragen“: alles, was man selbst in die Karte setzen kann, an einer Stelle
+function openEintragen() {
+  const c = map.getCenter(), mitte = [c.lat, c.lng], zoom = Math.max(16, map.getZoom());
+  const zu = () => document.querySelector('.scrim:not(.closing)')?.click();
+  const eintrag = (titel, text, svg, los) => h('button', { type: 'button', class: 'type-tile eintrag-tile', onclick: () => { zu(); setTimeout(los, 120); } },
+    h('span', { class: 'ersch-werkzeug-icon', html: svg }), h('span', { class: 'type-text' }, h('strong', {}, titel), h('small', {}, text)));
+  const ic = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ersch = (modus) => () => import('./map/erschliessung.js').then((x) => x.openErschliessungEditor({ center: mitte, zoom, modus }));
+  const punkt = (art) => () => import('./map/punkte.js').then((x) => x.openPunktEditor({ center: mitte, zoom, art }));
+  const fotopunkt = async () => {
+    const eigene = store.get().parcels.filter(passtFlurstueck);
+    if (!eigene.length) { toast('Lege zuerst ein Flurstück an – Fotopunkte gehören zu einem Flurstück.'); return; }
+    const pid = selected?.parcel?.id && eigene.some((p) => p.id === selected.parcel.id) ? selected.parcel.id : eigene.length === 1 ? eigene[0].id
+      : await dialog({ title: 'Auf welchem Flurstück?', body: h('p', {}, 'Wähle das Flurstück für den neuen Fotopunkt.'), actions: [...eigene.slice(0, 12).map((p) => ({ label: `Flurstück ${p.nr}, ${p.gemarkung}`, value: p.id })), { label: 'Abbrechen', value: null }] });
+    if (!pid) return;
+    const { openHistorieFlurstueck } = await import('./historie.js');
+    openHistorieFlurstueck(pid, { neuerFotopunkt: async (id) => { const f = (store.get().fotopunkte || []).find((x) => x.id === id); if (f) (await import('./tagebuch.js')).fotopunktFotos(f); } });
+  };
+  dialog({
+    title: 'Was möchtest du eintragen?',
+    body: h('div', { class: 'eintragen-liste' },
+      eintrag('Rückegassen anlegen', 'parallel mit festem Abstand über ein Flurstück', ic('<path d="M5 3v18M11 3v18M17 3v18"/>'), ersch('raster')),
+      eintrag('Rückegasse zeichnen', 'einzelne Gasse Punkt für Punkt oder per GPS', ic('<path d="M4 20l5-7 5 3 6-10"/>'), ersch('gasse')),
+      eintrag('Lagerplatz', 'Polter- oder Lagerplatz setzen', ic('<circle cx="7" cy="16" r="3"/><circle cx="13" cy="16" r="3"/><circle cx="10" cy="11" r="3"/>'), ersch('lager')),
+      eintrag('Habitatbaum', 'Biotop-, Höhlen- oder Totholzbaum', ic('<path d="M12 21v-8M12 13c-4 0-6-3-6-6a6 6 0 0 1 12 0c0 3-2 6-6 6z"/>'), punkt('habitat')),
+      eintrag('Jagdliche Einrichtung', 'Kanzel, Drückjagdbock, Erdsitz', ic('<path d="M7 21l2-12h6l2 12M8 14h8M6 9h12l-2-5H8z"/>'), punkt('jagd')),
+      eintrag('Fotopunkt', 'fester Standort mit Blickrichtung', ic('<rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8 7l1.5-3h5L16 7"/>'), fotopunkt),
+      eintrag('Schaden melden', 'Käfer, Windwurf, Bruch – mit Stelle in der Karte', ic('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>'), () => import('./schaden.js').then((x) => x.openSchadensmeldung({ parcelId: selected?.parcel?.id }))),
+      eintrag('Maßnahme', 'Pflanzung, Pflege, Holzernte …', ic('<path d="M12 5v14M5 12h14"/>'), () => window.dispatchEvent(new CustomEvent('ww:new-measure', { detail: { parcelId: selected?.parcel?.id } })))),
+    actions: [{ label: 'Abbrechen', value: null }],
+  });
+}
+
 function openLayerSheet() {
   const s = store.get().settings;
   const sw = (key, label, { color, disabled, note, onchange } = {}) => h('div', { class: `layer-row ${disabled ? 'disabled' : ''}` },
@@ -1244,7 +1278,7 @@ function openLayerSheet() {
       toast(`Ansicht „${l}“`);
     } }, h('strong', {}, l), h('small', {}, t))));
   dialog({
-    title: 'Ebenen',
+    title: 'Karte bearbeiten',
     body: h('div', { class: 'layer-sheet' },
       setWahl,
       h('p', { class: 'sheet-label' }, 'Oder einzeln wählen'),

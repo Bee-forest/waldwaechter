@@ -412,3 +412,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .sortimente-edit .mit-einheit input { flex: 1; min-width: 0; }
 .sortimente-edit .mit-einheit span { font-weight: 700; color: var(--ink-2); min-width: 2.6em; }
 .az-sort-btn { margin: -4px 0 14px; }
+/* Sortimente und Preise */
+.so-zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.so-zwei > label { min-width: 0; }
+.so-import { padding: 14px 16px; margin-bottom: 12px; display: grid; gap: 6px; }
+.so-hat-preis { color: var(--green, #2F7D3A); font-weight: 700; }
+.so-tabelle { width: 100%; border-collapse: collapse; margin: 6px 0; }
+.so-tabelle th, .so-tabelle td { padding: 4px 3px; text-align: left; font-size: 14px; }
+.so-tabelle tbody th { width: 3.6em; font-weight: 800; }
+.so-tabelle input { width: 100%; min-width: 0; padding: 8px 8px; font-size: 15px; }
+.so-tabelle .so-spalte { font-weight: 700; font-size: 13px; }
+.so-skonto { margin: 8px 0; }
+.az-euro { display: block; font-weight: 800; color: var(--ink); }
+.pl-posten { padding: 12px 14px; margin-bottom: 10px; display: grid; gap: 8px; }
+.pl-tabelle td { color: var(--ink-2); }
+.az-guete .mit-einheit, .so-skonto .mit-einheit { display: flex; align-items: center; gap: 8px; }
+.az-guete .mit-einheit input, .so-skonto .mit-einheit input { flex: 1; min-width: 0; }
+.so-tabelle input { font-size: 14px; padding: 8px 6px; }

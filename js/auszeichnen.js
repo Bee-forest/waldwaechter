@@ -6,7 +6,7 @@ import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { miniKarte, flaecheVon } from './flaeche.js';
 import { polysOf, formatHa } from './geo.js';
-import { sortimente, gewaehlteKeys, aushalten, openSortimenteEinstellen, masseText, zugabeVon } from './sortimente.js';
+import { sortimente, gewaehlteKeys, aushalten, openSortimenteEinstellen, masseText, zugabeVon, erloese, hatPreis, preisAnzeige, STANDARD_WAHL, klassenZeile } from './sortimente.js';
 
 export const STUFEN = [
   { k: 's1', label: '7–15 cm', mitte: 11, farbe: '#8FB35A' },
@@ -46,15 +46,18 @@ export function sortimentMengen(baeume, gewaehltRoh) {
   const gewaehlt = gewaehlteKeys(gewaehltRoh);
   const sig = JSON.stringify([liste.map((x) => [x.k, x.laenge, zugabeVon(x), x.zopf, x.max, x.fuer, x.rest]), gewaehlt]);
   if (cache.get('sig') !== sig) { cache.clear(); cache.set('sig', sig); }
-  const r = Object.fromEntries([...liste.map((x) => [x.k, { fm: 0, stueck: 0 }]), ['_wald', { fm: 0, stueck: 0 }]]);
+  const r = Object.fromEntries([...liste.map((x) => [x.k, { fm: 0, stueck: 0, kl: {} }]), ['_wald', { fm: 0, stueck: 0, kl: {} }]]);
   for (const b of baeume) {
     const key = `${b.k}|${b.ba}`;
     if (!cache.has(key)) {
       const st = STUFEN.find((x) => x.k === b.k) || STUFEN[0];
-      const nadel = b.ba === 'avg' || !BAUMARTEN[b.ba] ? null : !!BAUMARTEN[b.ba].nadel;
-      cache.set(key, aushalten(st.mitte, b.ba === 'avg' ? 'fi' : b.ba, efm(b.k, b.ba), liste, gewaehlt, nadel));
+      cache.set(key, aushalten(st.mitte, BAUMARTEN[b.ba]?.v ? b.ba : 'fi', efm(b.k, b.ba), liste, gewaehlt, BAUMARTEN[b.ba]?.v ? b.ba : 'avg'));
     }
-    for (const [k, v] of Object.entries(cache.get(key))) { r[k] = r[k] || { fm: 0, stueck: 0 }; r[k].fm += v.fm; r[k].stueck += v.stueck; }
+    for (const [k, v] of Object.entries(cache.get(key))) {
+      const z = r[k] = r[k] || { fm: 0, stueck: 0, kl: {} };
+      z.fm += v.fm; z.stueck += v.stueck;
+      Object.entries(v.kl || {}).forEach(([kk, fm]) => { z.kl[kk] = (z.kl[kk] || 0) + fm; });
+    }
   }
   return r;
 }
@@ -69,7 +72,7 @@ export async function openAuszeichnen(measureId) {
   const p = all.find((x) => x.id === m0.parcelId) || store.get().parcels.find((x) => x.id === m0.parcelId) || m0.flurstueck || null;
   const fl = flaecheVon(m0, p);
   // Sortimentswahl der letzten Holzernte für neue Maßnahmen übernehmen
-  const az = { baeume: [], ba: 'avg', sortimente: store.get().settings?.sortimentWahl || ['stamm', 'is', 'brenn'], ...(m0.auszeichnung || {}) };
+  const az = { baeume: [], ba: 'avg', sortimente: store.get().settings?.sortimentWahl || STANDARD_WAHL, ...(m0.auszeichnung || {}) };
   az.sortimente = gewaehlteKeys(az.sortimente);
   az.baeume = (az.baeume || []).map((b) => ({ ...b }));
   if (!m0.auszeichnung && m0.details?.species) { const t = String(m0.details.species).toLowerCase(); const k = Object.keys(BAUMARTEN).find((x) => x !== 'avg' && BAUMARTEN[x].name.toLowerCase().split(/[ /]+/).some((w) => w.length > 3 && t.includes(w))); if (k) az.ba = k; }
@@ -163,16 +166,23 @@ export async function openAuszeichnen(measureId) {
 
   function uebersicht() {
     const liste = sortimente();
-    const preise = Object.fromEntries(liste.map((x) => [x.k, x.preis]));
     az.sortimente = az.sortimente.filter((k) => liste.some((x) => x.k === k));
     const kosten = store.get().settings?.ernteKosten ?? '';
     const menge = sortimentMengen(az.baeume, az.sortimente);
     const gesamt = summe();
-    const erloes = az.sortimente.reduce((s, k) => s + (menge[k]?.fm || 0) * (Number(preise[k]) || 0), 0);
-    const sortDef = liste.filter((x) => az.sortimente.includes(x.k)).map(({ k, name, laenge, zopf, max, fuer, rest }) => ({ k, name, laenge, zugabe: zugabeVon({ k, zugabe: liste.find((y) => y.k === k).zugabe }), zopf, max, fuer, rest }));
+    const mix = { kd: (Number(az.anteilKD) || 0) / 100, nsf: (Number(az.anteilNSF) || 0) / 100 };
+    const je = erloese(menge, liste, az.sortimente, mix);
+    const brutto = Object.values(je).reduce((x, e) => x + e.euro, 0);
+    const skonto = Number(String(store.get().settings?.skonto ?? '').replace(',', '.')) || 0;
+    const erloes = brutto * (1 - skonto / 100);
+    const ohnePreis = liste.filter((x) => az.sortimente.includes(x.k) && menge[x.k]?.fm > 0.005 && (je[x.k]?.fehlt || !hatPreis(x)));
+    const mitKlassen = liste.some((x) => az.sortimente.includes(x.k) && x.preisArt === 'klassen' && menge[x.k]?.fm > 0.005);
+    const spalten = liste.find((x) => x.preisArt === 'klassen' && az.sortimente.includes(x.k))?.spalten || ['B/C frisch', 'K/D Käfer/Fäule'];
+    const pl = store.get().settings?.preisliste;
+    const sortDef = liste.filter((x) => az.sortimente.includes(x.k)).map(({ k, name, laenge, zopf, max, fuer, rest, einheit, rmFaktor, preisArt, klassen }) => ({ k, name, laenge, zugabe: zugabeVon(liste.find((y) => y.k === k)), zopf, max, fuer, rest, einheit, rmFaktor, preisArt, klassen: klassen ? Object.fromEntries(Object.keys(klassen).map((x) => [x, []])) : undefined }));
     const kost = gesamt * (Number(kosten) || 0);
-    const preisSetzen = (k, v) => store.update((st) => { st.settings.sortimente = sortimente().map((x) => (x.k === k ? { ...x, preis: v } : { ...x })); });
     const masse = (x) => masseText(x);
+    const rm = (x, fm) => (x.einheit === 'rm' ? ` ≈ ${fmt(fm / (Number(x.rmFaktor) || 0.65))} Rm` : '');
     const nachBa = {};
     az.baeume.forEach((b) => { const n = BAUMARTEN[b.ba]?.name || 'Durchschnitt'; nachBa[n] = (nachBa[n] || 0) + efm(b.k, b.ba); });
     fill(body,
@@ -185,20 +195,27 @@ export async function openAuszeichnen(measureId) {
       h('p', { class: 'hint' }, 'Deine Sortimente, Preise und die Auswahl hier gelten auch für alle neuen Holzernten.'),
       h('div', { class: 'az-sortimente' }, liste.map((s) => h('label', { class: 'jk-check' },
         h('input', { type: 'checkbox', checked: az.sortimente.includes(s.k), onchange: (e) => { az.sortimente = e.target.checked ? liste.map((x) => x.k).filter((k) => k === s.k || az.sortimente.includes(k)) : az.sortimente.filter((x) => x !== s.k); store.update((st) => { st.settings.sortimentWahl = [...az.sortimente]; }); speichern(false); render(); } }),
-        h('span', {}, s.name, h('small', {}, az.sortimente.includes(s.k) ? `${fmt(menge[s.k]?.fm || 0)} Fm${menge[s.k]?.stueck ? ` · ${menge[s.k].stueck} Stück` : ''} · ${masse(s)}` : masse(s)))))),
+        h('span', {}, s.name, h('small', {}, az.sortimente.includes(s.k) ? `${fmt(menge[s.k]?.fm || 0)} Fm${rm(s, menge[s.k]?.fm || 0)}${menge[s.k]?.stueck ? ` · ${menge[s.k].stueck} Stück` : ''} · ${masse(s)}` : masse(s)),
+          az.sortimente.includes(s.k) && je[s.k] && !je[s.k].fehlt ? h('small', { class: 'az-euro' }, `≈ ${euro(je[s.k].euro)}`) : null)))),
       menge._zugabe?.fm >= 0.05 ? h('p', { class: 'hint' }, `Längenzugabe: ca. ${fmt(menge._zugabe.fm)} Fm werden mit abgeschnitten, aber nicht mitverkauft.`) : null,
       menge._wald?.fm >= 0.05 ? h('p', { class: 'hint' }, `Ca. ${fmt(menge._wald.fm)} Fm passen in kein gewähltes Sortiment und bleiben im Wald (Kronen- und Zopfholz). Mit einem Restholz-Sortiment wie Energieholz wird es mitgerechnet.`) : null,
       h('details', { class: 'az-rechenweg' }, h('summary', {}, 'Wie wird gerechnet?'),
         h('p', { class: 'hint' }, 'Für jede Durchmesserstufe und Baumart bildet die App einen Musterstamm: Höhe aus einer Höhenkurve, der Durchmesser nimmt nach oben ab (ohne Rinde). Vom Stock (0,3 m) aufwärts hält sie Stücke in der Reihenfolge deiner Sortimentsliste aus – ein Stück passt, wenn das obere Ende mindestens den Zopf hat und das dicke Ende höchstens den Höchstdurchmesser. Der Rest geht ins Restholz. Am Ende wird alles auf die Menge im Zähler umgerechnet. Das ist eine Näherung – krumme, kranke oder stark beastete Stämme rechnet sie nicht ein.')),
-      h('p', { class: 'sheet-label' }, 'Preise und Kosten (für die Kalkulation)'),
+      h('p', { class: 'sheet-label' }, 'Kalkulation'),
+      pl ? h('p', { class: 'hint' }, `Preise aus: ${pl.titel} – nur auf diesem Gerät gespeichert.`) : null,
+      mitKlassen ? h('div', { class: 'az-preise az-guete' },
+        h('label', {}, `Anteil ${spalten[1] || 'K/D'}`, h('span', { class: 'mit-einheit' }, h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 100, step: 5, value: az.anteilKD ?? '', placeholder: '0', onchange: (e) => { az.anteilKD = e.target.value; speichern(false); render(); } }), h('span', {}, '%'))),
+        h('label', {}, 'Anteil NSF (nicht sägefähig)', h('span', { class: 'mit-einheit' }, h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 100, step: 5, value: az.anteilNSF ?? '', placeholder: '0', onchange: (e) => { az.anteilNSF = e.target.value; speichern(false); render(); } }), h('span', {}, '%'))),
+        h('p', { class: 'hint' }, `Der Rest gilt als ${spalten[0] || 'B/C'}. Das Stammholz wird nach Stärkeklassen (Mittendurchmesser) bewertet.`)) : null,
+      ohnePreis.length ? h('p', { class: 'lrt-hinweis' }, `Noch ohne Preis: ${ohnePreis.map((x) => x.name).join(', ')} – unter „Sortimente und Preise einstellen“ eintragen oder eine Preisliste laden.`) : null,
       h('div', { class: 'az-preise' },
-        az.sortimente.map((k) => h('label', {}, `${liste.find((s) => s.k === k).name} – €/Fm`, h('input', { type: 'number', inputmode: 'decimal', min: 0, step: 1, value: preise[k] ?? '', placeholder: 'Preis', onchange: (e) => { preisSetzen(k, e.target.value); render(); } }))),
         h('label', {}, 'Erntekosten (Einschlag und Rücken) – €/Fm', h('input', { type: 'number', inputmode: 'decimal', min: 0, step: 1, value: kosten, placeholder: 'Kosten', onchange: (e) => { store.update((st) => { st.settings.ernteKosten = e.target.value; }); render(); } }))),
       erloes || kost ? h('div', { class: 'az-kalk' },
-        h('div', {}, h('span', {}, 'Erlös'), h('strong', {}, euro(erloes))),
+        h('div', {}, h('span', {}, 'Erlös Holz'), h('strong', {}, euro(brutto))),
+        skonto ? h('div', {}, h('span', {}, `Skonto ${String(skonto).replace('.', ',')} %`), h('strong', {}, `– ${euro(brutto - erloes)}`)) : null,
         h('div', {}, h('span', {}, 'Erntekosten'), h('strong', {}, `– ${euro(kost)}`)),
         h('div', { class: 'az-ergebnis' }, h('span', {}, 'Ergebnis'), h('strong', {}, euro(erloes - kost))),
-        h('p', { class: 'hint' }, 'Die Preise werden gespeichert und bei der nächsten Holzernte vorgeschlagen.')) : h('p', { class: 'hint' }, 'Trage Preise je Sortiment und die Erntekosten ein – dann rechnet die App das Ergebnis der Maßnahme aus.'),
+        h('p', { class: 'hint' }, 'Bei Preisspannen rechnet die App mit der Mitte. Sortimente, Preise und Erntekosten gelten auch für neue Holzernten.')) : h('p', { class: 'hint' }, 'Trage Preise je Sortiment und die Erntekosten ein – dann rechnet die App das Ergebnis der Maßnahme aus.'),
       h('div', { class: 'btn-row' },
         h('button', { type: 'button', class: 'btn', onclick: () => { ansicht = 'zaehlen'; render(); } }, 'Weiter auszeichnen'),
         h('button', { type: 'button', class: 'btn btn-primary', onclick: () => {
@@ -225,7 +242,8 @@ export function auszeichnungZeilen(az) {
   return [
     ['Ausgezeichnet', `${az.baeume.length} Bäume, ca. ${fmt(gesamt)} Fm (Efm o.R., Näherung)`],
     ['Durchmesser', STUFEN.map((s) => { const c = az.baeume.filter((b) => b.k === s.k).length; return c ? `${s.label}: ${c}` : null; }).filter(Boolean).join(' · ')],
-    ['Sortimente', gew.filter((k) => def(k)).map((k) => { const d = def(k); return `${d.name}${d.rest ? '' : ` (${masseText(d, { ge: 'mind.' }).replace(/ · /g, ', ')})`}: ca. ${fmt(menge[k]?.fm || 0)} Fm${menge[k]?.stueck ? `, ${menge[k].stueck} Stück` : ''}`; }).join(' · ')],
+    ['Sortimente', gew.filter((k) => def(k) && (menge[k]?.fm || 0) >= 0.05).map((k) => { const d = def(k); const kl = d.preisArt === 'klassen' && menge[k]?.kl ? Object.entries(Object.entries(menge[k].kl).reduce((o, [hb, fm]) => { const z = klassenZeile(d, hb) || hb; o[z] = (o[z] || 0) + fm; return o; }, {})).filter(([, fm]) => fm >= 0.05).sort(([a], [b]) => Object.keys(d.klassen || {}).indexOf(a) - Object.keys(d.klassen || {}).indexOf(b)).map(([z, fm]) => `${z}: ${fmt(fm)}`).join(', ') : '';
+      return `${d.name}${d.rest ? '' : ` (${masseText(d, { ge: 'mind.' }).replace(/ · /g, ', ')})`}: ca. ${fmt(menge[k]?.fm || 0)} Fm${d.einheit === 'rm' ? ` (ca. ${fmt((menge[k]?.fm || 0) / (Number(d.rmFaktor) || 0.65))} Rm)` : ''}${menge[k]?.stueck ? `, ${menge[k].stueck} Stück` : ''}${kl ? ` – Stärkeklassen ${kl} Fm` : ''}`; }).join(' · ')],
     ...(menge._zugabe?.fm >= 0.05 ? [['Längenzugabe', `ca. ${fmt(menge._zugabe.fm)} Fm (wird mit abgeschnitten, nicht mitverkauft)`]] : []),
     ...(menge._wald?.fm >= 0.05 ? [['Bleibt im Wald', `ca. ${fmt(menge._wald.fm)} Fm Kronen- und Zopfholz`]] : []),
   ];

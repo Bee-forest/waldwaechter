@@ -23,6 +23,19 @@ function sichern() {
   subs.forEach((f) => f());
 }
 export const eigentuemerAbo = (f) => { subs.add(f); return () => subs.delete(f); };
+/** Eigentümereinträge zu Flurstücken (für das Teilen eines Ordners) */
+export function eigentuemerEintraege(parcels) {
+  const d = laden(), out = {};
+  for (const p of parcels) { const k = flurstueckKey(p.gemarkung, p.flur, p.nr); if (d[k]) out[k] = d[k]; }
+  return out;
+}
+/** Empfangene Eigentümereinträge übernehmen (vorhandene werden ergänzt, nicht gelöscht) */
+export function eigentuemerUebernehmen(eintraege) {
+  const d = laden(); let n = 0;
+  for (const [k, e] of Object.entries(eintraege || {})) { d[k] = { ...(d[k] || {}), ...e }; n++; }
+  if (n) sichern();
+  return n;
+}
 
 // Hochgeladene Tabellen (je Forstbetrieb / FBG eine): { id, name, datei, datum, anzahl, gefunden, nichtGefunden }
 const DATEI_KEY = 'waldwaechter.eigentuemer.dateien';
@@ -569,6 +582,7 @@ export function openOrdnerVerwaltung() {
       h('div', { class: 'fin-zeile-text' }, h('strong', {}, name), h('small', { class: 'muted' }, `${z.fl} Flurstücke · ${z.m} Maßnahmen · ${z.b} Buchungen`), (() => { const e = id && ordnerListe().find((o) => o.id === id)?.eigentuemer; return e && etAdresse(e) ? h('small', { class: 'muted' }, `Eigentümer: ${[etName(e), etAdresse(e)].filter(Boolean).join(', ')}`) : null; })()),
       h('button', { class: 'btn btn-small', onclick: () => { ordnerWaehlen(id || 'eigen'); seite.close(); } }, 'Öffnen'),
       id ? h('button', { class: 'btn btn-small', onclick: () => ordnerEigentuemerBearbeiten(id) }, 'Eigentümer') : null,
+      id ? h('button', { class: 'btn btn-small', onclick: () => import('./ordnerteilen.js').then((x) => x.ordnerTeilen(id)) }, 'Teilen') : null,
       id ? h('button', { class: 'btn btn-small', onclick: async () => { let n = name; const ok = await dialog({ title: 'Ordner umbenennen', body: h('div', { class: 'form' }, h('label', {}, 'Name', h('input', { value: n, oninput: (e) => { n = e.target.value; } }))), actions: [{ label: 'Abbrechen', value: false }, { label: 'Speichern', value: true, primary: true }] }); if (ok && n.trim()) store.update((st) => { st.ordner.find((o) => o.id === id).name = n.trim(); }); } }, 'Umbenennen') : null,
       id ? h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => {
         if (!(await confirmDialog(`Ordner „${name}“ auflösen?`, { ok: 'Auflösen', danger: true, body: 'Flurstücke, Maßnahmen und Buchungen bleiben erhalten und kommen zu „Eigene Flächen“.' }))) return;
@@ -580,6 +594,7 @@ export function openOrdnerVerwaltung() {
       liste.length > 300 ? h('p', { class: 'muted' }, `… ${liste.length - 300} weitere – Suche genauer eingeben`) : null,
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn btn-primary', onclick: () => ordnerAnlegen() }, '+ Neuer Ordner'),
+        h('button', { class: 'btn', onclick: () => import('./ordnerteilen.js').then((x) => x.ordnerEmpfangen()) }, 'Ordner empfangen (Datei laden)'),
         eigentuemerAnzahl() ? h('button', { class: 'btn', disabled: !EINSORTIEREN_AN, title: EINSORTIEREN_AN ? null : 'In Arbeit', onclick: () => { const r = ordnerAusEigentuemern(); toast(`${r.neu} Ordner angelegt, ${r.zugeordnet} Flurstücke zugeordnet`); } }, 'Ordner aus Eigentümerliste') : null),
       eigentuemerAnzahl() ? h('p', { class: 'hint' }, EINSORTIEREN_AN ? '' : '(In Arbeit – kommt mit einem späteren Update.) ', '„Ordner aus Eigentümerliste“ legt für jeden importierten Eigentümer deiner Flurstücke einen Ordner an und ordnet die Flurstücke zu.') : null);
   };

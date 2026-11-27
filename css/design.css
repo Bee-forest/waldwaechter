@@ -431,3 +431,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .az-guete .mit-einheit, .so-skonto .mit-einheit { display: flex; align-items: center; gap: 8px; }
 .az-guete .mit-einheit input, .so-skonto .mit-einheit input { flex: 1; min-width: 0; }
 .so-tabelle input { font-size: 14px; padding: 8px 6px; }
+/* Flurstück: Liste oder Karte */
+.flst-wahl { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.flst-wahl select { min-width: 0; }
+.flst-wahl .fk-knopf { white-space: nowrap; min-height: 44px; width: 100%; justify-content: center; }
+.flst-wahl .fk-knopf svg { width: 18px; height: 18px; }
+.fk-eigene { margin-bottom: 10px; }
+.leaflet-tooltip.teil-label { background: rgba(255,255,255,.85); border: 0; box-shadow: none; font-weight: 800; font-size: 11px; padding: 1px 5px; color: #1F4D3A; }
+.leaflet-tooltip.teil-label::before { display: none; }

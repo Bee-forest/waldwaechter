@@ -4,6 +4,7 @@
 // 3. alle Hüllen ansehen und frei wählen, 4. Stückliste mit Preisen (Hülle, Stab …), Förderung, buchen.
 // Preise: Waldbesitzer Service GmbH (WBS), Materialsortiment Herbst 2026, netto zzgl. 19 % MwSt.
 import { h, fill, openPage, toast, dialog } from './ui.js';
+import { mitKartenwahl } from './flaechekarte.js';
 import { store, uid } from './store.js';
 import { formatHa } from './geo.js';
 import { SAETZE } from './foerder-formular.js';
@@ -223,7 +224,7 @@ const euro = (v) => `${Number(v).toLocaleString('de-DE', { minimumFractionDigits
 const zahl = (v) => { const t = String(v ?? '').trim().replace(/\s|€/g, ''); if (!t) return null; const n = Number(/,/.test(t) ? t.replace(/\./g, '').replace(',', '.') : t); return Number.isFinite(n) ? n : null; };
 
 const pflanzungsName = (m) => {
-  const p = store.get().parcels.find((x) => x.id === m.parcelId);
+  const p = store.get().parcels.find((x) => x.id === m.parcelId) || (store.get().fremdFlurstuecke || []).find((x) => x.id === m.parcelId);
   const n = (m.pflanzplan?.arten || []).reduce((a, x) => a + (x.stueck || 0), 0) || Number(m.details?.count) || 0;
   const wann = m.date ? new Date(m.date).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' }) : 'ohne Termin';
   const arten = [...new Set(artenAusPflanzung(m).map((a) => a.name))].slice(0, 2).join(', ');
@@ -326,8 +327,8 @@ export function openEinzelschutzPlanung({ pflanzung = null, parcelId = null, foe
         pflanzungen.map((m) => h('option', { value: m.id, selected: m.id === pflanzung.id }, pflanzungsName(m))))),
       !pflanzungen.length ? h('small', { class: 'muted' }, 'Noch keine Pflanzung angelegt – du kannst die Stückzahl selbst eingeben.') : null,
       ohne ? h('div', {},
-        h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; } },
-          h('option', { value: '' }, 'ohne Flächenzuordnung'), store.get().parcels.filter(passtFlurstueck).map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
+        h('label', {}, 'Fläche', mitKartenwahl(h('select', { onchange: (e) => { s.parcelId = e.target.value || null; } },
+          h('option', { value: '' }, 'ohne Flächenzuordnung'), store.get().parcels.filter(passtFlurstueck).map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`))), null)),
         h('datalist', { id: 'es-arten' }, artenNamen.map((n) => h('option', { value: n }))),
         h('p', { class: 'sheet-label' }, 'Baumarten und Anzahl der zu schützenden Pflanzen'),
         h('ul', { class: 'pflanz-liste' }, eigeneArten.map((a, i) => h('li', { class: 'es-eigen' },

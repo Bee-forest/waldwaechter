@@ -3,6 +3,7 @@
 // Abzug der Rückegassen → Pflanzverband je Baumart → Baumarten in der Karte verteilen → Pflanzplanungskarte
 // mit Kosten. Danach optional Zaun um die Fläche und Förderantrag.
 import { h, fill, openPage, toast, dialog, confirmDialog } from './ui.js';
+import { mitKartenwahl } from './flaechekarte.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { areaHa, formatHa, centroid, pointInPolygon, polysOf } from './geo.js';
@@ -476,8 +477,8 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     if (schritt === 0) {
       inhalt = [
         foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Nach der Planung geht es direkt mit dem Förderantrag weiter.')) : null,
-        h('label', {}, 'Flurstück', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.ring = []; s.flaechen = []; karteNeu(); zeichne(); render(); } },
-          h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
+        h('label', {}, 'Flurstück', mitKartenwahl(h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.ring = []; s.flaechen = []; karteNeu(); zeichne(); render(); } },
+          h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`))), byId, mine)),
         h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Art der Pflanzung' },
           [['wiederaufforstung', 'Freifläche / Wiederaufforstung'], ['voranbau', 'Voranbau unter Schirm']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.art === k), onclick: () => { s.art = k; s.arten.forEach((x) => { x.nHa = null; }); render(); } }, l))),
         mapEl, status, umlaufHost,

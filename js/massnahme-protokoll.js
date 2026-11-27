@@ -1,6 +1,7 @@
 // Maßnahmen nachträglich bearbeiten (solange nicht erledigt) und Abschlussprotokoll nach dem Erledigen:
 // Schäden am verbleibenden Bestand, Auffälligkeiten, Bewertung des Unternehmers.
 import { h, fill, openPage, toast, fmtDate } from './ui.js';
+import { mitKartenwahl } from './flaechekarte.js';
 import { store } from './store.js';
 import { source } from './data/source.js';
 import { formatHa } from './geo.js';
@@ -68,9 +69,9 @@ export async function openMassnahmeBearbeiten(measureId) {
   } },
     h('p', { class: 'hint' }, `Gebucht am ${fmtDate(m.createdAt)}. Solange die Maßnahme nicht erledigt ist, kannst du alles ändern.`),
     h('label', {}, 'Fläche',
-      h('select', { name: 'parcel', onchange: (e) => zeigeWahl(e.target.value) },
+      mitKartenwahl(h('select', { name: 'parcel', onchange: (e) => zeigeWahl(e.target.value) },
         h('option', { value: '' }, 'ohne Flächenzuordnung'),
-        mine.map((p) => h('option', { value: p.id, selected: p.id === m.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${CATEGORIES[p.category]?.label || ''}, ${formatHa(amtlicheFlaecheHa(byId[p.id]))})`)))),
+        mine.map((p) => h('option', { value: p.id, selected: p.id === m.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${CATEGORIES[p.category]?.label || ''}, ${formatHa(amtlicheFlaecheHa(byId[p.id]))})`))), byId, mine)),
     flHost,
     felder.map(feld),
     m.serie ? null : h('label', {}, 'Geplanter Termin', h('input', { type: 'date', name: 'date', value: ymd(m.date) })),
@@ -234,8 +235,8 @@ export async function openFlaecheHinterlegen(measureId) {
   const zeige = (id, start = null) => { wahl?.entferne(); wahl = null; flHost.replaceChildren(); if (id && byId[id]) { wahl = flaechenWahl(byId[id], start); flHost.append(wahl.el); } };
   const body = h('div', { class: 'form' },
     h('p', { class: 'hint' }, m.status === 'fertig' ? 'Halte fest, auf welcher Fläche die Maßnahme tatsächlich durchgeführt wurde.' : 'Lege fest, wo die Maßnahme durchgeführt wird – ganzes Flurstück oder Teilfläche. Du kannst die Fläche auch vor Ort mit GPS ablaufen.'),
-    h('label', {}, 'Flurstück', h('select', { onchange: (e) => { parcelId = e.target.value || null; zeige(parcelId); } },
-      mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${formatHa(amtlicheFlaecheHa(byId[p.id]))})`)))),
+    h('label', {}, 'Flurstück', mitKartenwahl(h('select', { onchange: (e) => { parcelId = e.target.value || null; zeige(parcelId); } },
+      mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${formatHa(amtlicheFlaecheHa(byId[p.id]))})`))), byId, mine)),
     flHost,
     h('button', { type: 'button', class: 'btn btn-primary btn-block btn-large', onclick: () => {
       if (!parcelId) { toast('Bitte ein Flurstück wählen.'); return; }

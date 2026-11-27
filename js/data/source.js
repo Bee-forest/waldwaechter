@@ -16,6 +16,8 @@ import { store } from '../store.js';
 const cache = new Map(); // per WFS geladene Flurstücke dieser Sitzung
 const demoOn = () => false; // Demo-Flächen (Raum Ilmenau) entfernt – nur noch echte Flurstücke
 const stored = () => store.get().parcels.filter((p) => p.ring);
+// Flurstücke, die für Maßnahmen in der Karte gewählt wurden, aber nicht zu „Meine Flächen“ gehören
+const fremde = () => (store.get().fremdFlurstuecke || []).filter((p) => p.ring);
 
 function remember(list) { for (const p of list) cache.set(p.id, p); return list; }
 
@@ -31,11 +33,12 @@ export const source = {
     if (demoOn()) demoParcels.forEach((p) => map.set(p.id, p));
     cache.forEach((p, id) => map.set(id, p));
     stored().forEach((p) => { if (!map.has(p.id)) map.set(p.id, p); });
+    fremde().forEach((p) => { if (!map.has(p.id)) map.set(p.id, p); });
     return [...map.values()];
   },
 
   async parcelById(id) {
-    return cache.get(id) || stored().find((p) => p.id === id) || demoParcels.find((p) => p.id === id) || null;
+    return cache.get(id) || stored().find((p) => p.id === id) || fremde().find((p) => p.id === id) || demoParcels.find((p) => p.id === id) || null;
   },
 
   async parcelAt(latlng) {

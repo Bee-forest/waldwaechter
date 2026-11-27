@@ -4,6 +4,7 @@
 // Förderung nach der Thüringer Richtlinie 2025 Teil A (A 2.2.1 f, A 2.3) bzw. dem Landesprogramm (nur Sicherung).
 /* global L */
 import { h, fill, openPage, toast } from './ui.js';
+import { mitKartenwahl } from './flaechekarte.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { formatHa, areaHa } from './geo.js';
@@ -95,7 +96,9 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
 
   const flst = () => byId[s.parcelId] || null;
   const kulturen = () => (store.get().measures || []).filter((m) => m.type === 'pflanzung' && m.parcelId && m.parcelId === s.parcelId);
-  const ha = () => (s.teil ? (s.pts.length >= 3 ? areaHa(s.pts) : 0) : (flst() ? amtlicheFlaecheHa(flst()) || 0 : 0));
+  s.weitere ??= []; // fertige Teilflächen; s.pts ist die gerade gezeichnete
+  const alleTeile = () => [...s.weitere, s.pts].filter((r) => r.length >= 3);
+  const ha = () => (s.teil ? alleTeile().reduce((x, r) => x + areaHa(r), 0) : (flst() ? amtlicheFlaecheHa(flst()) || 0 : 0));
   // Neu zeichnen, ohne dass die Seite nach oben springt
   const ruhig = (fn) => { const pb = body.closest('.page-body'); const y = pb?.scrollTop || 0; fn(); if (pb) pb.scrollTop = y; };
 
@@ -113,15 +116,18 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
   function zeichne() {
     lyr.clearLayers();
     if (s.teil) {
-      if (s.pts.length >= 3) L.polygon(s.pts, { color: '#2E7D32', weight: 3, fillOpacity: 0.25, interactive: false }).addTo(lyr);
+      s.weitere.forEach((r, i) => L.polygon(r, { color: '#2E7D32', weight: 3, fillOpacity: 0.18, interactive: false }).addTo(lyr).bindTooltip(`Teilfläche ${i + 1}`, { permanent: true, direction: 'center', className: 'teil-label' }));
+      if (s.pts.length >= 3) L.polygon(s.pts, { color: s.weitere.length ? '#E65100' : '#2E7D32', weight: 3, fillOpacity: 0.25, interactive: false }).addTo(lyr);
       else if (s.pts.length === 2) L.polyline(s.pts, { color: '#2E7D32', weight: 3, interactive: false }).addTo(lyr);
       s.pts.forEach((ll) => L.circleMarker(ll, { radius: 6, color: '#fff', weight: 2, fillColor: '#2E7D32', fillOpacity: 1, interactive: false }).addTo(lyr));
-      status.textContent = s.pts.length < 3 ? `${s.pts.length} von mindestens 3 Eckpunkten – tippe die Pflegefläche in die Karte oder lauf sie mit dem GPS ab.` : `Pflegefläche ${formatHa(areaHa(s.pts))} · ${s.pts.length} Eckpunkte`;
+      const vorher = s.weitere.length ? `${s.weitere.length} Teilfläche${s.weitere.length > 1 ? 'n' : ''} fertig · ` : '';
+      status.textContent = s.pts.length < 3 ? `${vorher}${s.pts.length} von mindestens 3 Eckpunkten – tippe die ${s.weitere.length ? 'nächste Teilfläche' : 'Pflegefläche'} in die Karte oder lauf sie mit dem GPS ab.` : `${vorher}${s.weitere.length ? `Teilfläche ${s.weitere.length + 1}: ${formatHa(areaHa(s.pts))} · ` : ''}Pflegefläche gesamt ${formatHa(ha())}`;
     } else status.textContent = flst() ? `Ganzes Flurstück: ${formatHa(ha())}` : 'Ohne Flurstück: Fläche unten von Hand eintragen.';
     fill(umlaufHost, s.teil ? umlauf?.el : null);
     fill(teilHost, s.teil ? h('div', { class: 'btn-row' },
-      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts.pop(); zeichne(); navAkt(); } }, 'Letzten Punkt entfernen'),
-      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts = []; zeichne(); navAkt(); } }, 'Neu beginnen')) : null);
+      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { if (!s.pts.length && s.weitere.length) s.pts = s.weitere.pop(); else s.pts.pop(); zeichne(); navAkt(); } }, 'Letzten Punkt entfernen'),
+      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { if (s.pts.length < 3) { toast('Erst diese Teilfläche fertig einzeichnen (mindestens 3 Eckpunkte).'); return; } s.weitere.push(s.pts); s.pts = []; zeichne(); navAkt(); } }, '+ Weitere Teilfläche'),
+      h('button', { type: 'button', class: 'btn btn-small', onclick: () => { s.pts = []; s.weitere = []; zeichne(); navAkt(); } }, 'Alle löschen')) : null);
   }
 
   // Kultur übernehmen: Pflanzjahr und Pflanzfläche
@@ -130,7 +136,8 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
     if (m) {
       const t = m.finishedAt || m.date || m.createdAt;
       if (t) s.pflanzjahr = String(new Date(t).getFullYear());
-      if (m.flaeche?.ring?.length >= 3) { s.teil = true; s.pts = m.flaeche.ring.map((x) => [...x]); karteVeraltet = true; }
+      const ringe = m.flaeche?.ringe?.length ? m.flaeche.ringe : m.flaeche?.ring?.length >= 3 ? [m.flaeche.ring] : [];
+      if (ringe.length) { s.teil = true; s.weitere = ringe.slice(0, -1).map((r) => r.map((x) => [...x])); s.pts = ringe[ringe.length - 1].map((x) => [...x]); karteVeraltet = true; }
     }
   }
 
@@ -213,14 +220,14 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
       h('small', { class: 'muted' }, 'Pflanzjahr und Pflanzfläche werden übernommen.')) : null);
   }
   const flaecheEl = h('div', { class: 'form' },
-    h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; s.kulturId = null; kulturAuswahl(); schutzAkt(); karteNeu(); navAkt(); } },
-      h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
+    h('label', {}, 'Fläche', mitKartenwahl(h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; s.weitere = []; s.kulturId = null; kulturAuswahl(); schutzAkt(); karteNeu(); navAkt(); } },
+      h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`))), byId, mine)),
     h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Umfang der Fläche' },
       [[false, 'Ganzes Flurstück'], [true, 'Teilfläche einzeichnen']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.teil === k),
         onclick: (e) => { s.teil = k; e.currentTarget.parentElement.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-checked', String(i === (k ? 1 : 0)))); mapEl.classList.toggle('malt', k); zeichne(); navAkt(); } }, l))),
     kulturHost, mapEl, status, umlaufHost, teilHost, schutzHost);
   let nextBtn = null;
-  const kannWeiter = (q) => (q === 'art' ? !!s.art : q === 'flaeche' ? (!s.teil || s.pts.length >= 3) : true);
+  const kannWeiter = (q) => (q === 'art' ? !!s.art : q === 'flaeche' ? (!s.teil || alleTeile().length > 0) : true);
   function navAkt() { if (nextBtn) nextBtn.disabled = !kannWeiter(SCHRITTE[schritt]); }
 
   function inhalt(q) {
@@ -320,7 +327,7 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
 
   function speichern() {
     if (!s.art) { toast('Bitte die Art der Pflege wählen.'); return; }
-    if (s.teil && s.pts.length < 3) { toast('Bitte mindestens 3 Eckpunkte der Pflegefläche einzeichnen.'); return; }
+    if (s.teil && !alleTeile().length) { toast('Bitte mindestens 3 Eckpunkte der Pflegefläche einzeichnen.'); return; }
     const A = PFLEGE_ARTEN[s.art], f = ha(), k = kosten();
     const vorgehen = s.art === 'sicherung'
       ? [VERFAHREN_KULTUR.find((x) => x[0] === s.verfahren)?.[1], s.umfang === 'ganz' ? 'ganzflächig' : 'um die Pflanzen', `${s.durchgaenge}× im Jahr`, s.vegetation.length ? `gegen ${s.vegetation.join(', ')}` : ''].filter(Boolean).join(', ')
@@ -330,7 +337,7 @@ export async function openPflegePlanung({ parcelId = null, foerdern = false, onS
     store.update((st) => st.measures.push({
       id: neuId, type: 'pflege', parcelId: s.parcelId, date: s.date ? new Date(s.date).getTime() : null, status: 'geplant', createdAt: Date.now(), note: s.note.trim(),
       details: { art: A.label, area: f ? String(Math.round(f * 100) / 100).replace('.', ',') : '', vorgehen, species: s.art === 'sicherung' ? '' : s.species, mittelhoehe: s.mittelhoehe, pflanzjahr: s.pflanzjahr, zBaeume: s.zBaeume, ausfuehrung: s.ausfuehrung === 'eigen' ? 'Eigenleistung' : 'Unternehmer' },
-      ...(s.teil ? { flaeche: { ring: [...s.pts], ha: f } } : {}),
+      ...(s.teil ? { flaeche: { ring: alleTeile()[0], ringe: alleTeile(), ha: f } } : {}),
       pflege: { art: s.art, kulturId: s.kulturId, pflanzjahr: s.pflanzjahr, vegetation: s.vegetation, verfahren: s.verfahren, umfang: s.umfang, durchgaenge: s.durchgaenge,
         mittelhoehe: s.mittelhoehe, bhd: s.bhd, eingriffe: s.eingriffe, stammzahl: s.stammzahl, zBaeume: s.zBaeume, hoehe: s.hoehe, aestungArt: s.aestungArt, vorgehen },
       kosten: k?.summe != null ? Math.round(k.summe * 100) / 100 : null,

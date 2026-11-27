@@ -2,6 +2,7 @@
 // Bauregeln: Pfostenabstand 2,5–4 m (Standard 3,5 m), Eck- und Endpfosten mit Strebe, Mittelabstrebung alle 30–50 m,
 // je waagerechtem Draht ein Drahtspanner am Zaunanfang, -ende und an jeder Rollenverbindung (Grube / Drahtwaren Driller).
 import { h, fill, openPage, toast, dialog } from './ui.js';
+import { mitKartenwahl } from './flaechekarte.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
 import { distance, bearing, formatDist, formatHa, areaHa } from './geo.js';
@@ -146,8 +147,8 @@ export async function openZaunPlanung({ parcelId = null, onSaved, onAbbruch = nu
   fill(body,
     foerdern ? h('div', { class: 'lrt-hinweis ok' }, h('strong', {}, 'Mit Förderantrag'), h('p', {}, 'Nach dem Buchen geht es direkt mit dem Förderantrag weiter.')) : null,
     h('h2', { class: 'step-title' }, 'Wo soll der Zaun stehen?'),
-    h('label', {}, 'Fläche', h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; karteNeu(); renderRest(); } },
-      h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
+    h('label', {}, 'Fläche', mitKartenwahl(h('select', { onchange: (e) => { s.parcelId = e.target.value || null; s.pts = []; karteNeu(); renderRest(); } },
+      h('option', { value: '' }, 'ohne Flächenzuordnung'), mine.map((p) => h('option', { value: p.id, selected: p.id === s.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`))), byId, mine)),
     h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Zaunform' },
       [[true, 'Gatter (geschlossen)'], [false, 'Zaunlinie (offen)']].map(([k, l]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(s.geschlossen === k),
         onclick: (e) => { s.geschlossen = k; e.currentTarget.parentElement.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-checked', String(i === (k ? 0 : 1)))); zeichne(); renderRest(); } }, l))),

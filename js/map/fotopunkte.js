@@ -43,7 +43,7 @@ export function createFotopunktLayer(map, aktionen = {}, { ohne = () => null } =
         h('div', { class: 'btn-row' },
           aktionen.fotos ? h('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: () => { map.closePopup(); aktionen.fotos(f); } }, 'Fotos') : null,
           aktionen.hinfuehren ? h('button', { type: 'button', class: 'btn btn-small', onclick: () => { map.closePopup(); aktionen.hinfuehren(f); } }, 'Hinführen') : null,
-          aktionen.verschieben ? h('button', { type: 'button', class: 'link-btn', onclick: () => { map.closePopup(); aktionen.verschieben(f); } }, 'Standort / Blickrichtung ändern') : null)));
+          aktionen.verschieben ? h('button', { type: 'button', class: 'link-btn', onclick: () => { map.closePopup(); aktionen.verschieben(f); } }, 'Punkt bearbeiten') : null)));
       gruppe.addLayer(m);
     }
   }

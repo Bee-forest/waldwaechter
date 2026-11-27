@@ -176,7 +176,7 @@ export async function initHome(root) {
   overlays.fotopunkte = createFotopunktLayer(map, {
     fotos: async (f) => { const { fotopunktFotos } = await import('./tagebuch.js'); fotopunktFotos(f); },
     hinfuehren: async (f) => { const { openNavigation } = await import('./grenzfinder.js'); const p = (await source.allParcels()).find((x) => x.id === f.parcelId); openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }); },
-    verschieben: async (f) => { const { openHistorieFlurstueck } = await import('./historie.js'); openHistorieFlurstueck(f.parcelId, { fotopunkt: f.id }); },
+    verschieben: async (f) => { const { fotopunktBearbeiten } = await import('./tagebuch.js'); fotopunktBearbeiten(f); },
   });
   window.addEventListener('ww:karte-punkt', (e) => {
     alleSeitenSchliessen();

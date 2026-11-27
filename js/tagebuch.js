@@ -27,7 +27,7 @@ export function fotopunkteAbschnitt(p, ort) {
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => openNavigation({ titel: f.name || 'Fotopunkt', ziel: f.at, zielName: f.name || 'Fotopunkt', blick: f.blick, parcel: p }) }, 'Hinführen'),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => openFotos(`fp:${f.id}`, `${f.name || 'Fotopunkt'} · ${titel}`, { verlauf: true, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit.` }) }, fotoKnopfText(`fp:${f.id}`)),
         h('button', { type: 'button', class: 'btn btn-small', onclick: () => ort.zeige(f) }, 'Auf der Karte'),
-        h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktAufKarteVerschieben(f, p, ort) }, 'Standort / Blickrichtung ändern'),
+        h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktBearbeiten(f) }, 'Punkt bearbeiten'),
         h('button', { type: 'button', class: 'link-btn', onclick: () => fotopunktHierSetzen(f) }, 'Per GPS neu setzen'),
         h('button', { type: 'button', class: 'link-btn', onclick: async () => { if (await confirmDialog('Fotopunkt mit allen Aufnahmen löschen?', { ok: 'Löschen', danger: true })) { store.update((st) => { st.fotopunkte = st.fotopunkte.filter((x) => x.id !== f.id); }); fotosLoeschen(`fp:${f.id}`); } } }, 'löschen'))))));
 }
@@ -101,6 +101,47 @@ export function fotopunktNeu({ parcelId = null } = {}) {
     const id = await fotopunktSpeichern(r, imFlst?.id || null);
     erledigt = true; seite.close(); fertig(id || null);
   });
+}
+
+/** Fotopunkt bearbeiten: Name, Beschreibung, Standort und Blickrichtung auf einer Seite – ohne Flurstücksbezug */
+export async function fotopunktBearbeiten(fp) {
+  const [{ createBaseMap }, { eigeneFlaechenLayer }, { standortSteuerung }, { createFotopunktLayer }, geo] = await Promise.all([
+    import('./map/basemap.js'), import('./map/eigeneflaechen.js'), import('./map/standort.js'), import('./map/fotopunkte.js'), import('./geo.js')]);
+  const f = (store.get().fotopunkte || []).find((x) => x.id === fp.id) || fp;
+  const w = { name: f.name || '', notiz: f.notiz || '' };
+  const mapEl = h('div', { class: 'fp-neu-karte' });
+  const leiste = h('div', { class: 'fp-neu-leiste' });
+  let std = null, map = null, fpLyr = null, zu = false;
+  const seite = openPage('Punkt bearbeiten', h('div', { class: 'fp-neu form' },
+    h('label', {}, 'Name', h('input', { value: w.name, oninput: (e) => { w.name = e.target.value; } })),
+    h('label', {}, 'Beschreibung', h('textarea', { rows: 2, placeholder: 'z. B. Blick über die Pflanzung zum Hang', oninput: (e) => { w.notiz = e.target.value; } }, w.notiz)),
+    h('p', { class: 'hint' }, 'Standort: in die Karte tippen oder den Punkt verschieben, Blickrichtung ziehen – oder deinen GPS-Standort nehmen. Mit „Übernehmen“ wird alles gespeichert.'),
+    mapEl, leiste,
+    h('button', { type: 'button', class: 'btn btn-block btn-danger-ghost', onclick: async () => {
+      if (!(await confirmDialog('Fotopunkt mit allen Aufnahmen löschen?', { ok: 'Löschen', danger: true }))) return;
+      store.update((st) => { st.fotopunkte = st.fotopunkte.filter((x) => x.id !== f.id); delete st.fotos?.[`fp:${f.id}`]; });
+      toast('Fotopunkt gelöscht'); seite.close();
+    } }, 'Fotopunkt löschen')),
+  { onClose: () => { zu = true; std?.stop(); fpLyr?.entfernen?.(); try { map?.remove(); } catch { /* */ } } });
+  ({ map } = createBaseMap(mapEl, { center: f.at, zoom: 18, basemap: store.get().settings?.basemap, alkis: true }));
+  eigeneFlaechenLayer(map);
+  fpLyr = createFotopunktLayer(map, {}, { ohne: () => f.id }); fpLyr.addTo?.(map);
+  std = standortSteuerung(map, { schluessel: 'fotopunkt', start: 'an' });
+  setTimeout(() => map.invalidateSize(), 80);
+  const r = await fotopunktAufKarte(map, leiste, { start: f.at, blick: f.blick, titel: w.name || 'Fotopunkt' });
+  if (zu) return;
+  if (!r) { seite.close(); return; }
+  const verschoben = r.at[0] !== f.at[0] || r.at[1] !== f.at[1];
+  const eigene = store.get().parcels.filter((x) => x.ring);
+  const imFlst = verschoben ? eigene.find((x) => geo.inPolys(r.at, geo.polysOf(x))) : null;
+  store.update((st) => {
+    const x = st.fotopunkte.find((y) => y.id === f.id); if (!x) return;
+    x.name = w.name.trim() || x.name; x.notiz = w.notiz.trim();
+    if (verschoben) { x.at = r.at; x.genau = r.genau; x.perKarte = r.genau == null; if (imFlst) x.parcelId = imFlst.id; }
+    if (r.blick != null) x.blick = r.blick;
+  });
+  toast('Fotopunkt gespeichert');
+  seite.close();
 }
 
 /** Name und Blickrichtung abfragen und den Fotopunkt speichern */

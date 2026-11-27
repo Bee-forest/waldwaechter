@@ -5,6 +5,7 @@ import { kopfInhalt } from './home.js';
 import { centroid, polysOf, distance } from './geo.js';
 import { passtFlurstueck } from './profi.js';
 import { ladeRisiko, bewerte, risikoInhalt } from './risiko.js';
+import { sortimente, hatPreis, preisAnzeige, fuerText, masseText } from './sortimente.js';
 
 const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const monatText = (ym) => { const [y, m] = String(ym || '').split('-').map(Number); return y && m ? `${MONATE[m - 1]} ${y}` : ''; };
@@ -51,8 +52,41 @@ function render() {
 }
 
 // ---------- Holzpreise ----------
+// Eigene Preisliste (in „Sortimente und Preise“ geladen oder eingetragen) – liegt nur auf diesem Gerät
+function eigenePreise() {
+  const liste = sortimente().filter(hatPreis);
+  const pl = store.get().settings?.preisliste;
+  return liste.length ? { liste, titel: pl?.titel || 'Eigene Preise', am: pl?.am || null } : null;
+}
+const einheitText = (x) => (x.einheit === 'rm' ? '€/Rm' : '€/Fm');
+// Kurzzeile je Sortiment: bei Stärkeklassen die Hauptklasse (2b–4b bzw. mittlere Zeile) in der ersten Güte
+function kurzPreis(x) {
+  if (x.preisArt !== 'klassen') return { info: masseText(x).split(' · ')[0], preis: `${preisAnzeige(x.preis)} ${einheitText(x)}` };
+  const keys = Object.keys(x.klassen || {}).filter((k) => !/nsf/i.test(k) && x.klassen[k]?.[0]);
+  const k = keys.find((y) => /2b/i.test(y)) || keys[Math.floor(keys.length / 2)];
+  return { info: `${(x.spalten || [])[0] || ''} · Stkl. ${k}`, preis: `${preisAnzeige(x.klassen[k][0])} ${einheitText(x)}` };
+}
+function eigeneTabellen(e) {
+  return e.liste.map((x, i) => h('details', { class: 'kachel akt-art', open: i === 0 },
+    h('summary', {}, h('strong', {}, x.name, x.preisArt !== 'klassen' ? ` · ${preisAnzeige(x.preis)} ${einheitText(x)}` : ''), h('small', { class: 'muted' }, `${masseText(x)} · ${fuerText(x)}`)),
+    x.preisArt === 'klassen'
+      ? h('table', { class: 'akt-tabelle' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'Stärke'), (x.spalten || ['Güte 1', 'Güte 2']).slice(0, 2).map((t) => h('th', { class: 'zahl' }, t)))),
+        h('tbody', {}, Object.entries(x.klassen || {}).filter(([, v]) => v?.[0]).map(([k, v]) => h('tr', {}, h('td', {}, k),
+          /nsf/i.test(k) ? h('td', { class: 'zahl', colspan: 2 }, `${preisAnzeige(v[0])} ${einheitText(x)}`) : [h('td', { class: 'zahl' }, `${preisAnzeige(v[0])} ${einheitText(x)}`), h('td', { class: 'zahl' }, v[1] ? `${preisAnzeige(v[1])} ${einheitText(x)}` : '–')]))))
+      : h('p', {}, h('strong', {}, `${preisAnzeige(x.preis)} ${einheitText(x)}`), x.einheit === 'rm' && x.rmFaktor ? h('small', { class: 'muted' }, ` · 1 Rm = ${String(x.rmFaktor).replace('.', ',')} Fm`) : null)));
+}
 const HIGHLIGHTS = [['Fichte', 'Stammholz lang (> 10 m)'], ['Kiefer', 'Stammholzabschnitte'], ['Buche', 'Stammholz'], ['Eiche', 'Stammholz']];
+function eigeneKachelTeil(e) {
+  return h('button', { class: 'akt-kachel-btn', onclick: openHolzpreise, 'aria-label': 'Deine Holzpreise anzeigen' },
+    h('div', { class: 'akt-titelzeile' }, h('h2', { class: 'kachel-titel' }, 'Deine Holzpreise'), h('span', { class: 'akt-stand' }, e.am ? `geladen ${new Date(e.am).toLocaleDateString('de-DE')}` : 'selbst eingetragen')),
+    h('p', { class: 'muted akt-eigen-titel' }, e.titel),
+    h('ul', { class: 'akt-preise' }, e.liste.slice(0, 5).map((x) => { const k = kurzPreis(x); return h('li', {}, h('span', {}, h('strong', {}, x.name), ' ', h('small', { class: 'muted' }, k.info)), h('strong', {}, k.preis)); })),
+    h('span', { class: 'akt-mehr' }, 'Alle Sortimente und Stärkeklassen', h('span', { html: icon.chevron })));
+}
 function holzpreisKachel() {
+  const e0 = eigenePreise();
+  if ((!preise || preise.fehler) && e0) return h('section', { class: 'kachel' }, eigeneKachelTeil(e0), h('p', { class: 'muted' }, preise ? 'Überregionale Richtwerte gerade nicht erreichbar.' : 'Richtwerte werden geladen …'));
   if (!preise) return h('section', { class: 'kachel' }, h('h2', { class: 'kachel-titel' }, 'Holzpreise'), h('p', { class: 'muted' }, 'Wird geladen …'));
   if (preise.fehler) return h('section', { class: 'kachel' }, h('h2', { class: 'kachel-titel' }, 'Holzpreise'), h('p', { class: 'muted' }, 'Die Holzpreise konnten gerade nicht geladen werden.'));
   const zeilen = HIGHLIGHTS.map(([art, sort]) => {
@@ -60,9 +94,11 @@ function holzpreisKachel() {
     const s = b?.sortimente.find((x) => x.sortiment === sort);
     return s ? { art, s } : null;
   }).filter(Boolean);
+  const e = eigenePreise();
   return h('section', { class: 'kachel' },
+    e ? eigeneKachelTeil(e) : null,
     h('button', { class: 'akt-kachel-btn', onclick: openHolzpreise, 'aria-label': 'Alle Holzpreise anzeigen' },
-      h('div', { class: 'akt-titelzeile' }, h('h2', { class: 'kachel-titel' }, 'Holzpreise'), h('span', { class: 'akt-stand' }, `Stand ${monatText(preise.stand)}`)),
+      h('div', { class: 'akt-titelzeile' }, h(e ? 'h3' : 'h2', { class: 'kachel-titel' }, e ? 'Überregionale Richtwerte' : 'Holzpreise'), h('span', { class: 'akt-stand' }, `Stand ${monatText(preise.stand)}`)),
       h('ul', { class: 'akt-preise' }, zeilen.map(({ art, s }) => h('li', {},
         h('span', {}, h('strong', {}, art), ' ', h('small', { class: 'muted' }, [s.sortiment, s.guete, s.staerke].filter(Boolean).join(' · '))),
         h('strong', {}, preisText(s))))),
@@ -83,12 +119,19 @@ function risikoKachel() {
 
 function openHolzpreise() {
   const p = preise;
+  const e = eigenePreise();
   openPage('Holzpreise', h('div', { class: 'akt-seite' },
-    h('div', { class: 'kachel' },
+    e ? h('div', { class: 'kachel' },
+      h('p', {}, h('strong', {}, `Deine Preisliste: ${e.titel}`)),
+      h('p', { class: 'muted' }, 'Aus „Sortimente und Preise“ (Holzernte) – nur auf diesem Gerät gespeichert. Wird auch für die Kalkulation beim Auszeichnen verwendet.'),
+      h('button', { type: 'button', class: 'btn btn-small', onclick: () => import('./sortimente.js').then((x) => x.openSortimenteEinstellen()) }, 'Preise bearbeiten oder neue Liste laden')) : null,
+    e ? eigeneTabellen(e) : null,
+    e && p && !p.fehler ? h('h2', { class: 'akt-zwischen' }, 'Überregionale Richtwerte') : null,
+    p && !p.fehler ? h('div', { class: 'kachel' },
       h('p', {}, h('strong', {}, p.titel), ` – Stand ${monatText(p.stand)}`),
       h('p', { class: 'muted' }, p.hinweis),
-      p.quelle ? h('p', {}, h('a', { href: p.quelle.url, target: '_blank', rel: 'noopener' }, `Quelle: ${p.quelle.titel}`)) : null),
-    p.baumarten.map((b, i) => h('details', { class: 'kachel akt-art', open: i === 0 },
+      p.quelle ? h('p', {}, h('a', { href: p.quelle.url, target: '_blank', rel: 'noopener' }, `Quelle: ${p.quelle.titel}`)) : null) : null,
+    (p && !p.fehler ? p.baumarten : []).map((b, i) => h('details', { class: 'kachel akt-art', open: i === 0 },
       h('summary', {}, h('strong', {}, b.art), h('small', { class: 'muted' }, `${b.sortimente.length} Sortiment${b.sortimente.length === 1 ? '' : 'e'}`)),
       h('table', { class: 'akt-tabelle' },
         h('thead', {}, h('tr', {}, h('th', {}, 'Sortiment'), h('th', {}, 'Güte'), h('th', {}, 'Stärke'), h('th', { class: 'zahl' }, 'Preis'))),

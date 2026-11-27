@@ -117,7 +117,7 @@ async function fotoAnsehen(key, f) {
  * @param {string} key    z. B. `m:<id>` (Maßnahme), `lager:<id>`, `gasse:<id>`, `habitat:<id>`, `jagd:<id>`
  * @param {string} titel  Überschrift, z. B. „Pflanzung, Flurstück 45/1“
  */
-export function openFotos(key, titel, { verlauf = false, hinweis = null } = {}) {
+export function openFotos(key, titel, { verlauf = false, hinweis = null, ziel = null } = {}) {
   const body = h('div', { class: 'fotos' });
   let wahl = { vorher: null, nachher: null };
   const zeichne = () => {
@@ -147,7 +147,15 @@ export function openFotos(key, titel, { verlauf = false, hinweis = null } = {}) 
           liste.length ? h('div', { class: 'foto-raster' }, liste.map((f) => h('button', { type: 'button', class: 'foto-kachel', onclick: () => fotoAnsehen(key, f), 'aria-label': `Foto vom ${datumText(f.datum)} öffnen` },
             bildEl(`${f.id}-v`, '', 'foto-vorschau'), h('span', { class: 'foto-datum' }, datumText(f.datum))))) : h('p', { class: 'muted' }, 'Noch keine Aufnahme. Stell dich an den Fotopunkt, schau in die angegebene Richtung und fotografiere – jedes Jahr zur gleichen Jahreszeit.'),
           h('div', { class: 'btn-row' },
-            h('label', { class: 'btn btn-small' }, h('span', { html: icon.plus }), 'Foto aufnehmen', h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: (e) => { hinzufuegen(key, [...e.target.files], 'nachher'); e.target.value = ''; } })),
+            ziel && navigator.mediaDevices?.getUserMedia ? h('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: async () => {
+              const k = await import('./kamera.js');
+              await k.kompassErlauben(); // iOS fragt nur direkt nach einem Tipp
+              const letzte = liste[liste.length - 1];
+              let geist = null; try { geist = letzte ? await dateiLaden(letzte.id) : null; } catch { /* */ }
+              const datei = await k.kompassKamera({ ...ziel, geist });
+              if (datei) hinzufuegen(key, [datei], 'nachher');
+            } }, h('span', { html: icon.plus }), 'Foto mit Kompass aufnehmen') : null,
+            h('label', { class: 'btn btn-small' }, h('span', { html: icon.plus }), ziel ? 'Handykamera' : 'Foto aufnehmen', h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: (e) => { hinzufuegen(key, [...e.target.files], 'nachher'); e.target.value = ''; } })),
             h('label', { class: 'btn btn-small' }, 'Aus Galerie', h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: (e) => { hinzufuegen(key, [...e.target.files], 'nachher'); e.target.value = ''; } })))),
         h('p', { class: 'hint' }, 'Die Fotos werden verkleinert nur auf diesem Gerät gespeichert.'));
       return;

@@ -466,3 +466,27 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .fp-neu-leiste { display: grid; gap: 8px; }
 .wisch-zeile > .wisch-inhalt { flex-wrap: wrap; }
 .wisch-zeile > .wisch-inhalt > .fin-zeile-text { flex: 1 1 100%; }
+/* Kamera mit Kompass (Fotopunkt) */
+body.kk-offen { overflow: hidden; }
+.kk { position: fixed; inset: 0; z-index: 5000; background: #000; color: #fff; display: flex; flex-direction: column; }
+.kk-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.kk-geist { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .35; pointer-events: none; }
+.kk-oben { position: relative; display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 10px) 12px 10px; background: linear-gradient(rgba(0,0,0,.6), transparent); }
+.kk-titel { flex: 1; font-weight: 800; font-size: 16px; text-shadow: 0 1px 3px #000; }
+.kk-zu, .kk-geist-knopf { border: 0; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; font: inherit; font-weight: 700; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+.kk-zu { width: 40px; padding: 0; font-size: 18px; }
+.kk-geist-knopf[aria-pressed="false"] { opacity: .6; text-decoration: line-through; }
+.kk-hud { position: relative; margin: 8px auto 0; display: grid; justify-items: center; gap: 6px; padding: 10px 16px; border-radius: 18px; background: rgba(0,0,0,.5); border: 3px solid #E53935; min-width: 240px; transition: border-color .2s; }
+.kk-richtung-gut .kk-hud { border-color: #F9A825; }
+.kk-gut .kk-hud { border-color: #43A047; background: rgba(46,125,50,.65); }
+.kk-pfeil { width: 0; height: 0; border-left: 16px solid transparent; border-right: 16px solid transparent; border-bottom: 34px solid #fff; transform-origin: 50% 70%; transition: transform .15s linear; }
+.kk-text { font-weight: 800; font-size: 17px; text-align: center; text-shadow: 0 1px 3px #000; }
+.kk-ort { font-size: 14px; font-weight: 600; opacity: .95; }
+.kk-ort.gut { color: #C8F7C5; }
+.kk-band { position: relative; width: 220px; height: 16px; border-radius: 8px; background: rgba(255,255,255,.25); overflow: hidden; }
+.kk-band-mitte { position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: #fff; }
+.kk-band-ziel { position: absolute; top: 2px; bottom: 2px; width: 14px; margin-left: -7px; border-radius: 6px; background: #43A047; left: calc(50% + var(--versatz, 0) * 1.2px); transition: left .15s linear; }
+.kk-band::before { content: ''; position: absolute; left: calc(50% - 7px); width: 14px; top: 0; bottom: 0; background: rgba(67,160,71,.35); }
+.kk-unten { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; padding: 18px 0 calc(env(safe-area-inset-bottom) + 26px); background: linear-gradient(transparent, rgba(0,0,0,.55)); }
+.kk-ausloeser { width: 78px; height: 78px; border-radius: 50%; border: 5px solid #fff; background: rgba(255,255,255,.35); cursor: pointer; transition: background .2s; }
+.kk-gut .kk-ausloeser { background: #43A047; }

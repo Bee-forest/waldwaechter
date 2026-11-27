@@ -153,7 +153,7 @@ function fotopunktHierSetzen(f) {
 
 /** Fotos eines Fotopunkts öffnen (auch von der Karte aus) */
 export function fotopunktFotos(f) {
-  openFotos(`fp:${f.id}`, f.name || 'Fotopunkt', { verlauf: true, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit.` });
+  openFotos(`fp:${f.id}`, f.name || 'Fotopunkt', { verlauf: true, ziel: { blick: f.blick ?? null, at: f.at || null, name: f.name || 'Fotopunkt' }, hinweis: `Fotografiere immer von hier in Richtung ${f.blick}° (${compassLabel(f.blick)}), am besten jedes Jahr zur gleichen Jahreszeit. „Foto mit Kompass“ zeigt dir, wie weit du dich drehen musst – grün heißt: richtig ausgerichtet.` });
 }
 
 /** Standort und Blickrichtung eines Fotopunkts in der Karte ändern (ort = { map, leiste, ohne(id) }) */

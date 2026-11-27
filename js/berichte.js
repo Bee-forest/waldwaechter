@@ -30,13 +30,20 @@ export async function pdfKarte(doc, { x, y, w, h, pts, rand = 18, basemap = 'osm
   const hg = await kartenBild({ nord, sued, west, ost, basemap, breitePx: Math.round(w * 2.6), wms }).catch(() => null);
   doc.rechteck(x, y, w, h, { fill: [248, 250, 246] });
   if (hg) doc.bild(x, y, w, h, hg);
-  doc.rechteck(x, y, w, h, { stroke: [170, 180, 170] });
-  doc.linie(x + w - 18, y + 38, x + w - 18, y + 16, { w: 1.4, farbe: [40, 50, 40] }); doc.text(x + w - 21, y + 12, 'N', { bold: true, size: 9 });
-  const m = [10, 20, 50, 100, 200, 500, 1000, 2000].find((v) => v * sk >= 45) || 2000;
-  doc.rechteck(x + 8, y + h - 24, m * sk + 8, 16, { fill: [255, 255, 255] });
-  doc.linie(x + 12, y + h - 12, x + 12 + m * sk, y + h - 12, { w: 2, farbe: [40, 50, 40] }); doc.text(x + 12, y + h - 15, `${m.toLocaleString('de-DE')} m`, { size: 7 });
+  // alles, was jetzt gezeichnet wird, bleibt im Kartenrahmen; fertig() schließt ab (Rahmen, Nordpfeil, Maßstab)
+  doc.clip(x, y, w, h);
+  let zu = false;
+  const fertig = () => {
+    if (zu) return; zu = true;
+    doc.clipEnde();
+    doc.rechteck(x, y, w, h, { stroke: [170, 180, 170] });
+    doc.linie(x + w - 18, y + 38, x + w - 18, y + 16, { w: 1.4, farbe: [40, 50, 40] }); doc.text(x + w - 21, y + 12, 'N', { bold: true, size: 9 });
+    const m = [10, 20, 50, 100, 200, 500, 1000, 2000].find((v) => v * sk >= 45) || 2000;
+    doc.rechteck(x + 8, y + h - 24, m * sk + 8, 16, { fill: [255, 255, 255] });
+    doc.linie(x + 12, y + h - 12, x + 12 + m * sk, y + h - 12, { w: 2, farbe: [40, 50, 40] }); doc.text(x + 12, y + h - 15, `${m.toLocaleString('de-DE')} m`, { size: 7 });
+  };
   const drin = (ll) => { const [a, b] = tr(ll); return a >= x && a <= x + w && b >= y && b <= y + h; };
-  return { tr, drin, hg };
+  return { tr, drin, hg, fertig };
 }
 export const ringeZeichnen = (doc, tr, polys, stil) => doc.polygon(polys.flat().map((r) => r.map(tr)), stil);
 export const linieZeichnen = (doc, tr, pts, stil) => { for (let i = 0; i + 1 < pts.length; i++) { const [a, b] = tr(pts[i]), [c, d] = tr(pts[i + 1]); doc.linie(a, b, c, d, stil); } };
@@ -107,7 +114,7 @@ export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) 
   if (kh < 260) { doc.neueSeite(); W.y = 50; kh = 420; }
   W.y += 6;
   const baeume = (m.auszeichnung?.baeume || []).filter((b) => b.at);
-  const kartePts = [...polys.flat(2), ...baeume.map((b) => b.at), ...lager.map((l) => l.at), ...(rp && rp.dist < 2500 ? [rp.at] : [])];
+  const kartePts = [...polys.flat(2), ...(p ? polysOf(p).flat(2) : []), ...baeume.map((b) => b.at), ...lager.map((l) => l.at), ...(rp && rp.dist < 2500 ? [rp.at] : [])];
   const basemap = s.settings?.basemap === 'dop' ? 'dop' : 'osm';
   const k = await pdfKarte(doc, { x: W.L, y: W.y, w: W.R - W.L, h: kh, pts: kartePts, basemap });
   if (polys.length) ringeZeichnen(doc, k.tr, polys, { stroke: [242, 107, 29], w: 2.2 });
@@ -117,6 +124,7 @@ export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) 
   const rgb = (hx) => [1, 3, 5].map((i) => parseInt(hx.slice(i, i + 2), 16));
   baeume.forEach((b) => { if (!k.drin(b.at)) return; const i = STUFEN.findIndex((x) => x.k === b.k); punkt(doc, k.tr(b.at), rgb(STUFEN[i].farbe), 2.6 + i * 0.5); });
   if (rp && k.drin(rp.at)) { punkt(doc, k.tr(rp.at), [0, 150, 70], 6); const [a, b] = k.tr(rp.at); doc.text(a + 8, b + 3, rp.id, { bold: true, size: 8 }); }
+  k.fertig();
   W.y += kh + 6;
   if (baeume.length) { let x0 = W.L; doc.text(x0, W.y, 'Ausgezeichnete Bäume (BHD):', { size: 7.5, bold: true }); x0 += 122; STUFEN.forEach((st, i) => { if (x0 + 60 > W.R) { x0 = W.L + 122; W.y += 11; } punkt(doc, [x0 + 3, W.y - 2.5], rgb(st.farbe), 3.2); doc.text(x0 + 9, W.y, st.label, { size: 7.5 }); x0 += 62; }); W.y += 12; }
   doc.text(W.L, W.y, `Legende: orange = Arbeitsfläche · braun gestrichelt = Rückegasse · braun = Lagerplatz · grün = Rettungspunkt. Hintergrund: ${KARTEN_QUELLE[basemap]}`, { size: 7, farbe: GRAU });
@@ -159,6 +167,7 @@ export async function waldbericht() {
     ringeZeichnen(doc, k.tr, polys, { stroke: [242, 107, 29], w: 2 });
     (s.erschliessung?.gassen || []).filter((g) => g.line?.some(k.drin)).forEach((g) => linieZeichnen(doc, k.tr, g.line.filter(k.drin), { w: 1.6, farbe: [141, 90, 43], strich: [5, 3] }));
     for (const [art, farbe] of [['habitat', [46, 125, 50]], ['jagd', [93, 64, 55]]]) (s.punkte?.[art] || []).filter((x) => x.at && k.drin(x.at)).forEach((x) => punkt(doc, k.tr(x.at), farbe, 3.5));
+    k.fertig();
     W.y += 250;
     const kk = s.bestandKorrektur?.[p.id];
     if (kk?.haupt?.art) { W.kopf('Bestand (eigene Angaben)'); ['haupt', 'misch', 'neben'].forEach((x, i) => kk[x]?.art && W.zeile(['Hauptbaumart', 'Mischbaumart', 'Nebenbaumart'][i], `${kk[x].art}${kk[x].alter ? `, ${kk[x].alter} Jahre (Stand ${kk.jahr})` : ''}`)); }

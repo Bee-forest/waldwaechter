@@ -39,6 +39,9 @@ export class Pdf {
     if (stroke) this.farbe(stroke);
     this.ops.push(`${n(w)} w [] 0 d ${n(x)} ${n(this.H - y - h)} ${n(b)} ${n(h)} re ${fill && stroke ? 'B' : fill ? 'f' : 'S'}`);
   }
+  /** Zeichnen auf ein Rechteck beschränken (bis clipEnde) – damit nichts aus dem Kartenrahmen ragt */
+  clip(x, y, b, h) { this.ops.push(`q ${n(x)} ${n(this.H - y - h)} ${n(b)} ${n(h)} re W n`); }
+  clipEnde() { this.ops.push('Q'); }
   /** Polygon(e) aus Punkten [x, y] (Seitenkoordinaten, y nach unten) */
   polygon(ringe, { fill = null, stroke = [0, 0, 0], w = 1 } = {}) {
     if (fill) this.farbe(fill, true);

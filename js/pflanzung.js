@@ -760,9 +760,11 @@ export async function openPflanzPlanung({ parcelId = null, foerdern = false, onS
     const hg = await kartenBild({ nord, sued, west, ost, basemap, breitePx: Math.round(w * 2.6) }).catch(() => null);
     doc.rechteck(x, y, w, h, { fill: [248, 250, 246] });
     if (hg) doc.bild(x, y, w, h, hg);
-    doc.rechteck(x, y, w, h, { stroke: [170, 180, 170] });
-    const nordpfeil = () => { doc.linie(x + w - 18, y + 38, x + w - 18, y + 16, { w: 1.4, farbe: [40, 50, 40] }); doc.text(x + w - 21, y + 12, 'N', { bold: true, size: 9 }); };
-    const massstab = () => { const m = [5, 10, 20, 50, 100, 200, 500, 1000].find((v) => v * sk >= 45) || 1000; doc.linie(x + 12, y + h - 12, x + 12 + m * sk, y + h - 12, { w: 2, farbe: [40, 50, 40] }); doc.text(x + 12, y + h - 18, `${m.toLocaleString('de-DE')} m`, { size: 8 }); };
+    doc.clip(x, y, w, h); // Pflanzplätze und Gassen bleiben im Rahmen; nordpfeil() schließt ab
+    let zu = false;
+    const rahmen = () => { if (zu) return; zu = true; doc.clipEnde(); doc.rechteck(x, y, w, h, { stroke: [170, 180, 170] }); };
+    const nordpfeil = () => { rahmen(); doc.linie(x + w - 18, y + 38, x + w - 18, y + 16, { w: 1.4, farbe: [40, 50, 40] }); doc.text(x + w - 21, y + 12, 'N', { bold: true, size: 9 }); };
+    const massstab = () => { rahmen(); const m = [5, 10, 20, 50, 100, 200, 500, 1000].find((v) => v * sk >= 45) || 1000; doc.linie(x + 12, y + h - 12, x + 12 + m * sk, y + h - 12, { w: 2, farbe: [40, 50, 40] }); doc.text(x + 12, y + h - 18, `${m.toLocaleString('de-DE')} m`, { size: 8 }); };
     return { tr, sk, hg, nordpfeil, massstab };
   }
   const linienZeichnen = (doc, tr, pts, stil) => { for (let i = 0; i + 1 < pts.length; i++) { const [x1, y1] = tr(pts[i]), [x2, y2] = tr(pts[i + 1]); doc.linie(x1, y1, x2, y2, stil); } };

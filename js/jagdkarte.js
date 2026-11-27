@@ -128,6 +128,7 @@ async function erstellen(w) {
       doc.text(a + gr / 2 + 5, b + 3, t, { size: 7.5, bold: true });
     }
   }
+  k.fertig?.();
   // Legende unter der Karte, mit den Symbolen
   let y = 66 + kh + 14, x0 = L;
   for (const [t, l] of ARTEN.jagd.typen) { doc.bild(x0, y - 9, 11, 11, await sym('jagd', t)); doc.text(x0 + 14, y, l, { size: 8 }); x0 += 24 + l.length * 4.4; }

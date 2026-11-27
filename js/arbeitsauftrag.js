@@ -44,7 +44,17 @@ export async function umfeld(m) {
   return { p, fl, polys, mitte, gassen, lager, rett, info, rl };
 }
 
-/** Vorschlag für alle Felder aus Maßnahme, Profil und Umfeld */
+// Gefährdungen und Schutzmaßnahmen je Maßnahmenart (Vorschlag, frei änderbar)
+const SICHER = {
+  holz: ['Fällarbeiten: Hänger, Totholz und Dürrständer, Kronenbruch; Rückeverkehr und Seilarbeit', 'Fallbereich (2 Baumlängen) freihalten, Wege absperren und beschildern, Sicht- oder Rufkontakt, nicht allein mit der Motorsäge, PSA mit Schnittschutz'],
+  pflege: ['Motorsäge bzw. Freischneider, Rückschlag, Lärm; Arbeiten in dichtem Bewuchs', 'Abstand zu anderen Personen (mind. 15 m beim Freischneider), PSA mit Schnittschutz und Gesichtsschutz, Pausen einhalten'],
+  pflanzung: ['Hanglage, Stolpergefahr auf der Fläche, Werkzeug (Hohlspaten, Pflanzhaue)', 'Festes Schuhwerk, Handschuhe, Abstand beim Arbeiten mit der Pflanzhaue'],
+  zaun: ['Spanndraht unter Zug, Werkzeug (Pfahlramme, Akkuschrauber), Hanglage', 'Schutzbrille und Handschuhe, Draht nur mit geeignetem Spanngerät spannen, Pfahlramme mit Gehörschutz'],
+  maschine: ['Maschineneinsatz (Bagger, Forstmulcher): Steinschlag, wegfliegende Teile, Rückwärtsfahren', 'Gefahrenbereich (mind. 50 m beim Mulcher) absperren, nur nach Sichtkontakt nähern, Fahrer meldet Pausen'],
+};
+const SICHER_TYP = { holzernte_df: 'holz', holzernte_bs: 'holz', durchforstung: 'holz', verkehrssicherung: 'holz', pflege: 'pflege', pflanzung: 'pflanzung', saat: 'pflanzung', einzelschutz: 'pflanzung', zaunbau: 'zaun', raeumung: 'maschine', mulchen: 'maschine', bodenverwundung: 'maschine' };
+
+/** Vorschlag für alle Felder aus Maßnahme, Profil, früheren Aufträgen und Umfeld */
 export async function vorschlag(m, u) {
   const s = store.get();
   const { MEASURE_TYPES } = await import('./measures.js');
@@ -55,45 +65,107 @@ export async function vorschlag(m, u) {
   const az = m.auszeichnung;
   const { auszeichnungZeilen } = await import('./auszeichnen.js');
   const azZ = Object.fromEntries(auszeichnungZeilen(az));
-  const sg = [...(m.schutzgebiete || []), ...(m.thinning?.natura2000 || [])];
+  const zahl = (x) => String(x).replace('.', ',');
+  // Auftraggeber: Profil, dazu Anschrift aus dem letzten Arbeitsauftrag oder Förderantrag
+  const fa = [...(s.foerderantraege || [])].reverse().find((x) => x.daten?.strasse || x.daten?.telefon)?.daten || {};
+  const agAlt = s.settings?.auftraggeber || {};
+  const ag = { name: agAlt.name || pr.name || fa.name || '', adresse: agAlt.adresse || [fa.strasse, fa.ort].filter(Boolean).join(', '), tel: agAlt.tel || fa.telefon || '' };
+  // Auftragnehmer: der zuletzt beauftragte
+  const an = { name: '', adresse: '', tel: '', ...(s.settings?.auftragnehmer?.[0] || {}) };
+  // Mandant/in: Eigentümer des Flurstücks (Profimodus), wenn es nicht der Auftraggeber ist
+  let mandant = { name: '', adresse: '' };
+  try {
+    const { eigentuemerVon, istProfi } = await import('./profi.js');
+    const e = istProfi() && u.p ? eigentuemerVon(u.p) : null;
+    const n = e ? (e.waldbesitzer || [e.vorname, e.nachname].filter(Boolean).join(' ')) : '';
+    if (n && n !== ag.name) mandant = { name: n, adresse: [[e.strasse, e.hausnummer].filter(Boolean).join(' '), [e.plz, e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ') };
+  } catch { /* ohne Profimodus */ }
+  // Menge, Verfahren, Preis, Abrechnung je Maßnahmenart
+  const flHa = u.fl?.ha || (u.p ? amtlicheFlaecheHa(u.p) : 0);
+  const haText = d.area ? `${d.area} ha` : flHa ? formatHa(flHa) : '';
+  let menge = haText, abrechnung = flHa || d.area ? 'Fläche (ha)' : '', preis = '';
+  if (holz) {
+    const fm = az?.ergebnis?.gesamt ?? (d.menge ? Number(String(d.menge).replace(',', '.')) : null);
+    const n = az?.baeume?.length || d.baeume;
+    menge = fm ? `${zahl(Number(fm).toFixed(1))} Fm${n ? ` (${n} Bäume)` : ''}${haText ? ` auf ${haText}` : ''}` : haText;
+    abrechnung = 'Waldmaß';
+    if (s.settings?.ernteKosten) preis = `${s.settings.ernteKosten} €/fm`;
+  } else if (['pflanzung', 'einzelschutz'].includes(m.type) && d.count) {
+    menge = `${d.count} Stück${d.species ? ` ${d.species}` : ''}${haText ? ` auf ${haText}` : ''}`; abrechnung = 'Stückzahl';
+    if (m.type === 'einzelschutz' && d.preis) preis = `${d.preis} €/Stück`;
+  } else if (m.type === 'zaunbau' && d.length) {
+    menge = `${d.length} lfm${d.tore ? `, Tore: ${d.tore}` : ''}`; abrechnung = 'Laufmeter';
+  } else if (m.type === 'sonstiges' && d.amount) menge = d.amount;
+  if (!preis && m.kosten && !holz) {
+    const ha = Number(String(d.area || '').replace(',', '.')) || flHa;
+    preis = abrechnung === 'Fläche (ha)' && ha ? `ca. ${Math.round(m.kosten / ha)} €/ha (Kalkulation)` : abrechnung === 'Stückzahl' && d.count ? `ca. ${zahl((m.kosten / Number(d.count)).toFixed(2))} €/Stück (Kalkulation)` : abrechnung === 'Laufmeter' && d.length ? `ca. ${zahl((m.kosten / Number(d.length)).toFixed(2))} €/lfm (Kalkulation)` : '';
+  }
+  const verfahren = [d.verfahren || d.technik || (m.type === 'einzelschutz' ? d.art : '') || m.pflege?.vorgehen || d.vorgehen || (m.thinning?.plan ? (m.thinning.plan.methode === 'f4' ? 'Durchforstung nach Durchforstungshilfe' : 'Z-Baum-Durchforstung') : ''),
+    m.type === 'pflanzung' && d.verband ? `Verband ${d.verband}` : '', m.type === 'zaunbau' && d.zaun ? d.zaun : '', m.type === 'mulchen' && d.streifenbreite ? `Streifen ${d.streifenbreite} m, Abstand ${d.abstand || '?'} m` : '',
+    m.type === 'raeumung' && d.material ? d.material : '', m.type === 'bodenverwundung' && d.anteil ? `${d.anteil} % der Fläche` : ''].filter(Boolean).join(', ');
+  // Schutzgebiete, Biotope, LRT, Habitatbäume
+  const sg = [...(m.schutzgebiete || []), ...(m.thinning?.natura2000 || []), ...(u.info?.schutz || []).map((x) => ({ layer: x.layer, art: x.label, name: x.props?.NAME || x.props?.name || x.props?.Name || '' }))];
+  const hat = (l) => sg.some((g) => g.layer === l);
   const wald = u.info?.wald || [];
-  const menge = holz && (az?.ergebnis?.gesamt || d.menge)
-    ? `${String(az?.ergebnis?.gesamt ? az.ergebnis.gesamt.toFixed(1) : d.menge).replace('.', ',')} Fm${d.baeume ? ` (${d.baeume} Bäume)` : ''}`
-    : d.area ? `${d.area} ha` : u.fl?.ha ? formatHa(u.fl.ha) : u.p ? formatHa(amtlicheFlaecheHa(u.p)) : '';
-  const verfahren = d.verfahren || d.method || m.pflege?.vorgehen || (m.thinning?.plan ? (m.thinning.plan.methode === 'f4' ? 'Durchforstung nach Durchforstungshilfe' : 'Z-Baum-Durchforstung') : '') || '';
-  const rp = (r) => (r ? `${r.id}${r.name ? ` (${r.name})` : ''} – ${kurzKoord(r.at)}` : '');
+  const { inPolys } = await import('./geo.js');
+  const habitat = (s.punkte?.habitat || []).filter((x) => x.at && u.polys.length && inPolys(x.at, u.polys));
+  const naturBem = [
+    sg.filter((g) => ['ffh_geb', 'spa', 'nsg', 'nationalpark', 'biosreserv'].includes(g.layer)).map((g) => `${g.art}${g.name ? ` „${g.name}“` : ''}`).filter((x, i, a) => a.indexOf(x) === i).join(', '),
+    wald.filter((w) => ['waldbiotope', 'waldlebensraumtypen'].includes(w.layer)).map((w) => w.label).filter((x, i, a) => a.indexOf(x) === i).join(', '),
+    habitat.length ? `${habitat.length} Habitatbaum${habitat.length > 1 ? 'bäume' : ''} markiert – erhalten (siehe Karte)` : '',
+  ].filter(Boolean).join('; ');
+  const streng = ['ffh_geb', 'spa', 'nsg'].some(hat);
+  // Waldfunktionen und Erschließung als Bemerkung zur Fläche
+  const funktionen = (u.info?.funktion || []).map((f) => `${f.label}${f.layer === 'bodenschutzfunktion' ? ' (Rückegassen hangparallel, Kahlschlag vermeiden)' : ['erholungswald', 'erholungsfunktion'].includes(f.layer) ? ' (Waldbesucher – Wege absperren)' : ''}`);
+  const flaecheBem = [
+    funktionen.filter((x, i, a) => a.indexOf(x) === i).join('; '),
+    u.gassen.length ? `${u.gassen.length} Rückegasse${u.gassen.length > 1 ? 'n' : ''} eingezeichnet${d.gassenabstand ? `, Abstand ${d.gassenabstand} m` : ''} (siehe Karte)` : '',
+    u.lager[0]?.befahrbar ? `Lagerplatz: ${({ ganzjaehrig: 'ganzjährig mit LKW befahrbar', trocken: 'nur bei trockenem Wetter befahrbar', frost: 'nur bei Frost befahrbar', traktor: 'nur Traktor/Forwarder, kein LKW' })[u.lager[0].befahrbar] || u.lager[0].befahrbar}${u.lager[0].lkw ? ', LKW kann wenden' : ''}` : '',
+  ].filter(Boolean).join('. ');
+  const sonstiges = [
+    m.note || '',
+    az?.baeume?.length ? 'Die ausgezeichneten Bäume sind mit GPS-Punkten in der Karte der Anlage eingetragen.' : '',
+    m.type === 'pflanzung' && d.species ? `Baumart(en): ${d.species}${m.pflanzplan ? ' – Verteilung laut Pflanzplan' : ''}` : '',
+    streng && (holz || m.type === 'pflege' || SICHER_TYP[m.type] === 'maschine') ? 'Schutzgebiet: Arbeiten möglichst außerhalb der Brut- und Setzzeit (1.3.–30.9.); Horst- und Höhlenbäume erhalten.' : '',
+  ].filter(Boolean).join('\n');
+  // Revierleiter: Liste von ThüringenForst, sonst selbst hinterlegter Kontakt
   const rev = u.rl?.revier;
+  let telRL = rev ? `${rev.name || ''}${rev.mobil || rev.tel ? `, ${rev.mobil || rev.tel}` : ''}` : '';
+  if (!telRL && u.info?.zustaendig) { try { const { revierKontakt } = await import('./profi.js'); const k = revierKontakt(u.info.zustaendig); if (k?.name || k?.tel) telRL = [k.name, k.tel].filter(Boolean).join(', '); } catch { /* */ } }
+  const { BA_NAMEN } = await import('./sortimente.js');
+  const baArten = [...new Set((az?.baeume || []).map((b) => b.ba).filter((x) => x && x !== 'avg'))];
+  const baName = baArten.map((k) => BA_NAMEN[k] || k).join(', ');
+  const rp = (r) => (r ? `${r.id}${r.name ? ` (${r.name})` : ''} – ${kurzKoord(r.at)}` : '');
+  const [gefahren, massnahmen] = SICHER[SICHER_TYP[m.type]] || ['', ''];
+  const orte = (m.parcelIds?.length > 1 ? m.parcelIds : []).map((id) => s.parcels.find((x) => x.id === id) || (s.fremdFlurstuecke || []).find((x) => x.id === id)).filter(Boolean);
   return {
     nr: `AA-${new Date().getFullYear()}-${String(m.id).slice(-4).toUpperCase()}`,
     datum: new Date().toISOString().slice(0, 10),
-    ag: { name: pr.name || '', adresse: [pr.strasse, [pr.plz, pr.ort].filter(Boolean).join(' ')].filter(Boolean).join(', '), tel: pr.telefon || '' },
-    an: { name: '', adresse: '', tel: '' },
-    mandant: { name: '', adresse: '' },
+    ag, an, mandant,
     zeitraum: m.date ? `ab ${datum(m.date)}` : '',
-    ort: u.p ? `Gemarkung ${u.p.gemarkung}, Flur ${u.p.flur}, Flurstück ${u.p.nr}${u.fl && !u.fl.ganz && u.fl.ha ? ` (Teilfläche ${formatHa(u.fl.ha)})` : ''}` : m.ort || '',
-    leistungsart: T?.label || m.type,
-    verfahren,
-    menge,
-    preis: holz && s.settings?.ernteKosten ? `${s.settings.ernteKosten} €/fm` : '',
+    ort: orte.length ? orte.map((p) => `${p.gemarkung}, Flur ${p.flur}, Flst. ${p.nr}`).join('; ')
+      : u.p ? `Gemarkung ${u.p.gemarkung}${u.p.gemeinde ? ` (${u.p.gemeinde})` : ''}, Flur ${u.p.flur}, Flurstück ${u.p.nr}${u.fl && !u.fl.ganz && u.fl.ha ? ` – Teilfläche ${formatHa(u.fl.ha)}` : ''}` : m.ort || '',
+    leistungsart: `${T?.label || m.type}${d.species && !['pflanzung', 'einzelschutz'].includes(m.type) ? ` (${d.species})` : baName ? ` (${baName})` : ''}`,
+    verfahren, menge, preis,
     rvr: holz, qualitaet: '',
     aushaltung: azZ.Sortimente ? azZ.Sortimente.split(' · ').join('\n') : '',
-    sonstiges: m.note || '',
+    sonstiges,
     ersch: { grob: !!u.lager.length, fein: !!u.gassen.length, keine: false, vorgeschaedigt: false },
-    flaecheBem: '',
+    flaecheBem,
     natur: {
-      ffh: sg.some((g) => g.layer === 'ffh_geb'), spa: sg.some((g) => g.layer === 'spa'), nsg: sg.some((g) => g.layer === 'nsg'),
-      biotop: wald.some((w) => w.layer === 'waldbiotope'), lrt: wald.some((w) => w.layer === 'waldlebensraumtypen'), denkmal: false, arten: false,
+      ffh: hat('ffh_geb'), spa: hat('spa'), nsg: hat('nsg'),
+      biotop: wald.some((w) => w.layer === 'waldbiotope'), lrt: wald.some((w) => w.layer === 'waldlebensraumtypen'), denkmal: false, arten: habitat.length > 0,
       keine: false,
     },
-    _naturGeprueft: !!m.schutzGeprueft && !!u.info && !u.info.failed,
-    naturBem: sg.length ? `${sg.map((g) => `${g.art} „${g.name || '–'}“`).filter((x, i, a) => a.indexOf(x) === i).join(', ')} – Verordnung beachten` : '',
+    _naturGeprueft: (!!m.schutzGeprueft || (!!u.info && !u.info.failed)) && !habitat.length,
+    naturBem,
     polter: u.lager[0] ? `${u.lager[0].name ? `${u.lager[0].name}: ` : ''}${kurzKoord(u.lager[0].at)}` : '',
-    polterDurch: '', grenzenDurch: '',
+    polterDurch: u.lager.length ? ag.name : '', grenzenDurch: ag.name,
     mark: { grenzen: false, ernteholz: !!(az?.baeume?.length || m.thinning?.plan), gassen: !!u.gassen.length },
     rp1: rp(u.rett[0]), rp2: rp(u.rett[1]),
-    telAG: pr.telefon || '', telRL: rev ? `${rev.name || ''}${rev.mobil || rev.tel ? `, ${rev.mobil || rev.tel}` : ''}` : '', telAN: '',
-    gefahren: '', massnahmen: '',
-    abrechnung: holz ? 'Waldmaß' : d.area || u.fl ? 'Fläche (ha)' : '',
+    telAG: ag.tel, telRL, telAN: an.tel || '',
+    gefahren, massnahmen,
+    abrechnung,
   };
 }
 const natursumme = (n) => NATUR.slice(1).some(([k]) => n[k]);
@@ -160,6 +232,7 @@ export async function arbeitsauftragAusfuellen(measureId) {
       store.update((st) => {
         const x = st.measures.find((y) => y.id === measureId); if (x) x.auftrag = JSON.parse(JSON.stringify(a));
         if (a.an.name) { const l = (st.settings.auftragnehmer || []).filter((y) => y.name !== a.an.name); l.unshift({ ...a.an, tel: a.an.tel || a.telAN }); st.settings.auftragnehmer = l.slice(0, 20); }
+        if (a.ag.name || a.ag.adresse || a.telAG) st.settings.auftraggeber = { name: a.ag.name, adresse: a.ag.adresse, tel: a.telAG || a.ag.tel || '' };
       });
       seite.close();
       const b = await import('./berichte.js'); b.unternehmerAuftrag(measureId);

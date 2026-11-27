@@ -448,7 +448,8 @@ export function ordnerSuchen({ aktiv = null, mitSpezial = false, eigenWert = 'ei
     const body = h('div', { class: 'ordner-suche' }, feld, liste,
       h('div', { class: 'btn-row' },
         h('button', { type: 'button', class: 'btn', onclick: async () => { const o = await ordnerAnlegen(feld.value.trim() || vorschlag); if (o) ende(o.id); } }, '+ Neuer Ordner'),
-        mitSpezial ? h('button', { type: 'button', class: 'btn', onclick: () => { ende(null); openOrdnerVerwaltung(); } }, 'Ordner verwalten') : null));
+        mitSpezial ? h('button', { type: 'button', class: 'btn', onclick: () => { ende(null); openOrdnerVerwaltung(); } }, 'Ordner verwalten · teilen') : null,
+        mitSpezial ? h('button', { type: 'button', class: 'btn', onclick: () => { ende(null); import('./ordnerteilen.js').then((x) => x.ordnerEmpfangen()); } }, 'Ordner empfangen') : null));
     const seite = openPage('Ordner wählen', body, { onClose: () => { if (!erledigt) { erledigt = true; fertig(null); } } });
     zeigen('');
     setTimeout(() => feld.focus(), 200);

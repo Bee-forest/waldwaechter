@@ -74,52 +74,42 @@ export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) 
   if (!m) return;
   if (!anhaengen) toast('Arbeitsauftrag wird erstellt …');
   const { MEASURE_TYPES } = await import('./measures.js');
-  const all = await source.allParcels();
-  const p = all.find((x) => x.id === m.parcelId) || m.flurstueck || null;
-  const fl = flaecheVon(m, p);
-  const polys = fl?.polys?.length ? fl.polys : p ? polysOf(p) : [];
-  const mitte = polys.length ? centroid(polys[0][0]) : m.schaden?.pos || null;
+  const AA = await import('./arbeitsauftrag.js');
+  const u = await AA.umfeld(m);
+  const { p, fl, polys, mitte, gassen, lager } = u;
   if (!mitte) { if (!anhaengen) toast('Für diese Maßnahme ist keine Fläche hinterlegt – bitte zuerst eine Fläche hinterlegen.'); return; }
-  const E = s.erschliessung || { gassen: [], lager: [] };
-  const nahe = (ll, r) => Math.abs(ll[0] - mitte[0]) < r && Math.abs(ll[1] - mitte[1]) < r * 1.6;
-  const gassen = (E.gassen || []).filter((g) => g.line?.some((ll) => nahe(ll, 0.012)));
-  const lager = (E.lager || []).filter((l) => l.at && nahe(l.at, 0.015));
-  const rett = await nearestRescue(mitte, 1).catch(() => []);
-  const rp = rett[0];
-  const pr = s.profile || {};
+  const rp = u.rett[0];
+  const a = AA.mischen(await AA.vorschlag(m, u), m.auftrag);
   const doc = new Pdf();
+  // Seite 1: Formular nach Vorlage
+  await AA.auftragSeite(doc, a);
+  // Seite 2: Karte und Arbeitsanweisung
+  doc.neueSeite();
   const W = new Schreiber(doc);
   const typ = MEASURE_TYPES[m.type]?.label || m.type;
-  W.titel(`Arbeitsauftrag: ${typ}`, `Erstellt am ${datum(Date.now())} mit der WaldWächter-App`);
-  W.kopf('Auftraggeber');
-  W.zeile('Name', pr.name || '–'); W.zeile('Telefon', pr.telefon || '–'); W.zeile('E-Mail', pr.email || '–');
-  if (pr.strasse || pr.ort) W.zeile('Anschrift', [pr.strasse, pr.ort].filter(Boolean).join(', '));
-  W.kopf('Fläche und Maßnahme');
-  if (p) W.zeile('Flurstück', `${p.nr}, Flur ${p.flur}, Gemarkung ${p.gemarkung}${p.gemeinde ? ` (${p.gemeinde})` : ''}`);
-  W.zeile('Fläche', `${fl?.art || 'Flurstück'}${fl?.ha ? `, ${formatHa(fl.ha)}` : p ? `, ${formatHa(amtlicheFlaecheHa(p))}` : ''}`);
-  W.zeile('Termin', m.date ? datum(m.date) : 'nach Absprache');
-  const T = MEASURE_TYPES[m.type];
-  for (const [k, v] of Object.entries(m.details || {})) { if (v === '' || v == null) continue; const f = T?.fields?.find((x) => x[0] === k); if (f) W.zeile(f[1].replace(/ \(.*\)/, ''), String(v)); }
-  if (m.thinning?.plan) W.zeile('Durchforstung', `${m.thinning.plan.methode === 'f4' ? `${Math.round(m.thinning.plan.planung?.budget || 0)} m³ Menge laut Durchforstungshilfe` : `${m.thinning.plan.total} Bäume Entnahme geplant`}; Bäume sind ausgezeichnet`);
+  W.titel(`Anlage zum Arbeitsauftrag ${a.nr}`, `${typ}${p ? ` · Flurstück ${p.nr}, Flur ${p.flur}, Gemarkung ${p.gemarkung}` : ''}${fl?.ha ? ` · ${formatHa(fl.ha)}` : ''}`);
   const { auszeichnungZeilen, STUFEN } = await import('./auszeichnen.js');
-  auszeichnungZeilen(m.auszeichnung).forEach(([a, b]) => W.zeile(a, b));
-  if (m.note) W.zeile('Hinweise', m.note);
-  const sg = m.thinning?.natura2000 || m.schutzgebiete || [];
-  if (sg.length) W.zeile('Schutzgebiet', `${sg.map((g) => `${g.art} „${g.name || 'ohne Namen'}“`).join(', ')} – Verordnung beachten${['ffh_geb', 'spa', 'nsg'].some((l) => sg.some((g) => g.layer === l)) ? '; Brut- und Setzzeit 1.3.–30.9. beachten' : ''}.`);
+  const azZ = auszeichnungZeilen(m.auszeichnung);
+  if (azZ.length || m.thinning?.plan) {
+    W.kopf('Auszeichnung');
+    if (m.thinning?.plan) W.zeile('Durchforstung', `${m.thinning.plan.methode === 'f4' ? `${Math.round(m.thinning.plan.planung?.budget || 0)} m³ Menge laut Durchforstungshilfe` : `${m.thinning.plan.total} Bäume Entnahme geplant`}; Bäume sind ausgezeichnet`);
+    azZ.forEach(([k2, v]) => W.zeile(k2, v));
+  }
   W.kopf('Arbeitsanweisung');
   [...(ANWEISUNG[m.type] || []), SICHERHEIT].forEach((t) => W.absatz(`• ${t}`, { size: 10 }));
   W.kopf('Zufahrt, Lagerplatz und Rettung');
   W.zeile('Treffpunkt / Fläche', `${mitte[0].toFixed(5)} N, ${mitte[1].toFixed(5)} O – ${kartenLink(mitte)}`);
   lager.slice(0, 3).forEach((l, i) => W.zeile(i ? '' : 'Lagerplatz', `${l.name || `Lagerplatz ${i + 1}`}: ${l.at[0].toFixed(5)} N, ${l.at[1].toFixed(5)} O${l.befahrbar ? ` · ${l.befahrbar}` : ''}${l.lkw ? ' · LKW kann wenden' : ''}${l.text ? ` · ${l.text}` : ''}`));
-  if (!lager.length) W.zeile('Lagerplatz', 'nicht eingetragen – bitte vor Ort absprechen');
-  W.zeile('Rückegassen', gassen.length ? `${gassen.length} eingezeichnet (siehe Karte)${gassen.some((g) => g.befahrbar) ? '; ' + gassen.filter((g) => g.befahrbar).map((g) => `${g.name || 'Gasse'}: ${g.befahrbar}`).slice(0, 4).join(', ') : ''}` : 'nicht eingezeichnet');
-  W.zeile('Rettungspunkt', rp ? `${rp.id}${rp.name ? ` (${rp.name})` : ''}, ${formatDist(rp.dist)} ${compassLabel(rp.brg)} – ${rp.at[0].toFixed(5)} N, ${rp.at[1].toFixed(5)} O. Im Notfall 112 anrufen und die Nummer des Rettungspunkts nennen.` : 'kein Rettungspunkt gefunden (Geoportal nicht erreichbar)');
-  // Karte
-  W.platz(360);
+  W.zeile('Rückegassen', gassen.length ? `${gassen.length} eingezeichnet (siehe Karte)` : 'nicht eingezeichnet');
+  W.zeile('Rettungspunkt', rp ? `${rp.id}${rp.name ? ` (${rp.name})` : ''}, ${formatDist(rp.dist)} ${compassLabel(rp.brg)} – im Notfall 112 anrufen und die Nummer nennen.` : 'kein Rettungspunkt gefunden (Geoportal nicht erreichbar)');
+  // Karte – passt sie noch auf die Seite (mind. 260 pt), sonst neue Seite
+  let kh = Math.min(380, 800 - W.y - 40);
+  if (kh < 260) { doc.neueSeite(); W.y = 50; kh = 420; }
+  W.y += 6;
   const baeume = (m.auszeichnung?.baeume || []).filter((b) => b.at);
   const kartePts = [...polys.flat(2), ...baeume.map((b) => b.at), ...lager.map((l) => l.at), ...(rp && rp.dist < 2500 ? [rp.at] : [])];
   const basemap = s.settings?.basemap === 'dop' ? 'dop' : 'osm';
-  const k = await pdfKarte(doc, { x: W.L, y: W.y, w: W.R - W.L, h: 340, pts: kartePts, basemap });
+  const k = await pdfKarte(doc, { x: W.L, y: W.y, w: W.R - W.L, h: kh, pts: kartePts, basemap });
   if (polys.length) ringeZeichnen(doc, k.tr, polys, { stroke: [242, 107, 29], w: 2.2 });
   if (p && fl && !fl.ganz) ringeZeichnen(doc, k.tr, polysOf(p), { stroke: [246, 211, 45], w: 1.2 });
   gassen.forEach((g) => linieZeichnen(doc, k.tr, g.line.filter(k.drin), { w: 2, farbe: [141, 90, 43], strich: [5, 3] }));
@@ -127,17 +117,10 @@ export async function unternehmerAuftrag(measureId, { anhaengen = false } = {}) 
   const rgb = (hx) => [1, 3, 5].map((i) => parseInt(hx.slice(i, i + 2), 16));
   baeume.forEach((b) => { if (!k.drin(b.at)) return; const i = STUFEN.findIndex((x) => x.k === b.k); punkt(doc, k.tr(b.at), rgb(STUFEN[i].farbe), 2.6 + i * 0.5); });
   if (rp && k.drin(rp.at)) { punkt(doc, k.tr(rp.at), [0, 150, 70], 6); const [a, b] = k.tr(rp.at); doc.text(a + 8, b + 3, rp.id, { bold: true, size: 8 }); }
-  W.y += 346;
+  W.y += kh + 6;
   if (baeume.length) { let x0 = W.L; doc.text(x0, W.y, 'Ausgezeichnete Bäume (BHD):', { size: 7.5, bold: true }); x0 += 122; STUFEN.forEach((st, i) => { if (x0 + 60 > W.R) { x0 = W.L + 122; W.y += 11; } punkt(doc, [x0 + 3, W.y - 2.5], rgb(st.farbe), 3.2); doc.text(x0 + 9, W.y, st.label, { size: 7.5 }); x0 += 62; }); W.y += 12; }
   doc.text(W.L, W.y, `Legende: orange = Arbeitsfläche · braun gestrichelt = Rückegasse · braun = Lagerplatz · grün = Rettungspunkt. Hintergrund: ${KARTEN_QUELLE[basemap]}`, { size: 7, farbe: GRAU });
-  W.y += 22;
-  W.kopf('Vereinbarung');
-  W.absatz('Preis / Abrechnung: ______________________________________________');
-  W.absatz('Ausführungszeitraum: _____________________________________________');
-  W.y += 24;
-  doc.linie(W.L, W.y, W.L + 200, W.y); doc.linie(W.R - 200, W.y, W.R, W.y); W.y += 12;
-  doc.text(W.L, W.y, 'Ort, Datum, Auftraggeber', { size: 8, farbe: GRAU }); doc.text(W.R - 200, W.y, 'Ort, Datum, Auftragnehmer', { size: 8, farbe: GRAU });
-  const name = `Arbeitsauftrag_${dateiname(typ)}${p ? `_${dateiname(`${p.gemarkung}_${p.nr}`)}` : ''}.pdf`;
+  const name = `Arbeitsauftrag_${dateiname(a.nr)}_${dateiname(typ)}${p ? `_${dateiname(`${p.gemarkung}_${p.nr}`)}` : ''}.pdf`;
   const blob = doc.blob();
   // Am Auftrag ablegen (Verlauf und Anhänge) – der jeweils neueste ersetzt den alten
   const anhangId = `auftrag-${m.id}`;

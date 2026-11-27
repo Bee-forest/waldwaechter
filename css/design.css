@@ -439,3 +439,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .fk-eigene { margin-bottom: 10px; }
 .leaflet-tooltip.teil-label { background: rgba(255,255,255,.85); border: 0; box-shadow: none; font-weight: 800; font-size: 11px; padding: 1px 5px; color: #1F4D3A; }
 .leaflet-tooltip.teil-label::before { display: none; }
+/* Arbeitsauftrag ausfüllen */
+.aa-kopf { margin: 18px 0 4px; font-size: 16px; color: var(--primary); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.aa-haken { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 10px; }
+.aa-haken .jk-check { margin: 0; }
+.aa-form details { margin: 6px 0; }
+.aa-form details summary { cursor: pointer; font-weight: 700; color: var(--ink-2); padding: 6px 0; }

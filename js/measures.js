@@ -443,7 +443,7 @@ function measureCard(m, byId) {
       auszeichnenOffen(m) ? fortsetzenKnopf(m, 'btn-voll btn-auszeichnen')
         : AUSZEICHNEN.includes(m.type) && m.status !== 'fertig' ? h('button', { class: 'btn btn-voll btn-auszeichnen', onclick: () => import('./auszeichnen.js').then((x) => x.openAuszeichnen(m.id)) }, `Auszeichnung ansehen / ändern (${m.auszeichnung?.baeume?.length || 0} Bäume)`) : null,
       m.status === 'fertig' && !m.serie && m.type !== 'schaden' ? h('button', { class: 'btn btn-voll', onclick: () => openProtokoll(m.id) }, m.protokoll ? 'Protokoll ansehen' : 'Protokoll ausfüllen') : null,
-      !m.serie && !['schaden', 'holzverkauf', 'polter'].includes(m.type) ? h('button', { class: 'btn btn-voll', title: 'Arbeitsauftrag mit Karte als PDF', onclick: () => import('./berichte.js').then((x) => x.unternehmerAuftrag(m.id)).catch(() => toast('Arbeitsauftrag konnte nicht erstellt werden.')) }, h('span', { html: icon.auftrag }), 'Arbeitsauftrag') : null,
+      !m.serie && !['schaden', 'holzverkauf', 'polter'].includes(m.type) ? h('button', { class: 'btn btn-voll', title: 'Arbeitsauftrag mit Karte als PDF', onclick: () => import('./arbeitsauftrag.js').then((x) => x.arbeitsauftragAusfuellen(m.id)).catch(() => toast('Arbeitsauftrag konnte nicht erstellt werden.')) }, h('span', { html: icon.auftrag }), 'Arbeitsauftrag') : null,
       h('span', { class: 'measure-icons' },
         m.status !== 'fertig' && m.type !== 'durchforstung' ? knopf(icon.edit, 0, 'Bearbeiten', () => openMassnahmeBearbeiten(m.id)) : null,
         knopf(icon.camera, fotoAnzahl(`m:${m.id}`) + (m.fotopunkte || []).reduce((a, id) => a + fotoAnzahl(`fp:${id}`), 0), 'Fotos', () => fotosWaehlen(m, `${MEASURE_TYPES[m.type]?.label || 'Maßnahme'} · ${where}`)),
@@ -466,7 +466,7 @@ function measureCard(m, byId) {
 export function arbeitsauftragZeigen(id) {
   const m = store.get().measures.find((x) => x.id === id);
   if (!m || m.serie || ['schaden', 'holzverkauf', 'polter'].includes(m.type)) return;
-  setTimeout(() => import('./berichte.js').then((b) => b.unternehmerAuftrag(id)).catch(() => toast('Der Arbeitsauftrag konnte nicht erstellt werden – du findest ihn später bei der Maßnahme.')), 300);
+  setTimeout(() => import('./arbeitsauftrag.js').then((b) => b.arbeitsauftragAusfuellen(id)).catch(() => toast('Der Arbeitsauftrag konnte nicht erstellt werden – du findest ihn später bei der Maßnahme.')), 300);
 }
 
 async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt = null } = {}) {

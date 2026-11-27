@@ -221,7 +221,7 @@ export async function openAuszeichnen(measureId) {
         h('button', { type: 'button', class: 'btn btn-primary', onclick: () => {
           store.update((st) => { const x = st.measures.find((y) => y.id === measureId); if (x) x.auszeichnung = { ...az, sortDef, ergebnis: { gesamt, menge, erloes, kosten: kost } }; });
           speichern(true); seite.close();
-          import('./berichte.js').then((b) => b.unternehmerAuftrag(measureId));
+          import('./arbeitsauftrag.js').then((b) => b.arbeitsauftragAusfuellen(measureId));
         } }, 'Fertig – Arbeitsauftrag mit Karte')));
     store.update((st) => { const x = st.measures.find((y) => y.id === measureId); if (x) x.auszeichnung = { ...(x.auszeichnung || az), ...az, sortDef, ergebnis: { gesamt, menge, erloes, kosten: kost } }; });
   }

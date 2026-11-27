@@ -3,7 +3,7 @@
 import { h, fill, openPage, toast, dialog } from './ui.js';
 import { store, uid } from './store.js';
 import { source } from './data/source.js';
-import { centroid, polysOf, formatHa } from './geo.js';
+import { centroid, polysOf, formatHa, inPolys } from './geo.js';
 import { flaechenWahl } from './flaeche.js';
 import { SPECIES } from './thinning/plan.js';
 import { fotoListe, openFotos } from './fotos.js';
@@ -72,12 +72,20 @@ export async function openSchadensmeldung({ parcelId = null, onSaved, typ = 'kae
   const mine = store.get().parcels.filter((p) => byId[p.id] && passtFlurstueck(p));
   const id = uid();
   const punkte = [];
-  const w = { typ, parcelId: parcelId || mine[0]?.id || null, pos: null, genau: null, species: 'Fichte', menge: '', baeume: baeume ? String(baeume) : '', datum: new Date().toISOString().slice(0, 10), text: '' };
+  const w = { typ, parcelId: parcelId || null, pos: null, genau: null, species: 'Fichte', menge: '', baeume: baeume ? String(baeume) : '', datum: new Date().toISOString().slice(0, 10), text: '' };
   let wahl = null;
   const body = h('div', { class: 'form schaden' });
   const page = openPage('Schaden melden', body, { onClose: () => { wahl?.entferne(); stellen.entferne(); } });
   // Schadstellen auf der Karte: je Schadensart ein eigenes Symbol
-  const stellen = schadstellenKarte({ punkte, typ: () => w.typ });
+  // Flurstück ergibt sich aus der ersten Schadstelle (eigene Fläche), ohne die Karte neu aufzubauen
+  const stellen = schadstellenKarte({ punkte, typ: () => w.typ, onAenderung: () => {
+    if (w.parcelId || !punkte.length) return;
+    const p = mine.find((x) => x.ring && inPolys(punkte[0].at, polysOf(x)));
+    if (!p) return;
+    w.parcelId = p.id; stellenFlst = p.id;
+    const sel = body.querySelector('select[name="flst"]'); if (sel) sel.value = p.id;
+    zeigeWahl();
+  } });
   let stellenFlst = undefined;
   const flHost = h('div');
   const zeigeWahl = () => { wahl?.entferne(); wahl = null; fill(flHost); if (w.parcelId && byId[w.parcelId]) { wahl = flaechenWahl(byId[w.parcelId]); flHost.append(wahl.el); } };
@@ -91,13 +99,13 @@ export async function openSchadensmeldung({ parcelId = null, onSaved, typ = 'kae
     const n = fotoListe(fotoKey).length;
     fill(body,
       h('p', { class: 'muted' }, 'Kalamitätsholz muss schnell aus dem Wald. Erfasse den Schaden und schicke die Meldung direkt an deine FBG.'),
+      h('p', { class: 'sheet-label' }, 'Wo ist der Schaden? Tippe die Stelle in die Karte'),
+      stellen.el,
       h('p', { class: 'sheet-label' }, 'Art des Schadens'),
       h('div', { class: 'q-cards' }, SCHADEN_TYPEN.map(([k, l, t]) => h('button', { type: 'button', class: `q-option ${w.typ === k ? 'on' : ''}`, 'aria-pressed': String(w.typ === k), onclick: () => { w.typ = k; punkte.forEach((pp) => { pp.typ = k; }); if (k === 'kaefer' && !/fichte|kiefer|lärche/i.test(w.species)) w.species = 'Fichte'; zeichne(); } },
         h('span', { class: 'schaden-symbol schaden-mini', html: `<span>${SCHADEN_SYMBOLE[k]}</span>` }), h('span', { class: 'q-text' }, h('strong', {}, l), h('small', {}, t))))),
-      h('label', {}, 'Flurstück', h('select', { onchange: (e) => { w.parcelId = e.target.value || null; zeigeWahl(); } },
+      h('label', {}, 'Flurstück (optional – wird aus der Schadstelle erkannt)', h('select', { name: 'flst', onchange: (e) => { w.parcelId = e.target.value || null; zeigeWahl(); } },
         h('option', { value: '' }, 'ohne Flurstück'), mine.map((p) => h('option', { value: p.id, selected: p.id === w.parcelId }, `Flurstück ${p.nr}, ${p.gemarkung}`)))),
-      h('p', { class: 'sheet-label' }, 'Wo genau? Schadstellen auf der Karte setzen'),
-      stellen.el,
       h('details', { class: 'bzt-mehr' }, h('summary', {}, 'Betroffene Fläche (optional)'), flHost),
       h('div', { class: 'form-row' },
         h('label', {}, 'Baumart', h('select', { onchange: (e) => { w.species = e.target.value; } }, SPECIES.map((s) => h('option', { selected: s === w.species }, s)))),

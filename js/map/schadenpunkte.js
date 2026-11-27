@@ -1,5 +1,6 @@
 // Symbole für Schadstellen (je Schadensart ein eigenes Zeichen) und eine Karte, in der man sie setzt.
 import { h, fill, toast } from '../ui.js';
+import { standortSteuerung } from './standort.js';
 import { miniKarte } from '../flaeche.js';
 
 const svg = (inhalt) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inhalt}</svg>`;
@@ -31,7 +32,7 @@ export function schadstellenKarte({ punkte, typ, onAenderung = () => {} }) {
   const el = h('div', { class: 'schadstellen' }, kartenHost, status, h('div', { class: 'btn-row' },
     h('button', { type: 'button', class: 'btn btn-small', onclick: () => gps() }, 'Meinen Standort als Schadstelle'),
     h('button', { type: 'button', class: 'btn btn-small', onclick: () => { punkte.pop(); zeichne(); onAenderung(); } }, 'Letzte Stelle entfernen')), liste);
-  let karte = null, lyr = null, parcel = null;
+  let karte = null, lyr = null, parcel = null, standort = null;
   function zeichne() {
     lyr?.clearLayers();
     punkte.forEach((p, i) => {
@@ -47,7 +48,7 @@ export function schadstellenKarte({ punkte, typ, onAenderung = () => {} }) {
     fill(liste, punkte.map((p, i) => h('p', { class: 'muted' }, `Stelle ${i + 1}: ${p.at[0].toFixed(5)}, ${p.at[1].toFixed(5)}${p.genau ? ` (GPS ± ${p.genau} m)` : ''}`)));
   }
   function karteBauen() {
-    karte?.map.remove();
+    standort?.stop(); karte?.map.remove();
     const mapEl = h('div', { class: 'mini-map schaden-karte' });
     kartenHost.replaceChildren(mapEl);
     karte = miniKarte(mapEl, parcel, { zoom: 17 });
@@ -55,6 +56,8 @@ export function schadstellenKarte({ punkte, typ, onAenderung = () => {} }) {
     karte.map.doubleClickZoom.disable();
     karte.map.on('click', (e) => { punkte.push({ at: [Number(e.latlng.lat.toFixed(7)), Number(e.latlng.lng.toFixed(7))], typ: typ() }); zeichne(); onAenderung(); });
     if (!parcel && punkte[0]) karte.map.setView(punkte[0].at, 17);
+    // eigener Standort; ohne Flurstück springt die Karte beim Start dorthin
+    standort = standortSteuerung(karte.map, { schluessel: 'schaden', start: 'an', zentrieren: !parcel && !punkte.length });
     zeichne();
   }
   function gps() {
@@ -71,7 +74,7 @@ export function schadstellenKarte({ punkte, typ, onAenderung = () => {} }) {
     el,
     setFlurstueck(p) { parcel = p || null; karteBauen(); },
     neuZeichnen() { zeichne(); setTimeout(() => karte?.map.invalidateSize(), 60); },
-    entferne() { karte?.map.remove(); karte = null; },
+    entferne() { standort?.stop(); karte?.map.remove(); karte = null; },
   };
 }
 

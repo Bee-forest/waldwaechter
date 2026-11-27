@@ -7,7 +7,7 @@ const merken = (k, v) => { try { localStorage.setItem(`waldwaechter.standort.${k
 const gemerkt = (k) => { try { return localStorage.getItem(`waldwaechter.standort.${k}`); } catch { return null; } };
 
 /** Fügt der Karte den Standort-Knopf hinzu. Rückgabe: { stop(), modus(), letzte() } */
-export function standortSteuerung(map, { schluessel = 'karte', start = 'an', position = 'topleft' } = {}) {
+export function standortSteuerung(map, { schluessel = 'karte', start = 'an', position = 'topleft', zentrieren = false } = {}) {
   let modus = gemerkt(schluessel) || start, watch = null, punkt = null, kreis = null, letzte = null, fehler = false, offen = false;
   const knopf = h('button', { type: 'button', class: 'standort-knopf', html: icon.locate });
   const menue = h('div', { class: 'standort-menue', role: 'menu', hidden: true });
@@ -46,6 +46,7 @@ export function standortSteuerung(map, { schluessel = 'karte', start = 'an', pos
       kreis = L.circle(ll, { radius: acc, color: '#1F74B8', weight: 1, opacity: 0.5, fillColor: '#1F74B8', fillOpacity: 0.08, interactive: false }).addTo(map);
       punkt = L.marker(ll, { interactive: false, keyboard: false, zIndexOffset: 1000, icon: L.divIcon({ className: 'me', html: '<span class="me-dot"></span>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(map);
     } else { punkt.setLatLng(ll); kreis.setLatLng(ll).setRadius(acc); }
+    if (erstes && zentrieren && modus !== 'folgen') map.setView(ll, Math.max(map.getZoom(), 17)); // einmal hinspringen
     if (modus === 'folgen') {
       if (erstes) map.setView(ll, Math.max(map.getZoom(), 17));
       else if (!map.getBounds().pad(-0.3).contains(ll)) map.panTo(ll, { animate: true });
@@ -57,10 +58,11 @@ export function standortSteuerung(map, { schluessel = 'karte', start = 'an', pos
     punkt?.remove(); kreis?.remove(); punkt = kreis = null;
   }
   // Karte von Hand verschoben → nicht mehr folgen, Standort bleibt sichtbar
-  map.on('dragstart', () => { if (modus === 'folgen') { modus = 'an'; merken(schluessel, 'an'); anzeigen(); toast('Karte folgt nicht mehr – Standort wird weiter angezeigt.'); } });
+  const beiZiehen = () => { if (modus === 'folgen') { modus = 'an'; merken(schluessel, 'an'); anzeigen(); toast('Karte folgt nicht mehr – Standort wird weiter angezeigt.'); } };
+  map.on('dragstart', beiZiehen);
   map.on('click', zu);
 
   anzeigen();
   if (modus !== 'aus') starten();
-  return { stop: stopWatch, modus: () => modus, letzte: () => letzte };
+  return { stop: () => { stopWatch(); map.off('dragstart', beiZiehen); map.off('click', zu); }, modus: () => modus, letzte: () => letzte };
 }

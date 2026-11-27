@@ -4,7 +4,7 @@
 // - Overpass-Daten: „Network first“ mit Cache als Rückfall.
 // Bei jeder Änderung an App-Dateien VERSION erhöhen.
 
-const VERSION = 'v3.25.2';
+const VERSION = 'v3.25.3';
 const SHELL = `ww-shell-${VERSION}`;
 const TILES = 'ww-tiles-v2';
 const DATA = 'ww-data-v1';

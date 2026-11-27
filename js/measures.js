@@ -555,6 +555,7 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
     let wahl = null;
     const schutzHost = h('div');
     let setzeHa = () => {};
+    let gezeichnet = null; // Teilflächen aus der Kartenwahl (Modus „Fläche einzeichnen“)
     const zeigeWahl = (id) => {
       if (vorwahl) { // Fläche kommt aus der Kartenwahl (auch fremde Flurstücke oder selbst eingezeichnet)
         if (vp) { wahl = flaechenWahl(vp, null, { onChange: (f) => setzeHa(f?.ha) }); flHost.append(wahl.el); } else setzeHa((vorwahl.ringe || [vorwahl.ring]).reduce((x, r) => x + areaHa(r), 0));
@@ -563,6 +564,13 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
         return;
       }
       wahl?.entferne(); wahl = null; flHost.replaceChildren(); schutzHost.replaceChildren();
+      if (id === '__ring' && gezeichnet?.length) { // frei eingezeichnete Fläche(n), auch ohne bzw. über Flurstücke hinweg
+        const ha = gezeichnet.reduce((x, r) => x + areaHa(r), 0);
+        setzeHa(ha);
+        flHost.append(h('p', { class: 'hint' }, `${gezeichnet.length > 1 ? `${gezeichnet.length} Teilflächen` : 'Eingezeichnete Fläche'}, zusammen ${formatHa(ha)}. Ändern: „oder Fläche auf der Karte wählen“ noch einmal antippen.`));
+        import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis({ ring: gezeichnet[0], polys: gezeichnet.map((r) => [r]) }, { eingriff: EINGRIFF.includes(type) })));
+        return;
+      }
       if (!id) flHost.append(h('p', { class: 'hint' }, 'Nach der Wahl der Fläche kannst du festlegen, ob die Maßnahme das ganze Flurstück betrifft oder nur eine oder mehrere Teilflächen, die du in der Karte einzeichnest.'));
       if (!id) setzeHa(null);
       if (id && byId[id]) { wahl = flaechenWahl(byId[id], null, { onChange: (f) => setzeHa(f?.ha) }); flHost.append(wahl.el); import('./schutzpruefung.js').then((x) => schutzHost.replaceChildren(x.schutzHinweis(byId[id], { eingriff: EINGRIFF.includes(type) }))); }
@@ -570,7 +578,8 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
     const form = h('form', { class: 'form', onsubmit: (e) => {
       e.preventDefault();
       const fd = new FormData(form);
-      const vRinge = vorwahl?.ring ? (vorwahl.ringe || [vorwahl.ring]) : null;
+      const frei = fd.get('parcel') === '__ring' && gezeichnet?.length ? gezeichnet : null;
+      const vRinge = vorwahl?.ring ? (vorwahl.ringe || [vorwahl.ring]) : frei;
       const fl = vRinge ? { modus: 'teil', ring: vRinge[0], ringe: vRinge, ha: vRinge.reduce((x, r) => x + areaHa(r), 0) } : wahl ? wahl.wert() : null;
       if (wahl && !fl) { toast('Bitte mindestens 3 Eckpunkte der Teilfläche einzeichnen.'); return; }
       let kosten = String(fd.get('kosten') || '').trim();
@@ -579,9 +588,9 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
       const neuId = uid();
       store.update((s) => {
         const eigen = vp && s.parcels.some((x) => x.id === vp.id);
-        s.measures.push({ id: neuId, type, parcelId: vorwahl ? (vp?.id || null) : (fd.get('parcel') || null),
+        s.measures.push({ id: neuId, type, parcelId: vorwahl ? (vp?.id || null) : frei ? null : (fd.get('parcel') || null),
           ...(vp && !eigen ? { flurstueck: flurstueckSchnappschuss(vp) } : {}),
-          ...(vorwahl?.ring ? { ort: `Eingezeichnete Fläche (${formatHa((vorwahl.ringe || [vorwahl.ring]).reduce((x, r) => x + areaHa(r), 0))})` } : {}), date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
+          ...(vorwahl?.ring || frei ? { ort: `Eingezeichnete Fläche (${formatHa(vRinge.reduce((x, r) => x + areaHa(r), 0))})` } : {}), date: fd.get('date') ? new Date(fd.get('date')).getTime() : null,
           note: String(fd.get('note') || '').trim(), details, status: 'geplant', createdAt: Date.now(),
           ...(fl?.modus === 'teil' ? { flaeche: { ring: fl.ring, ringe: fl.ringe, ha: fl.ha } } : {}), kosten: kosten ? Number(kosten.replace(',', '.')) : null,
           ...(type === 'verkehrssicherung' ? { date: null, serie: { termine: VSP_TERMINE.map((x) => ({ ...x })) }, erledigt: {} } : {}) });
@@ -597,7 +606,7 @@ async function openNewMeasure({ parcelId, antragId = null, typ = null, pflegeArt
         mitKartenwahl(h('select', { name: 'parcel', onchange: (e) => zeigeWahl(e.target.value) },
           h('option', { value: '' }, mine.length ? 'Fläche wählen' : 'Noch keine eigenen Flächen'),
           mine.map((p) => h('option', { value: p.id, selected: p.id === parcelId }, `Flurstück ${p.nr}, ${p.gemarkung} (${CATEGORIES[p.category].label}, ${formatHa(amtlicheFlaecheHa(byId[p.id]))})`)),
-        ), byId, mine)),
+        ), byId, mine, { zeichnen: true, onRinge: (r) => { gezeichnet = r; } })),
       t.gruppe === 'vorbereitung' ? h('p', { class: 'hint' }, 'Förderung: Räumung, Bodenverwundung und streifenweises Mulchen werden als Kulturvorbereitung zusammen mit der Pflanzung gefördert (Richtlinie 530 €/ha bzw. 1.300 €/ha Mulchen). Im Förderantrag der Pflanzung unter „Kulturvorbereitung“ angeben.') : null,
       flHost, schutzHost,
       AUSZEICHNEN.includes(type) ? h('p', { class: 'hint' }, 'Anzahl der Bäume und die Menge brauchst du hier nicht anzugeben: Nach dem Anlegen geht es direkt ins Auszeichnen. Dort tippst du je Baum die Durchmesserstufe an – die App zählt mit und setzt GPS-Punkte.') : null,

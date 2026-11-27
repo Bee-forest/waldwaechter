@@ -135,10 +135,22 @@ export function fremdesMerken(p) {
  * @param {HTMLSelectElement} select  die bestehende Flurstücksliste
  * @param {object} byId  Nachschlage-Tabelle des Formulars (wird um das fremde Flurstück ergänzt)
  */
-export function mitKartenwahl(select, byId = null, liste = null) {
+export function mitKartenwahl(select, byId = null, liste = null, { zeichnen = false, onRinge = null } = {}) {
   const knopf = h('button', { type: 'button', class: 'btn btn-small fk-knopf', onclick: async (e) => {
     e.preventDefault();
-    const w = await flaecheAufKarte({ titel: 'Flurstück wählen', frage: 'Welches Flurstück?', parcelId: select.value || null, nurFlurstueck: true, knopf: 'Dieses Flurstück übernehmen' });
+    const w = await flaecheAufKarte(zeichnen
+      ? { titel: 'Fläche wählen', frage: 'Flurstück antippen oder Fläche(n) einzeichnen', parcelId: select.value && select.value !== '__ring' ? select.value : null, knopf: 'Übernehmen' }
+      : { titel: 'Flurstück wählen', frage: 'Welches Flurstück?', parcelId: select.value || null, nurFlurstueck: true, knopf: 'Dieses Flurstück übernehmen' });
+    if (w?.ringe?.length && onRinge) {
+      onRinge(w.ringe);
+      const ha = w.ringe.reduce((x, r) => x + areaHa(r), 0);
+      let o = [...select.options].find((x) => x.value === '__ring');
+      if (!o) { o = h('option', { value: '__ring' }); select.append(o); }
+      o.textContent = `Eingezeichnete Fläche${w.ringe.length > 1 ? ` (${w.ringe.length} Teilflächen)` : ''}, ${formatHa(ha)}`;
+      select.value = '__ring';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
     const p = w?.parcel;
     if (!p) return;
     if (byId && !Array.isArray(byId)) byId[p.id] = p;
@@ -150,6 +162,6 @@ export function mitKartenwahl(select, byId = null, liste = null) {
     }
     select.value = p.id;
     select.dispatchEvent(new Event('change', { bubbles: true }));
-  } }, h('span', { html: icon.map || icon.locate }), 'oder Flurstück auf der Karte wählen');
+  } }, h('span', { html: icon.map || icon.locate }), zeichnen ? 'oder Fläche auf der Karte wählen / einzeichnen' : 'oder Flurstück auf der Karte wählen');
   return h('span', { class: 'flst-wahl' }, select, knopf);
 }

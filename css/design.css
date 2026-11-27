@@ -445,3 +445,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .aa-haken .jk-check { margin: 0; }
 .aa-form details { margin: 6px 0; }
 .aa-form details summary { cursor: pointer; font-weight: 700; color: var(--ink-2); padding: 6px 0; }
+/* Standort in Bearbeitungskarten */
+.standort-steuerung { position: relative; background: transparent; border: 0 !important; box-shadow: none !important; }
+.standort-knopf { width: 40px; height: 40px; border: 0; border-radius: 12px; background: var(--surface, #fff); color: var(--ink-2, #555); box-shadow: 0 2px 8px rgba(0,0,0,.25); display: grid; place-items: center; cursor: pointer; }
+.standort-knopf svg { width: 22px; height: 22px; }
+.standort-knopf.standort-an { color: #1F74B8; box-shadow: 0 0 0 2px #1F74B8 inset, 0 2px 8px rgba(0,0,0,.25); }
+.standort-knopf.standort-folgen { background: #1F74B8; color: #fff; }
+.standort-menue { position: absolute; left: 46px; top: 0; background: var(--surface, #fff); border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.25); padding: 4px; display: grid; min-width: 150px; z-index: 1000; }
+.standort-menue[hidden] { display: none; }
+.standort-menue button { border: 0; background: none; text-align: left; padding: 10px 12px; font: inherit; font-size: 15px; border-radius: 8px; color: var(--ink, #222); cursor: pointer; }
+.standort-menue button.aktiv { background: #E3EEF8; color: #1F74B8; font-weight: 700; }

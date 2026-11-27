@@ -6,6 +6,7 @@ import { h, fill, dialog, confirmDialog, toast, openPage } from '../ui.js';
 import { store, uid } from '../store.js';
 import { openFotos, fotoKnopfText, fotosLoeschen } from '../fotos.js';
 import { createBaseMap } from './basemap.js';
+import { standortSteuerung } from './standort.js';
 import { distance, formatDist, polysOf } from '../geo.js';
 import { umlaufSteuerung, vereinfachen } from '../umlauf.js';
 import { erkenneGassen } from './gassenerkennung.js';
@@ -192,11 +193,12 @@ export function openErschliessungEditor({ center, zoom = 17, modus = 'gasse', fl
   const umlaufHost = h('div');
   let draft = [], quelle = 'hand', vorschlaege = [], erkennt = false;
   const inhalt = h('div', { class: 'ersch' }, h('div', { class: 'ersch-werkzeuge', role: 'radiogroup', 'aria-label': 'Was möchtest du tun?' }), h('p', { class: 'ersch-was' }), mapEl, leiste, umlaufHost);
-  const page = openPage('Erschließung bearbeiten', inhalt, { onClose: () => { umlauf?.stop(); lyr.entfernen(); abo(); map.remove(); } });
+  const page = openPage('Erschließung bearbeiten', inhalt, { onClose: () => { umlauf?.stop(); standort?.stop(); lyr.entfernen(); abo(); map.remove(); } });
   const base = createBaseMap(mapEl, { center, zoom, basemap: s0.settings.basemap, alkis: true });
   const map = base.map;
   eigeneFlaechenLayer(map);
   L.control.zoom({ position: 'topleft' }).addTo(map);
+  const standort = standortSteuerung(map, { schluessel: 'erschliessung', start: 'an' });
   let edit = null; // Verlauf einer bestehenden Gasse wird bearbeitet: { g, line }
   const lyr = createErschliessungLayers(map, {
     klickbar: () => modus !== 'erkennen' && modus !== 'raster' && !(modus === 'gasse' && draft.length),

@@ -455,3 +455,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .standort-menue[hidden] { display: none; }
 .standort-menue button { border: 0; background: none; text-align: left; padding: 10px 12px; font: inherit; font-size: 15px; border-radius: 8px; color: var(--ink, #222); cursor: pointer; }
 .standort-menue button.aktiv { background: #E3EEF8; color: #1F74B8; font-weight: 700; }
+/* Wischen zum Löschen (Ordner verwalten) */
+.wisch-zeile { position: relative; overflow: hidden; list-style: none; border-radius: 14px; }
+.wisch-zeile > .wisch-inhalt { position: relative; z-index: 1; background: var(--surface, #fff); touch-action: pan-y; }
+.wisch-loeschen { position: absolute; top: 0; bottom: 0; width: 92px; border: 0; background: #C62828; color: #fff; font-weight: 700; font-size: 13px; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
+.wisch-links { left: 0; } .wisch-rechts { right: 0; }
+.wisch-zeile.zeigt-links .wisch-links, .wisch-zeile.zeigt-rechts .wisch-rechts { display: flex; }
+/* Neuer Fotopunkt */
+.fp-neu-karte { height: 56vh; min-height: 300px; border-radius: 16px; overflow: hidden; margin: 8px 0; }
+.fp-neu-leiste { display: grid; gap: 8px; }
+.wisch-zeile > .wisch-inhalt { flex-wrap: wrap; }
+.wisch-zeile > .wisch-inhalt > .fin-zeile-text { flex: 1 1 100%; }

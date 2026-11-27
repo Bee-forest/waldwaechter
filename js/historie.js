@@ -98,7 +98,7 @@ function openDetail(p, T, { fotopunkt = null, neuerFotopunkt = null } = {}) {
     fill(listHost,
       h('div', { class: 'btn-row historie-aktionen' },
         h('button', { type: 'button', class: 'btn btn-primary', onclick: () => notizDialog(p.id) }, 'Tagebuch-Eintrag schreiben'),
-        h('button', { type: 'button', class: 'btn', onclick: () => fotopunktAnlegen(p.id, p, ort) }, 'Fotopunkt anlegen')),
+        h('button', { type: 'button', class: 'btn', onclick: () => import('./tagebuch.js').then((t) => t.fotopunktNeu({ parcelId: p.id })) }, 'Fotopunkt anlegen')),
       fotopunkteAbschnitt(p, ort),
       h('h2', { class: 'section-title' }, 'Chronik: Maßnahmen und Tagebuch'),
       summeKosten ? h('p', { class: 'muted' }, `Kosten aller Maßnahmen: ${euro(summeKosten)}`) : null,

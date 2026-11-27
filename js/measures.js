@@ -206,19 +206,12 @@ async function fotosWaehlen(m, titel) {
     const f = (store.get().fotopunkte || []).find((x) => x.id === wahl.id);
     if (f) fotopunktFotos(f);
   } else if (wahl.art === 'neu') {
-    let pid = flst[0];
-    if (flst.length > 1) {
-      const all = await source.allParcels();
-      pid = await dialog({ title: 'Auf welchem Flurstück?', body: h('p', {}, 'Wähle das Flurstück, auf dem der Fotopunkt liegen soll.'),
-        actions: [...flst.map((id) => { const p = all.find((x) => x.id === id); return { label: p ? `Flurstück ${p.nr}, ${p.gemarkung}` : id, value: id }; }), { label: 'Abbrechen', value: null }] });
-      if (!pid) return;
-    }
-    const { openHistorieFlurstueck } = await import('./historie.js');
-    openHistorieFlurstueck(pid, { neuerFotopunkt: (id) => {
-      fotopunktVerknuepfen(m.id, id);
-      const f = (store.get().fotopunkte || []).find((x) => x.id === id);
-      if (f) fotopunktFotos(f);
-    } });
+    const { fotopunktNeu } = await import('./tagebuch.js');
+    const id = await fotopunktNeu({ parcelId: flst[0] || null });
+    if (!id) return;
+    fotopunktVerknuepfen(m.id, id);
+    const f = (store.get().fotopunkte || []).find((x) => x.id === id);
+    if (f) fotopunktFotos(f);
   }
 }
 

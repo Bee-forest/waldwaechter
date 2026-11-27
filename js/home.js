@@ -1223,19 +1223,17 @@ function openEintragen() {
   const ersch = (modus) => () => import('./map/erschliessung.js').then((x) => x.openErschliessungEditor({ center: mitte, zoom, modus }));
   const punkt = (art) => () => import('./map/punkte.js').then((x) => x.openPunktEditor({ center: mitte, zoom, art }));
   const fotopunkt = async () => {
-    const eigene = store.get().parcels.filter(passtFlurstueck);
-    if (!eigene.length) { toast('Lege zuerst ein Flurstück an – Fotopunkte gehören zu einem Flurstück.'); return; }
-    const pid = selected?.parcel?.id && eigene.some((p) => p.id === selected.parcel.id) ? selected.parcel.id : eigene.length === 1 ? eigene[0].id
-      : await dialog({ title: 'Auf welchem Flurstück?', body: h('p', {}, 'Wähle das Flurstück für den neuen Fotopunkt.'), actions: [...eigene.slice(0, 12).map((p) => ({ label: `Flurstück ${p.nr}, ${p.gemarkung}`, value: p.id })), { label: 'Abbrechen', value: null }] });
-    if (!pid) return;
-    const { openHistorieFlurstueck } = await import('./historie.js');
-    openHistorieFlurstueck(pid, { neuerFotopunkt: async (id) => { const f = (store.get().fotopunkte || []).find((x) => x.id === id); if (f) (await import('./tagebuch.js')).fotopunktFotos(f); } });
+    // immer auf die Fotopunkt-Seite – Flurstück ist egal, die Lage wird in der Karte gewählt
+    const pid = selected?.parcel?.id || null;
+    const t = await import('./tagebuch.js');
+    const id = await t.fotopunktNeu({ parcelId: pid });
+    const f = id && (store.get().fotopunkte || []).find((x) => x.id === id);
+    if (f) t.fotopunktFotos(f);
   };
   dialog({
     title: 'Was möchtest du eintragen?',
     body: h('div', { class: 'eintragen-liste' },
-      eintrag('Rückegassen anlegen', 'parallel mit festem Abstand über ein Flurstück', ic('<path d="M5 3v18M11 3v18M17 3v18"/>'), ersch('raster')),
-      eintrag('Rückegasse zeichnen', 'einzelne Gasse Punkt für Punkt oder per GPS', ic('<path d="M4 20l5-7 5 3 6-10"/>'), ersch('gasse')),
+      eintrag('Rückegassen', 'parallel mit festem Abstand anlegen oder einzeln zeichnen, bearbeiten', ic('<path d="M5 3v18M11 3v18M17 3v18"/>'), ersch('gasse')),
       eintrag('Lagerplatz', 'Polter- oder Lagerplatz setzen', ic('<circle cx="7" cy="16" r="3"/><circle cx="13" cy="16" r="3"/><circle cx="10" cy="11" r="3"/>'), ersch('lager')),
       eintrag('Habitatbaum', 'Biotop-, Höhlen- oder Totholzbaum', ic('<path d="M12 21v-8M12 13c-4 0-6-3-6-6a6 6 0 0 1 12 0c0 3-2 6-6 6z"/>'), punkt('habitat')),
       eintrag('Jagdliche Einrichtung', 'Kanzel, Drückjagdbock, Erdsitz', ic('<path d="M7 21l2-12h6l2 12M8 14h8M6 9h12l-2-5H8z"/>'), punkt('jagd')),

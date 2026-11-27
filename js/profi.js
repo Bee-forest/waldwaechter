@@ -565,6 +565,51 @@ export function ordnerAuswahl(p, { beiAenderung } = {}) {
     h('p', { class: 'hint' }, 'Maßnahmen und Finanzen dieses Flurstücks erscheinen im gewählten Ordner.'));
 }
 
+/** Ordner löschen: nur den Ordner (Inhalt zu „Eigene Flächen“) oder mit allem Inhalt */
+async function ordnerLoeschenFragen(id, name, z) {
+  const wahl = await dialog({
+    title: `Ordner „${name}“ löschen`,
+    body: h('div', {}, h('p', {}, `Im Ordner: ${z.fl} Flurstücke, ${z.m} Maßnahmen, ${z.b} Buchungen.`)),
+    actions: [
+      { label: 'Abbrechen', value: null },
+      { label: 'Nur Ordner löschen – Inhalt zu „Eigene Flächen“', value: 'aufloesen' },
+      { label: 'Ordner mit allem Inhalt löschen', value: 'alles', danger: true },
+    ],
+  });
+  if (!wahl) return false;
+  if (wahl === 'alles') {
+    if (!(await confirmDialog(`Wirklich „${name}“ mit ${z.fl} Flurstücken, ${z.m} Maßnahmen und ${z.b} Buchungen löschen?`, { ok: 'Endgültig löschen', danger: true, body: 'Das lässt sich nicht rückgängig machen.' }))) return false;
+    const s = store.get();
+    ordnerMitInhaltLoeschen({ ordner: (s.ordner || []).filter((o) => o.id === id), flaechen: s.parcels.filter((p) => p.ordnerId === id), massnahmen: (s.measures || []).filter((m) => ordnerVon(m) === id), buchungen: (s.finanzen?.buchungen || []).filter((b) => ordnerVon(b) === id) });
+  } else {
+    store.update((st) => { st.ordner = st.ordner.filter((o) => o.id !== id); for (const p of st.parcels) if (p.ordnerId === id) p.ordnerId = null; for (const m of st.measures || []) if (m.ordnerId === id) m.ordnerId = null; for (const b of st.finanzen?.buchungen || []) if (b.ordnerId === id) b.ordnerId = null; if (st.settings.ordnerAktiv === id) st.settings.ordnerAktiv = 'eigen'; });
+  }
+  toast(`Ordner „${name}“ gelöscht`);
+  return true;
+}
+
+/** Listenzeile, die sich wie bei iOS zur Seite wischen lässt – dahinter erscheint „Löschen“ */
+function wischZeile(inhaltEl, beiLoeschen) {
+  const B = 92;
+  const knopf = (seite) => h('button', { type: 'button', class: `wisch-loeschen wisch-${seite}`, 'aria-label': 'Ordner löschen', onclick: async () => { const ok = await beiLoeschen(); if (!ok) zurueck(); } },
+    h('span', { html: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>' }), 'Löschen');
+  const li = h('li', { class: 'wisch-zeile' }, knopf('links'), knopf('rechts'), inhaltEl);
+  let x0 = null, y0 = 0, dx = 0, offen = 0, aktiv = false, gewischt = false;
+  const setze = (x, anim) => { inhaltEl.style.transition = anim ? 'transform .2s ease' : 'none'; inhaltEl.style.transform = x ? `translateX(${x}px)` : ''; li.classList.toggle('zeigt-links', x > 0); li.classList.toggle('zeigt-rechts', x < 0); };
+  const zurueck = () => { offen = 0; setze(0, true); };
+  inhaltEl.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; dx = 0; aktiv = false; });
+  inhaltEl.addEventListener('pointermove', (e) => {
+    if (x0 == null) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (!aktiv) { if (Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my) * 1.5) { aktiv = true; inhaltEl.setPointerCapture?.(e.pointerId); } else if (Math.abs(my) > 10) { x0 = null; return; } else return; }
+    dx = Math.max(-B * 1.3, Math.min(B * 1.3, offen + mx)); setze(dx, false); e.preventDefault();
+  });
+  const ende = () => { if (x0 == null) return; x0 = null; if (!aktiv) return; gewischt = true; setTimeout(() => { gewischt = false; }, 400); offen = Math.abs(dx) > B / 2 ? Math.sign(dx) * B : 0; setze(offen, true); };
+  inhaltEl.addEventListener('pointerup', ende); inhaltEl.addEventListener('pointercancel', ende);
+  inhaltEl.addEventListener('click', (e) => { if (gewischt) { e.stopPropagation(); e.preventDefault(); return; } if (offen) { e.stopPropagation(); e.preventDefault(); zurueck(); } }, true);
+  return li;
+}
+
 export function openOrdnerVerwaltung() {
   const inhalt = h('div', { class: 'ordner-seite' });
   let suche = '';
@@ -579,17 +624,18 @@ export function openOrdnerVerwaltung() {
       m: (s.measures || []).filter((m) => ordnerVon(m) === id).length,
       b: (s.finanzen?.buchungen || []).filter((b) => ordnerVon(b) === id).length,
     });
-    const zeile = (id, name) => { const z = zahl(id); return h('li', { class: 'fin-zeile' },
-      h('div', { class: 'fin-zeile-text' }, h('strong', {}, name), h('small', { class: 'muted' }, `${z.fl} Flurstücke · ${z.m} Maßnahmen · ${z.b} Buchungen`), (() => { const e = id && ordnerListe().find((o) => o.id === id)?.eigentuemer; return e && etAdresse(e) ? h('small', { class: 'muted' }, `Eigentümer: ${[etName(e), etAdresse(e)].filter(Boolean).join(', ')}`) : null; })()),
-      h('button', { class: 'btn btn-small', onclick: () => { ordnerWaehlen(id || 'eigen'); seite.close(); } }, 'Öffnen'),
-      id ? h('button', { class: 'btn btn-small', onclick: () => ordnerEigentuemerBearbeiten(id) }, 'Eigentümer') : null,
-      id ? h('button', { class: 'btn btn-small', onclick: () => import('./ordnerteilen.js').then((x) => x.ordnerTeilen(id)) }, 'Teilen') : null,
-      id ? h('button', { class: 'btn btn-small', onclick: async () => { let n = name; const ok = await dialog({ title: 'Ordner umbenennen', body: h('div', { class: 'form' }, h('label', {}, 'Name', h('input', { value: n, oninput: (e) => { n = e.target.value; } }))), actions: [{ label: 'Abbrechen', value: false }, { label: 'Speichern', value: true, primary: true }] }); if (ok && n.trim()) store.update((st) => { st.ordner.find((o) => o.id === id).name = n.trim(); }); } }, 'Umbenennen') : null,
-      id ? h('button', { class: 'btn btn-small btn-danger-ghost', onclick: async () => {
-        if (!(await confirmDialog(`Ordner „${name}“ auflösen?`, { ok: 'Auflösen', danger: true, body: 'Flurstücke, Maßnahmen und Buchungen bleiben erhalten und kommen zu „Eigene Flächen“.' }))) return;
-        store.update((st) => { st.ordner = st.ordner.filter((o) => o.id !== id); for (const p of st.parcels) if (p.ordnerId === id) p.ordnerId = null; for (const m of st.measures || []) if (m.ordnerId === id) m.ordnerId = null; for (const b of st.finanzen?.buchungen || []) if (b.ordnerId === id) b.ordnerId = null; if (st.settings.ordnerAktiv === id) st.settings.ordnerAktiv = 'eigen'; });
-      } }, 'Auflösen') : null); };
-    if (!inhalt.childNodes.length) fill(inhalt, h('p', { class: 'muted' }, 'Je Eigentümer ein Ordner: Flurstücke, Maßnahmen und Finanzen werden getrennt geführt. Oben in jeder Ansicht wählst du, welcher Ordner zu sehen ist.'), (s.ordner || []).length > 8 ? sucheFeld : null, listeHost);
+    const zeile = (id, name) => {
+      const z = zahl(id);
+      const inhaltEl = h('div', { class: 'fin-zeile wisch-inhalt' },
+        h('div', { class: 'fin-zeile-text' }, h('strong', {}, name), h('small', { class: 'muted' }, `${z.fl} Flurstücke · ${z.m} Maßnahmen · ${z.b} Buchungen`), (() => { const e = id && ordnerListe().find((o) => o.id === id)?.eigentuemer; return e && etAdresse(e) ? h('small', { class: 'muted' }, `Eigentümer: ${[etName(e), etAdresse(e)].filter(Boolean).join(', ')}`) : null; })()),
+        h('button', { class: 'btn btn-small', onclick: () => { ordnerWaehlen(id || 'eigen'); seite.close(); } }, 'Öffnen'),
+        id ? h('button', { class: 'btn btn-small', onclick: () => ordnerEigentuemerBearbeiten(id) }, 'Eigentümer') : null,
+        id ? h('button', { class: 'btn btn-small', onclick: () => import('./ordnerteilen.js').then((x) => x.ordnerTeilen(id)) }, 'Teilen') : null,
+        id ? h('button', { class: 'btn btn-small', onclick: async () => { let n = name; const ok = await dialog({ title: 'Ordner umbenennen', body: h('div', { class: 'form' }, h('label', {}, 'Name', h('input', { value: n, oninput: (e) => { n = e.target.value; } }))), actions: [{ label: 'Abbrechen', value: false }, { label: 'Speichern', value: true, primary: true }] }); if (ok && n.trim()) store.update((st) => { st.ordner.find((o) => o.id === id).name = n.trim(); }); } }, 'Umbenennen') : null);
+      if (!id) return h('li', { class: 'wisch-zeile' }, inhaltEl);
+      return wischZeile(inhaltEl, () => ordnerLoeschenFragen(id, name, z));
+    };
+    if (!inhalt.childNodes.length) fill(inhalt, h('p', { class: 'muted' }, 'Je Eigentümer ein Ordner: Flurstücke, Maßnahmen und Finanzen werden getrennt geführt. Oben in jeder Ansicht wählst du, welcher Ordner zu sehen ist. Zum Löschen einen Ordner zur Seite wischen.'), (s.ordner || []).length > 8 ? sucheFeld : null, listeHost);
     fill(listeHost,
       h('ul', { class: 'fin-liste' }, q ? null : zeile(null, 'Eigene Flächen'), liste.slice(0, 300).map((o) => zeile(o.id, o.name))),
       liste.length > 300 ? h('p', { class: 'muted' }, `… ${liste.length - 300} weitere – Suche genauer eingeben`) : null,

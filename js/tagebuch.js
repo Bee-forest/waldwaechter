@@ -70,6 +70,41 @@ export async function notizDialog(parcelId, alt = null) {
 export async function fotopunktAnlegen(parcelId, p, ort) {
   const r = await fotopunktAufKarte(ort.map, ort.leiste, { titel: 'Neuer Fotopunkt' });
   if (!r) return;
+  return fotopunktSpeichern(r, parcelId);
+}
+
+/**
+ * Neuer Fotopunkt auf einer eigenen Seite mit Karte – mit oder ohne vorher gewähltes Flurstück.
+ * Standort per Karte oder GPS; das Flurstück ergibt sich aus der Lage (eigene Fläche), sonst ohne Flurstück.
+ */
+export function fotopunktNeu({ parcelId = null } = {}) {
+  return new Promise(async (fertig) => {
+    const [{ createBaseMap }, { eigeneFlaechenLayer }, { standortSteuerung }, { createFotopunktLayer }, geo] = await Promise.all([
+      import('./map/basemap.js'), import('./map/eigeneflaechen.js'), import('./map/standort.js'), import('./map/fotopunkte.js'), import('./geo.js')]);
+    const s = store.get();
+    const eigene = s.parcels.filter((x) => x.ring);
+    const start = eigene.find((x) => x.id === parcelId) || null;
+    const mapEl = h('div', { class: 'fp-neu-karte' });
+    const leiste = h('div', { class: 'fp-neu-leiste' });
+    let erledigt = false, std = null, map = null, fpLyr = null;
+    const seite = openPage('Neuer Fotopunkt', h('div', { class: 'fp-neu' },
+      h('p', { class: 'hint' }, 'Tippe in die Karte, wo du stehst, und zieh die Blickrichtung – oder nimm deinen GPS-Standort. Mit dem Knopf links oben zeigst du deinen Standort an.'),
+      mapEl, leiste), { onClose: () => { std?.stop(); fpLyr?.entfernen?.(); try { map?.remove(); } catch { /* */ } if (!erledigt) { erledigt = true; fertig(null); } } });
+    ({ map } = createBaseMap(mapEl, { center: start ? geo.centroid(start.ring) : eigene[0] ? geo.centroid(eigene[0].ring) : [50.9, 11.0], zoom: start || eigene.length ? 16 : 9, basemap: s.settings?.basemap, alkis: true }));
+    eigeneFlaechenLayer(map);
+    fpLyr = createFotopunktLayer(map); fpLyr.addTo(map);
+    std = standortSteuerung(map, { schluessel: 'fotopunkt', start: 'an', zentrieren: !start });
+    setTimeout(() => { map.invalidateSize(); if (start) map.fitBounds(L.polygon(geo.polysOf(start)).getBounds(), { padding: [20, 20], maxZoom: 18 }); }, 80);
+    const r = await fotopunktAufKarte(map, leiste, { titel: 'Neuer Fotopunkt' });
+    if (!r) { if (!erledigt) { erledigt = true; seite.close(); fertig(null); } return; }
+    const imFlst = eigene.find((x) => geo.inPolys(r.at, geo.polysOf(x)));
+    const id = await fotopunktSpeichern(r, imFlst?.id || null);
+    erledigt = true; seite.close(); fertig(id || null);
+  });
+}
+
+/** Name und Blickrichtung abfragen und den Fotopunkt speichern */
+async function fotopunktSpeichern(r, parcelId) {
   const w = { name: '', blick: r.blick != null ? String(r.blick) : '' };
   const blickFeld = h('input', { type: 'number', min: 0, max: 359, inputmode: 'numeric', placeholder: 'z. B. 135', value: w.blick, oninput: (e) => { w.blick = e.target.value; } });
   const kompassKnopf = h('button', { type: 'button', class: 'btn btn-small', onclick: async () => {

@@ -101,7 +101,8 @@ export async function vorschlag(m, u) {
     preis = abrechnung === 'Fläche (ha)' && ha ? `ca. ${Math.round(m.kosten / ha)} €/ha (Kalkulation)` : abrechnung === 'Stückzahl' && d.count ? `ca. ${zahl((m.kosten / Number(d.count)).toFixed(2))} €/Stück (Kalkulation)` : abrechnung === 'Laufmeter' && d.length ? `ca. ${zahl((m.kosten / Number(d.length)).toFixed(2))} €/lfm (Kalkulation)` : '';
   }
   const verfahren = [d.verfahren || d.technik || (m.type === 'einzelschutz' ? d.art : '') || m.pflege?.vorgehen || d.vorgehen || (m.thinning?.plan ? (m.thinning.plan.methode === 'f4' ? 'Durchforstung nach Durchforstungshilfe' : 'Z-Baum-Durchforstung') : ''),
-    m.type === 'pflanzung' && d.verband ? `Verband ${d.verband}` : '', m.type === 'zaunbau' && d.zaun ? d.zaun : '', m.type === 'mulchen' && d.streifenbreite ? `Streifen ${d.streifenbreite} m, Abstand ${d.abstand || '?'} m` : '',
+    m.type === 'mulchen' && d.verfahren && d.technik ? d.technik : '',
+    m.type === 'pflanzung' && d.verband ? `Verband ${d.verband}` : '', m.type === 'zaunbau' && d.zaun ? d.zaun : '', m.type === 'mulchen' && d.streifenbreite && !/flächig/i.test(d.verfahren || '') ? `Streifen ${d.streifenbreite} m, Abstand ${d.abstand || '?'} m` : '',
     m.type === 'raeumung' && d.material ? d.material : '', m.type === 'bodenverwundung' && d.anteil ? `${d.anteil} % der Fläche` : ''].filter(Boolean).join(', ');
   // Schutzgebiete, Biotope, LRT, Habitatbäume
   const sg = [...(m.schutzgebiete || []), ...(m.thinning?.natura2000 || []), ...(u.info?.schutz || []).map((x) => ({ layer: x.layer, art: x.label, name: x.props?.NAME || x.props?.name || x.props?.Name || '' }))];

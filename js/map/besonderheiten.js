@@ -11,7 +11,7 @@ import { biotopWichtig, lrtCode, lrtWichtig, LRT } from './lrt.js';
 export const BESONDERHEIT = {
   vsp: {
     title: 'Verkehrssicherungspflicht',
-    text: 'Hier grenzt dein Wald an eine öffentliche Straße, einen Platz oder eine Bahnstrecke. Du musst dafür sorgen, dass von deinen Bäumen keine erkennbare Gefahr ausgeht, etwa durch tote Äste oder kranke Bäume. Kontrolliere den Waldrand deshalb zweimal im Jahr – belaubt und unbelaubt – und schreib die Kontrolle auf.',
+    text: 'Hier grenzt dein Wald an eine Straße, eine Bahnstrecke, Bebauung oder einen Ort, an dem sich regelmäßig Menschen aufhalten (z. B. Spielplatz, Parkplatz, Schutzhütte, Rastplatz). Du musst dafür sorgen, dass von deinen Bäumen keine erkennbare Gefahr ausgeht, etwa durch tote Äste oder kranke Bäume. Kontrolliere den Waldrand deshalb zweimal im Jahr – belaubt und unbelaubt – und schreib die Kontrolle auf.',
   },
   punktbiotop: {
     title: 'Punktbiotop',
@@ -27,7 +27,20 @@ export const BESONDERHEIT = {
   },
 };
 
-const VERKEHR = /straßenverkehr|strassenverkehr|platz|bahnverkehr/i;
+// Nachbarflächen (ALKIS-Nutzung), an denen Bäume Menschen oder Sachen gefährden können
+const ANGRENZEND = [
+  [/straßenverkehr|strassenverkehr/i, 'Straße'],
+  [/bahnverkehr/i, 'Bahnstrecke'],
+  [/^platz|,\s*platz/i, 'Platz'],
+  [/sport.*freizeit|erholung/i, 'Sport-, Freizeit- oder Erholungsfläche (z. B. Spielplatz, Park, Campingplatz)'],
+  [/besonderer funktionaler/i, 'Gemeinbedarfsfläche (z. B. Schule, Kita, Klinik)'],
+  [/wohnbau/i, 'Wohnbebauung'],
+  [/gemischter nutzung/i, 'Bebauung'],
+  [/industrie|gewerbe/i, 'Gewerbefläche'],
+  [/friedhof/i, 'Friedhof'],
+];
+const artVon = (t = '') => ANGRENZEND.find(([re]) => re.test(t))?.[1] || null;
+const VERKEHR = { test: (t) => !!artVon(t) };
 const NAH_M = 4;          // so nah muss die Grenze an der Verkehrsfläche liegen
 const PUNKT_ALLE_M = 120; // ein „i“ je angefangene 120 m Grenze
 
@@ -70,7 +83,7 @@ export async function verkehrssicherung(p) {
     if (hit) {
       if (!cur) { cur = { pts: [], art: new Set() }; strecken.push(cur); }
       cur.pts.push(gp.at);
-      cur.art.add(/bahn/i.test(hit.nutzungText) ? 'Bahnstrecke' : /platz/i.test(hit.nutzungText) ? 'Platz' : 'Straße');
+      cur.art.add(artVon(hit.nutzungText) || 'Straße');
     } else cur = null;
   }
   const out = [];
@@ -149,12 +162,52 @@ export async function lebensraumtypen(p) {
   return out;
 }
 
+// Orte, an denen sich Menschen aufhalten (OpenStreetMap, live über Overpass): im Wald oder bis 30 m (etwa eine Baumlänge) davor
+const ORTE = [
+  ['leisure', 'playground', 'Spielplatz'], ['amenity', 'parking', 'Parkplatz'], ['tourism', 'picnic_site', 'Rastplatz'], ['leisure', 'picnic_table', 'Picknicktisch'],
+  ['amenity', 'shelter', 'Schutzhütte'], ['amenity', 'bench', 'Sitzbank'], ['tourism', 'camp_site', 'Campingplatz'], ['tourism', 'viewpoint', 'Aussichtspunkt'],
+  ['amenity', 'kindergarten', 'Kindergarten'], ['amenity', 'school', 'Schule'], ['highway', 'bus_stop', 'Bushaltestelle'], ['leisure', 'park', 'Park'],
+  ['amenity', 'bbq', 'Grillplatz'], ['leisure', 'firepit', 'Feuerstelle'], ['tourism', 'information', 'Infotafel / Wanderparkplatz'],
+];
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const ORT_M = 30;
+export async function aufenthaltsorte(p) {
+  const polys = polysOf(p);
+  const { s: s0, w: w0, n: n0, e: e0 } = bbox(polys.flat(2));
+  const pad = 0.0005;
+  const bb = `${s0 - pad},${w0 - pad},${n0 + pad},${e0 + pad}`;
+  const q = `[out:json][timeout:20];(${ORTE.map(([k, v]) => `nwr["${k}"="${v}"](${bb});`).join('')});out center tags;`;
+  let json = null;
+  for (const url of OVERPASS) {
+    try { const r = await fetch(url, { method: 'POST', body: `data=${encodeURIComponent(q)}` }); if (r.ok) { json = await r.json(); break; } } catch { /* nächster */ }
+  }
+  if (!json) return [];
+  const ringe = polys.flat();
+  const out = [];
+  for (const el of json.elements || []) {
+    const at = el.type === 'node' ? [el.lat, el.lon] : el.center ? [el.center.lat, el.center.lon] : null;
+    if (!at) continue;
+    const ort = ORTE.find(([k, v]) => el.tags?.[k] === v);
+    if (!ort) continue;
+    if (ort[2] === 'Infotafel / Wanderparkplatz' && el.tags?.information !== 'board') continue;
+    const drin = inPolys(at, polys);
+    let d = Infinity; if (!drin) for (const ring of ringe) for (let i = 0; i < ring.length - 1; i++) d = Math.min(d, distSeg(at, ring[i], ring[i + 1]));
+    if (!drin && d > ORT_M) continue;
+    const name = el.tags?.name ? ` „${el.tags.name}“` : '';
+    out.push({ type: 'vsp', at, art: `${ort[2]}${name}`, ort: true, abstand: drin ? 0 : Math.round(d), ...BESONDERHEIT.vsp,
+      title: `Verkehrssicherung: ${ort[2]}`, text: `${drin ? 'Im Wald liegt' : `Etwa ${Math.round(d)} m vor dem Waldrand liegt`} ein Ort, an dem sich regelmäßig Menschen aufhalten: ${ort[2]}${name}. Bäume in Fallreichweite (etwa eine Baumlänge) musst du regelmäßig kontrollieren und Gefahren wie tote Äste oder kranke Bäume beseitigen – zweimal im Jahr, belaubt und unbelaubt, und die Kontrolle aufschreiben.` });
+  }
+  // gleiche Art dicht beieinander (z. B. viele Bänke) nur einmal
+  return out.filter((x, i) => !out.slice(0, i).some((y) => y.art === x.art && Math.abs(y.at[0] - x.at[0]) < 0.0003 && Math.abs(y.at[1] - x.at[1]) < 0.0005));
+}
+
 const cache = new Map();
 /** Alle Besonderheiten eines Flurstücks (zwischengespeichert für die Sitzung) */
 export function besonderheiten(p) {
   if (!p || p.source !== 'alkis') return Promise.resolve(p?.features || []);
   if (!cache.has(p.id)) {
-    const job = Promise.all([verkehrssicherung(p).catch(() => []), biotope(p).catch(() => []), lebensraumtypen(p).catch(() => [])]).then(([a, b2, c]) => [...a, ...b2, ...c]);
+    const teileWald = nutzungAnteile(p);
+    const job = Promise.all([verkehrssicherung(p).catch(() => []), biotope(p).catch(() => []), lebensraumtypen(p).catch(() => []), teileWald && !(teileWald.Wald > 0) ? [] : aufenthaltsorte(p).catch(() => [])]).then(([a, b2, c, d]) => [...a, ...d, ...b2, ...c]);
     cache.set(p.id, job);
     job.catch(() => cache.delete(p.id));
   }

@@ -286,7 +286,7 @@ function zeigeBesonderheit(f, p) {
       toast('Verkehrssicherung im Maßnahmenplan – zweimal im Jahr');
     } }, schon ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern'));
   }
-  const extra = f.type === 'vsp' && f.laenge ? ` (an ${f.art || 'Straße'} entlang, ca. ${Math.round(f.laenge / 10) * 10} m Waldrand)` : '';
+  const extra = f.type === 'vsp' && f.laenge ? ` (an ${f.art || 'Straße'} entlang, ca. ${Math.round(f.laenge / 10) * 10} m Waldrand)` : '';  // Orte (Spielplatz usw.) bringen ihren eigenen Text mit
   const kartiert = f.type !== 'vsp' ? (f.name ? ` Kartiert als: ${f.name}.` : ' Die Art ist in der Kartierung nicht angegeben.') : '';
   const angaben = (f.angaben || []).filter(([, v]) => !f.name || !f.name.includes(v)).slice(0, 4).map(([k, v]) => `${k}: ${v}`).join(' · ');
   say(`${f.title}${extra}:${kartiert} ${f.text}${angaben ? ` (${angaben})` : ''}`, { duration: 0, actions: actions.length ? actions : undefined });
@@ -356,6 +356,7 @@ function ladeBesonderheiten(parcel) {
   });
 }
 
+const BESONDERHEIT_VSP_TEXT = 'Hier grenzt dein Wald an eine Straße, eine Bahnstrecke, Bebauung oder einen Ort, an dem sich regelmäßig Menschen aufhalten (z. B. Spielplatz, Parkplatz, Schutzhütte). Bäume in Fallreichweite musst du zweimal im Jahr kontrollieren – belaubt und unbelaubt – und Gefahren beseitigen. Schreib die Kontrollen auf.';
 function besonderheitenListe(p) {
   const f = featuresOf(p);
   if (!f.length) return [h('p', { class: 'muted' }, 'Keine Verkehrssicherungspflicht, keine kartierten Biotope und keine Wald-Lebensraumtypen auf diesem Flurstück gefunden.')];
@@ -363,10 +364,10 @@ function besonderheitenListe(p) {
   for (const x of f) (gruppen[x.type] ||= []).push(x);
   return [h('ul', { class: 'feature-list' }, Object.entries(gruppen).map(([t, list]) => h('li', { class: `feature feature-${t}` },
     h('span', { class: 'feature-type' }, FEATURE_TYPES[t] || list[0].title),
-    t === 'vsp' ? h('strong', {}, list.length > 1 ? `${list.length} Stellen auf der Karte` : list[0].title)
+    t === 'vsp' ? h('div', {}, h('strong', {}, list.length > 1 ? `${list.length} Stellen auf der Karte` : list[0].title), h('ul', { class: 'feature-namen' }, [...new Set(list.map((x) => x.art || 'Straße'))].map((a) => h('li', {}, a))))
       : h('ul', { class: 'feature-namen' }, [...new Map(list.map((x) => [x.name || '', x])).values()].map((x) => h('li', {}, h('strong', {}, x.name || 'Art nicht angegeben'),
         (x.angaben || []).filter(([, v]) => !x.name || !x.name.includes(v)).length ? h('small', { class: 'muted' }, ` · ${(x.angaben || []).filter(([, v]) => !x.name || !x.name.includes(v)).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}`) : null))),
-    h('p', {}, list[0].text),
+    h('p', {}, t === 'vsp' ? BESONDERHEIT_VSP_TEXT : list[0].text),
     t === 'vsp' ? h('button', { class: 'btn btn-small', disabled: hatVerkehrssicherung(p.id), onclick: (e) => { erinnereVerkehrssicherung(p); e.currentTarget.disabled = true; e.currentTarget.textContent = 'Im Maßnahmenplan'; toast('Verkehrssicherung im Maßnahmenplan'); } },
       hatVerkehrssicherung(p.id) ? 'Bereits im Maßnahmenplan' : 'An Verkehrssicherung erinnern') : null,
   ))), h('p', { class: 'hint' }, 'Tippe auf ein „i“ in der Karte, dann erklärt dir der WaldWächter die Besonderheit. Biotope: © GDI-Th / TLUBN / ThüringenForst, live abgefragt.')];
